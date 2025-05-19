@@ -4,39 +4,31 @@ import { getAuth, type Auth } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
 
-// Explicitly log what is being read from process.env
-const publicApiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
-const serverApiKey = process.env.FIREBASE_API_KEY;
-const publicProjectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
-const serverProjectId = process.env.FIREBASE_PROJECT_ID;
+// For client-side Firebase initialization, we MUST use NEXT_PUBLIC_ prefixed variables.
+const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+const authDomain = process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN;
+const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+const storageBucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+const messagingSenderId = process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID;
+const appId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID;
 
-console.log("Firebase Init: Raw NEXT_PUBLIC_FIREBASE_API_KEY:", publicApiKey);
-console.log("Firebase Init: Raw FIREBASE_API_KEY (server fallback):", serverApiKey);
-console.log("Firebase Init: Raw NEXT_PUBLIC_FIREBASE_PROJECT_ID:", publicProjectId);
-console.log("Firebase Init: Raw FIREBASE_PROJECT_ID (server fallback):", serverProjectId);
-
-const apiKey = publicApiKey || serverApiKey;
-const projectId = publicProjectId || serverProjectId;
-
-console.log("Firebase Init: Effective API Key to be used:", apiKey);
-console.log("Firebase Init: Effective Project ID to be used:", projectId);
-
-// Log other necessary config values
-console.log("Firebase Init: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN:", process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN);
-console.log("Firebase Init: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET:", process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET);
-console.log("Firebase Init: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID:", process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID);
-console.log("Firebase Init: NEXT_PUBLIC_FIREBASE_APP_ID:", process.env.NEXT_PUBLIC_FIREBASE_APP_ID);
+console.log("Firebase Client Init: Attempting to read NEXT_PUBLIC_FIREBASE_API_KEY. Value:", apiKey);
+console.log("Firebase Client Init: Attempting to read NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN. Value:", authDomain);
+console.log("Firebase Client Init: Attempting to read NEXT_PUBLIC_FIREBASE_PROJECT_ID. Value:", projectId);
+console.log("Firebase Client Init: Attempting to read NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET. Value:", storageBucket);
+console.log("Firebase Client Init: Attempting to read NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID. Value:", messagingSenderId);
+console.log("Firebase Client Init: Attempting to read NEXT_PUBLIC_FIREBASE_APP_ID. Value:", appId);
 
 const firebaseConfig = {
   apiKey: apiKey,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  authDomain: authDomain,
   projectId: projectId,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  storageBucket: storageBucket,
+  messagingSenderId: messagingSenderId,
+  appId: appId,
 };
 
-console.log("Firebase Init: Final constructed firebaseConfig object BEFORE check:", JSON.stringify(firebaseConfig, null, 2));
+console.log("Firebase Client Init: Constructed firebaseConfig object:", JSON.stringify(firebaseConfig, null, 2));
 
 let app: FirebaseApp;
 let auth: Auth;
@@ -44,18 +36,26 @@ let db: Firestore;
 let storage: FirebaseStorage;
 
 if (getApps().length === 0) {
+  // Check if essential config values are present and throw an error if not
   if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
-    console.error("Firebase Init Error: apiKey or projectId is missing in the constructed firebaseConfig. Values found were: apiKey='", firebaseConfig.apiKey, "', projectId='", firebaseConfig.projectId, "'. Check the server logs above this message for details on what process.env contained.");
-    throw new Error(
-      "Firebase API Key or Project ID is MISSING. \n" +
-      "CRITICAL: CHECK YOUR SERVER-SIDE CONSOLE LOGS. \n" +
-      "The logs directly above this error message (search for 'Firebase Init:') show the exact values (or lack thereof) being read from your environment. \n" +
-      "Ensure NEXT_PUBLIC_FIREBASE_API_KEY (or FIREBASE_API_KEY) and NEXT_PUBLIC_FIREBASE_PROJECT_ID (or FIREBASE_PROJECT_ID) are correctly set. \n" +
-      "If using Firebase Studio, verify its environment variable settings. \n" +
-      "If using a .env.local file, ensure it's in the project root and the development server has been RESTARTED after any changes to it."
-    );
+    const errorMsg = `CRITICAL Firebase Client Init Error: NEXT_PUBLIC_FIREBASE_API_KEY or NEXT_PUBLIC_FIREBASE_PROJECT_ID is missing.
+    Values found during config construction:
+    NEXT_PUBLIC_FIREBASE_API_KEY: '${firebaseConfig.apiKey}'
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: '${firebaseConfig.projectId}'
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: '${firebaseConfig.authDomain}'
+    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: '${firebaseConfig.storageBucket}'
+    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '${firebaseConfig.messagingSenderId}'
+    NEXT_PUBLIC_FIREBASE_APP_ID: '${firebaseConfig.appId}'
+
+    Please ensure these NEXT_PUBLIC_ prefixed environment variables are correctly set and accessible to your Next.js client-side build.
+    - If using Firebase Studio, verify its environment variable configuration section.
+    - If using a local .env.local file, ensure it's in the project root and the development server has been RESTARTED after any changes.
+    - Review your server/build logs for the 'Firebase Client Init: Attempting to read...' messages above to see the exact values being processed.`;
+    console.error(errorMsg);
+    throw new Error(errorMsg);
   }
 
+  // Warn if other, less critical (for basic init) values are missing
   if (
     !firebaseConfig.authDomain ||
     !firebaseConfig.storageBucket ||
@@ -63,8 +63,8 @@ if (getApps().length === 0) {
     !firebaseConfig.appId
   ) {
     console.warn(
-      "Firebase Init Warning: Some non-critical Firebase configuration values (authDomain, storageBucket, messagingSenderId, appId) " +
-      "are missing. This might lead to issues with specific Firebase services. " +
+      "Firebase Client Init Warning: Some non-critical Firebase configuration values (authDomain, storageBucket, messagingSenderId, appId) " +
+      "are missing or undefined. This might lead to issues with specific Firebase services. " +
       "Current config being used:", JSON.stringify(firebaseConfig, null, 2)
     );
   }
@@ -72,7 +72,7 @@ if (getApps().length === 0) {
   try {
     app = initializeApp(firebaseConfig);
   } catch (initError) {
-    console.error("Firebase Init Error: Failed to initialize Firebase App. This usually means some config values are present but invalid (e.g., malformed projectId, authDomain). Error:", initError);
+    console.error("Firebase Client Init Error: Failed to initialize Firebase App. This usually means some config values are present but potentially invalid (e.g., malformed projectId, authDomain). Error:", initError);
     console.error("Firebase config that caused initialization failure:", JSON.stringify(firebaseConfig, null, 2));
     throw initError; // Re-throw the original initialization error
   }
@@ -86,5 +86,3 @@ db = getFirestore(app);
 storage = getStorage(app);
 
 export { app, auth, db, storage };
-
-    
