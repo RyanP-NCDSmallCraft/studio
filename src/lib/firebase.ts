@@ -1,7 +1,10 @@
-
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import { getAuth, type Auth } from "firebase/auth";
-import { getFirestore, type Firestore } from "firebase/firestore";
+import {
+  initializeFirestore,
+  memoryLocalCache,
+  type Firestore
+} from "firebase/firestore";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
 
 // For client-side Firebase initialization, we MUST use NEXT_PUBLIC_ prefixed variables.
@@ -74,7 +77,7 @@ if (getApps().length === 0) {
       }, null, 2)
     );
   }
-  
+
   try {
     app = initializeApp(firebaseConfig);
   } catch (initError) {
@@ -88,7 +91,12 @@ if (getApps().length === 0) {
 }
 
 auth = getAuth(app);
-db = getFirestore(app);
+
+// FIXED: Use in-memory Firestore to avoid offline error in Firebase Studio
+db = initializeFirestore(app, {
+  localCache: memoryLocalCache()
+});
+
 storage = getStorage(app);
 
 export { app, auth, db, storage };
