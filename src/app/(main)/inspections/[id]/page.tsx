@@ -9,7 +9,7 @@ import type { Inspection, ChecklistItemResult } from "@/types";
 import { ClipboardList, Ship, User, CalendarDays, CheckSquare, XSquare, AlertTriangle, Edit, MessageSquare, Image as ImageIcon } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { format } from 'date-fns';
+import { formatFirebaseTimestamp } from '@/lib/utils';
 import Image from "next/image";
 
 // Placeholder data
@@ -116,9 +116,9 @@ export default function InspectionDetailPage() {
               <p><strong>Type:</strong> {inspection.inspectionType}</p>
               <p><strong>Linked Registration:</strong> <Button variant="link" asChild className="p-0 h-auto"><Link href={`/registrations/${inspection.registrationRef.id}`}>{inspection.registrationRef.id}</Link></Button></p>
               <p><strong>Inspector:</strong> { (inspection.inspectorRef as any)?.displayName || inspection.inspectorRef?.id || "Not Assigned"}</p>
-              <p><strong>Scheduled Date:</strong> {inspection.scheduledDate ? format(inspection.scheduledDate.toDate(), "PPpp") : "N/A"}</p>
-              <p><strong>Inspection Date:</strong> {inspection.inspectionDate ? format(inspection.inspectionDate.toDate(), "PPpp") : "N/A"}</p>
-              <p><strong>Completed Date:</strong> {inspection.completedAt ? format(inspection.completedAt.toDate(), "PPpp") : "N/A"}</p>
+              <p><strong>Scheduled Date:</strong> {formatFirebaseTimestamp(inspection.scheduledDate, "PPpp")}</p>
+              <p><strong>Inspection Date:</strong> {formatFirebaseTimestamp(inspection.inspectionDate, "PPpp")}</p>
+              <p><strong>Completed Date:</strong> {formatFirebaseTimestamp(inspection.completedAt, "PPpp")}</p>
             </CardContent>
           </Card>
           <Card>

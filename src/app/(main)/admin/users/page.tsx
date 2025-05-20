@@ -9,7 +9,6 @@ import Link from "next/link";
 import { PlusCircle, Users, Edit, ToggleLeft, ToggleRight, Filter } from "lucide-react";
 import type { User } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
-import { format } from 'date-fns';
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -23,6 +22,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useRouter } from "next/navigation";
+import { formatFirebaseTimestamp } from '@/lib/utils';
 
 
 // Placeholder data
@@ -121,7 +121,7 @@ export default function UserManagementPage() {
                       {user.isActive ? "Active" : "Inactive"}
                     </Badge>
                   </TableCell>
-                  <TableCell>{user.createdAt ? format(user.createdAt.toDate(), "PP") : "N/A"}</TableCell>
+                  <TableCell>{formatFirebaseTimestamp(user.createdAt, "PP")}</TableCell>
                   <TableCell className="text-right">
                      {isAdmin && (
                         <>

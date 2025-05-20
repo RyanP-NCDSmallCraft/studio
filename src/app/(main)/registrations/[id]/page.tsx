@@ -9,7 +9,7 @@ import type { Registration, Owner, ProofOfOwnershipDoc, Inspection } from "@/typ
 import { Ship, User, FileText, ClipboardCheck, CalendarDays, DollarSign, Edit, CheckCircle, XCircle, Info, FileSpreadsheet, ListChecks, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { format } from 'date-fns';
+import { formatFirebaseTimestamp } from '@/lib/utils';
 import Image from "next/image";
 import {
   AlertDialog,
@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import React, { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { format } from "date-fns"; // Keep for specific date string parsing if needed, or remove if formatFirebaseTimestamp covers all.
 
 // Placeholder data
 const placeholderRegistration: Registration = {
@@ -92,8 +93,9 @@ export default function RegistrationDetailPage() {
 
   const [approveModalOpen, setApproveModalOpen] = useState(false);
   const [scaRegoNo, setScaRegoNo] = useState(registration.scaRegoNo || "");
-  const [effectiveDate, setEffectiveDate] = useState(registration.effectiveDate ? format(registration.effectiveDate.toDate(), "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd"));
-  const [expiryDate, setExpiryDate] = useState(registration.expiryDate ? format(registration.expiryDate.toDate(), "yyyy-MM-dd") : format(new Date(new Date().setFullYear(new Date().getFullYear() + 1)), "yyyy-MM-dd"));
+  // Use format from date-fns for initial input values as they are date strings
+  const [effectiveDate, setEffectiveDate] = useState(registration.effectiveDate ? format((registration.effectiveDate as any).toDate ? (registration.effectiveDate as any).toDate() : registration.effectiveDate, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd"));
+  const [expiryDate, setExpiryDate] = useState(registration.expiryDate ? format((registration.expiryDate as any).toDate ? (registration.expiryDate as any).toDate() : registration.expiryDate, "yyyy-MM-dd") : format(new Date(new Date().setFullYear(new Date().getFullYear() + 1)), "yyyy-MM-dd"));
 
 
   if (!registration) {
@@ -289,7 +291,7 @@ export default function RegistrationDetailPage() {
                 <div key={owner.ownerId} className="p-3 border rounded-md bg-muted/30">
                   <p className="font-semibold text-md">{owner.firstName} {owner.surname} <Badge variant="secondary">{owner.role}</Badge></p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm mt-1">
-                    <p><strong>DOB:</strong> {format(owner.dob.toDate(), "PP")}</p>
+                    <p><strong>DOB:</strong> {formatFirebaseTimestamp(owner.dob, "PP")}</p>
                     <p><strong>Sex:</strong> {owner.sex}</p>
                     <p><strong>Phone:</strong> {owner.phone}</p>
                     {owner.email && <p><strong>Email:</strong> {owner.email}</p>}
@@ -309,10 +311,10 @@ export default function RegistrationDetailPage() {
               <p><strong>Type:</strong> {registration.registrationType}</p>
               {registration.previousScaRegoNo && <p><strong>Previous Rego:</strong> {registration.previousScaRegoNo}</p>}
               <p><strong>Province:</strong> {registration.provinceOfRegistration}</p>
-              <p><strong>Submitted:</strong> {registration.submittedAt ? format(registration.submittedAt.toDate(), "PPpp") : "N/A"}</p>
-              <p><strong>Approved:</strong> {registration.approvedAt ? format(registration.approvedAt.toDate(), "PPpp") : "N/A"}</p>
-              <p><strong>Effective:</strong> {registration.effectiveDate ? format(registration.effectiveDate.toDate(), "PP") : "N/A"}</p>
-              <p><strong>Expires:</strong> {registration.expiryDate ? format(registration.expiryDate.toDate(), "PP") : "N/A"}</p>
+              <p><strong>Submitted:</strong> {formatFirebaseTimestamp(registration.submittedAt, "PPpp")}</p>
+              <p><strong>Approved:</strong> {formatFirebaseTimestamp(registration.approvedAt, "PPpp")}</p>
+              <p><strong>Effective:</strong> {formatFirebaseTimestamp(registration.effectiveDate, "PP")}</p>
+              <p><strong>Expires:</strong> {formatFirebaseTimestamp(registration.expiryDate, "PP")}</p>
             </CardContent>
           </Card>
 
@@ -324,7 +326,7 @@ export default function RegistrationDetailPage() {
                 <p><strong>Amount:</strong> ${registration.paymentAmount?.toFixed(2)}</p>
                 <p><strong>Method:</strong> {registration.paymentMethod}</p>
                 <p><strong>Receipt No:</strong> {registration.paymentReceiptNumber}</p>
-                <p><strong>Date:</strong> {registration.paymentDate ? format(registration.paymentDate.toDate(), "PP") : "N/A"}</p>
+                <p><strong>Date:</strong> {formatFirebaseTimestamp(registration.paymentDate, "PP")}</p>
                 {registration.bankStampRef && <p><strong>Bank Ref:</strong> {registration.bankStampRef}</p>}
               </CardContent>
             </Card>
@@ -382,7 +384,7 @@ export default function RegistrationDetailPage() {
                       <Badge>{insp.status}</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Scheduled: {insp.scheduledDate ? format(insp.scheduledDate.toDate(), "PP") : "N/A"} |
+                      Scheduled: {formatFirebaseTimestamp(insp.scheduledDate, "PP")} |
                       Result: {insp.overallResult || "Pending"}
                     </p>
                   </Link>

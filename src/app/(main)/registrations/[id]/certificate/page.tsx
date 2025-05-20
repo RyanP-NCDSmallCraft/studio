@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import type { Registration } from "@/types";
 import { FileSpreadsheet, Download, Sailboat } from "lucide-react";
 import { useParams } from "next/navigation";
-import { format } from 'date-fns';
+import { formatFirebaseTimestamp } from '@/lib/utils';
 import { useToast } from "@/hooks/use-toast";
 
 // Placeholder data
@@ -109,11 +109,11 @@ export default function CertificatePreviewPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
               <div>
                 <h3 className="font-semibold text-primary mb-1">Date of Issue:</h3>
-                <p>{registration.effectiveDate ? format(registration.effectiveDate.toDate(), "MMMM dd, yyyy") : 'N/A'}</p>
+                <p>{formatFirebaseTimestamp(registration.effectiveDate, "MMMM dd, yyyy")}</p>
               </div>
               <div>
                 <h3 className="font-semibold text-primary mb-1">Expiry Date:</h3>
-                <p>{registration.expiryDate ? format(registration.expiryDate.toDate(), "MMMM dd, yyyy") : 'N/A'}</p>
+                <p>{formatFirebaseTimestamp(registration.expiryDate, "MMMM dd, yyyy")}</p>
               </div>
             </div>
             

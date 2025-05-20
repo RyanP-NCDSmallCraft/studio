@@ -8,7 +8,7 @@ import Link from "next/link";
 import { PlusCircle, Ship, Eye, Edit, Filter } from "lucide-react";
 import type { Registration } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
-import { format } from 'date-fns';
+import { formatFirebaseTimestamp } from '@/lib/utils';
 
 // Placeholder data - in a real app, this would come from Firestore
 const placeholderRegistrations: Registration[] = [
@@ -34,6 +34,7 @@ const placeholderRegistrations: Registration[] = [
     fuelType: "Gasoline",
     vesselType: "PWC",
     proofOfOwnershipDocs: [],
+    // submittedAt is optional, if not present, createdAt is used for display
   },
   {
     registrationId: "REG002",
@@ -57,6 +58,7 @@ const placeholderRegistrations: Registration[] = [
     fuelType: "Gasoline",
     vesselType: "OpenBoat",
     proofOfOwnershipDocs: [],
+    // submittedAt is optional
   },
 ];
 
@@ -110,32 +112,37 @@ export default function RegistrationListPage() {
                 <TableHead>Owner</TableHead>
                 <TableHead>Craft Make/Model</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Submitted</TableHead>
+                <TableHead>Date</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {placeholderRegistrations.map((reg) => (
-                <TableRow key={reg.registrationId}>
-                  <TableCell>{reg.scaRegoNo || reg.interimRegoNo || "N/A"}</TableCell>
-                  <TableCell>{reg.owners[0]?.firstName} {reg.owners[0]?.surname}</TableCell>
-                  <TableCell>{reg.craftMake} {reg.craftModel}</TableCell>
-                  <TableCell>
-                    <Badge variant={getStatusBadgeVariant(reg.status)}>{reg.status}</Badge>
-                  </TableCell>
-                  <TableCell>{reg.submittedAt ? format(reg.submittedAt.toDate(), "PP") : (reg.createdAt ? format(reg.createdAt.toDate(), "PP") : "N/A")}</TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" asChild title="View Details">
-                      <Link href={`/registrations/${reg.registrationId}`}><Eye className="h-4 w-4" /></Link>
-                    </Button>
-                    {(isRegistrar && (reg.status === "Draft" || reg.status === "RequiresInfo" || reg.status === "Submitted")) && (
-                       <Button variant="ghost" size="icon" asChild title="Edit Registration">
-                        <Link href={`/registrations/${reg.registrationId}/edit`}><Edit className="h-4 w-4" /></Link>
+              {placeholderRegistrations.map((reg) => {
+                const dateToDisplay = reg.submittedAt 
+                  ? formatFirebaseTimestamp(reg.submittedAt, "PP") 
+                  : formatFirebaseTimestamp(reg.createdAt, "PP");
+                return (
+                  <TableRow key={reg.registrationId}>
+                    <TableCell>{reg.scaRegoNo || reg.interimRegoNo || "N/A"}</TableCell>
+                    <TableCell>{reg.owners[0]?.firstName} {reg.owners[0]?.surname}</TableCell>
+                    <TableCell>{reg.craftMake} {reg.craftModel}</TableCell>
+                    <TableCell>
+                      <Badge variant={getStatusBadgeVariant(reg.status)}>{reg.status}</Badge>
+                    </TableCell>
+                    <TableCell>{dateToDisplay}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" asChild title="View Details">
+                        <Link href={`/registrations/${reg.registrationId}`}><Eye className="h-4 w-4" /></Link>
                       </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
+                      {(isRegistrar && (reg.status === "Draft" || reg.status === "RequiresInfo" || reg.status === "Submitted")) && (
+                         <Button variant="ghost" size="icon" asChild title="Edit Registration">
+                          <Link href={`/registrations/${reg.registrationId}/edit`}><Edit className="h-4 w-4" /></Link>
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>

@@ -8,7 +8,7 @@ import Link from "next/link";
 import { PlusCircle, ClipboardList, Eye, Edit, Filter } from "lucide-react";
 import type { Inspection } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
-import { format } from 'date-fns';
+import { formatFirebaseTimestamp } from '@/lib/utils';
 
 // Placeholder data
 const placeholderInspections: Inspection[] = [
@@ -105,7 +105,7 @@ export default function InspectionListPage() {
                   <TableCell>{insp.inspectionId}</TableCell>
                   <TableCell>{insp.registrationRef.id}</TableCell>
                   <TableCell>{insp.inspectionType}</TableCell>
-                  <TableCell>{insp.scheduledDate ? format(insp.scheduledDate.toDate(), "PP") : "N/A"}</TableCell>
+                  <TableCell>{formatFirebaseTimestamp(insp.scheduledDate, "PP")}</TableCell>
                   <TableCell>
                     <Badge variant={getStatusBadgeVariant(insp.status)}>{insp.status}</Badge>
                   </TableCell>
