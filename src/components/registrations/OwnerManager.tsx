@@ -2,7 +2,7 @@
 "use client";
 import React, { useState } from "react";
 import type { Control, UseFormReturn } from "react-hook-form";
-import { useFieldArray } from "react-hook-form";
+import { useFieldArray, useForm } from "react-hook-form"; // Added useForm here
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -174,3 +174,4 @@ export function OwnerManager({ owners, setOwners, form: mainForm }: OwnerManager
     </Card>
   );
 }
+
