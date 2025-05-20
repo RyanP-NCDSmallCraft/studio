@@ -45,21 +45,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const userDocSnap = await getDoc(userDocRef);
           if (userDocSnap.exists()) {
             loadedUserProfile = { userId: user.uid, ...userDocSnap.data() } as AppUser;
-            console.log(`AuthProvider onAuthStateChanged: User document for ${user.uid} exists. Profile:`, JSON.stringify(loadedUserProfile));
+            console.log(`AuthProvider onAuthStateChanged: User document for ${user.uid} exists. Profile loaded (Role: ${loadedUserProfile?.role}).`);
           } else {
             console.warn(`AuthProvider onAuthStateChanged: User document for ${user.uid} NOT found. Creating default ReadOnly profile.`);
+            // This is a fallback. In a real app, user creation/role assignment should be a more robust process.
             loadedUserProfile = {
               userId: user.uid,
               email: user.email || "",
               displayName: user.displayName || user.email?.split('@')[0] || "User",
-              role: "ReadOnly",
+              role: "ReadOnly", // Default to least privileged role
               createdAt: Timestamp.now(),
-              isActive: true,
+              isActive: true, // Assume active unless specified otherwise
             };
-            console.log(`AuthProvider onAuthStateChanged: Default ReadOnly profile created for ${user.uid}:`, JSON.stringify(loadedUserProfile));
+            console.log(`AuthProvider onAuthStateChanged: Default ReadOnly profile created for ${user.uid}.`);
           }
         } catch (error: any) {
-          console.error(`AuthProvider onAuthStateChanged: Error fetching user document for ${user.uid}:`, error);
+          console.error(`AuthProvider onAuthStateChanged: Error fetching user document for ${user.uid}: Code: ${error.code}, Message: ${error.message}`);
           let errorTitle = "Profile Load Error";
           let errorDescription = "Failed to load user profile.";
 
@@ -77,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } finally {
           setCurrentUser(loadedUserProfile);
           setLoading(false);
-          console.log(`AuthProvider onAuthStateChanged: Finished processing for ${user?.uid || 'null'}. Set currentUser to:`, JSON.stringify(loadedUserProfile), "Set loading to false.");
+          console.log(`AuthProvider onAuthStateChanged: Finished processing for ${user?.uid || 'null'}. Set currentUser to ${loadedUserProfile ? `User (Role: ${loadedUserProfile.role})` : 'null'}. Set loading to false.`);
         }
       } else {
         console.log("AuthProvider onAuthStateChanged: No user authenticated or user logged out.");
@@ -94,26 +95,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [toast]);
 
+
   useEffect(() => {
     if (!firebaseUser?.uid) {
       // console.log("AuthProvider (onSnapshot effect): No firebaseUser.uid, skipping or cleaning up snapshot listener.");
       return;
     }
-    console.log(`AuthProvider (onSnapshot effect): firebaseUser.uid found (${firebaseUser.uid}). Setting up snapshot listener.`);
+    console.log(`AuthProvider (onSnapshot effect): firebaseUser.uid found (${firebaseUser.uid}). Setting up snapshot listener for user profile updates.`);
 
     const userDocRef = doc(db, "users", firebaseUser.uid);
     const unsubscribeSnapshot = onSnapshot(userDocRef, (docSnap) => {
       console.log(`AuthProvider (onSnapshot): Snapshot received for user: ${firebaseUser.uid}`);
       if (docSnap.exists()) {
         const newProfileData = { userId: firebaseUser.uid, ...docSnap.data() } as AppUser;
-        console.log(`AuthProvider (onSnapshot): Document exists. New profile data:`, JSON.stringify(newProfileData));
+        console.log(`AuthProvider (onSnapshot): User document exists. New profile data (Role: ${newProfileData?.role}).`);
         setCurrentUser(newProfileData);
       } else {
+        // This case means the user's document was deleted from Firestore while they were logged in.
+        // This could be a valid scenario (admin deletes user) or an error.
         console.warn(`AuthProvider (onSnapshot): User document NO LONGER exists in Firestore for UID: ${firebaseUser.uid}. Setting currentUser to null.`);
-        setCurrentUser(null);
+        setCurrentUser(null); // Effectively logs the user out of the app's protected state
+        toast({
+          title: "Profile Unavailable",
+          description: "Your user profile could not be found. You may need to log in again or contact support.",
+          variant: "destructive",
+        });
       }
     }, (error) => {
-      console.error(`AuthProvider (onSnapshot): Error for user ${firebaseUser.uid}:`, error);
+      console.error(`AuthProvider (onSnapshot): Firestore snapshot error for user ${firebaseUser.uid}: Code: ${error.code}, Message: ${error.message}`);
       let errorTitle = "Profile Sync Error";
       let errorDescription = "Failed to sync user profile in real-time.";
       if (error instanceof FirestoreError) {
@@ -121,18 +130,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           errorTitle = "Network Issue";
           errorDescription = "Could not sync user profile. The application may be offline.";
         } else if (error.code === 'permission-denied') {
-          errorDescription = "Profile sync failed due to insufficient permissions. Rules may have changed for 'users' collection.";
+          errorDescription = "Profile sync failed due to insufficient permissions. Firestore rules may have changed for the 'users' collection.";
         }
       }
       toast({ title: errorTitle, description: errorDescription, variant: "destructive" });
-      setCurrentUser(null); // If snapshot fails badly, clear user
+      // Decide if we should set currentUser to null here.
+      // If the snapshot fails, it might be temporary. Forcing logout might be too aggressive.
+      // But if permissions are denied, the current profile might be stale/incorrect.
+      // For now, let's keep the existing currentUser data but notify about the sync issue.
+      // If persistent 'permission-denied', the user might get an old role until next full login.
     });
 
     return () => {
       console.log(`AuthProvider (onSnapshot effect): Cleaning up snapshot listener for user: ${firebaseUser.uid}`);
       unsubscribeSnapshot();
     };
-  }, [firebaseUser?.uid, toast]);
+  }, [firebaseUser?.uid, toast]); // firebaseUser.uid ensures this runs when the UID changes
 
   const isAdmin = currentUser?.role === "Admin";
   const isRegistrar = currentUser?.role === "Registrar" || isAdmin;
@@ -156,3 +169,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     </AuthContext.Provider>
   );
 }
+
+    

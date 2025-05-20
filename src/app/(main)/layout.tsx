@@ -12,8 +12,7 @@ export default function MainLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    // Add detailed logging for the effect's dependencies and decision logic
-    console.log(`MainLayout Effect: currentUser changed to ${currentUser ? currentUser.userId : currentUser}, loading changed to ${loading}`);
+    console.log(`MainLayout Effect: loading: ${loading}, currentUser: ${!!currentUser} (ID: ${currentUser?.userId || 'N/A'})`);
     if (!loading && !currentUser) {
       console.log("MainLayout Effect: NOT loading and NO currentUser. Redirecting to /login.");
       router.replace("/login");
@@ -50,3 +49,5 @@ export default function MainLayout({ children }: { children: ReactNode }) {
   console.log(`MainLayout Render: 'loading' is false and 'currentUser' IS present (UID: ${currentUser.userId}). Rendering AppShell.`);
   return <AppShell>{children}</AppShell>;
 }
+
+    
