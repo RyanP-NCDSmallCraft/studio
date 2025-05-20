@@ -3,7 +3,7 @@
 
 import type { User as FirebaseUser } from "firebase/auth";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc, Timestamp } from "firebase/firestore";
+import { doc, getDoc, Timestamp, onSnapshot } from "firebase/firestore"; // Added onSnapshot
 import type { ReactNode } from "react";
 import React, { createContext, useEffect, useState } from "react";
 import { auth, db } from "@/lib/firebase";
@@ -28,50 +28,71 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true); // Start true for initial load
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setLoading(true); // Set loading to true at the start of any auth state change
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      setLoading(true); 
       setFirebaseUser(user);
       if (user) {
-        // User is signed in, fetch app user profile from Firestore
         const userDocRef = doc(db, "users", user.uid);
         try {
           const userDocSnap = await getDoc(userDocRef);
           if (userDocSnap.exists()) {
             setCurrentUser({ userId: user.uid, ...userDocSnap.data() } as AppUser);
           } else {
-            // Potentially handle case where user exists in Auth but not Firestore
             console.warn("User document not found in Firestore for UID:", user.uid, "Setting to ReadOnly role.");
-            // For scaffolding, let's assume a basic user if not found
             setCurrentUser({
               userId: user.uid,
               email: user.email || "",
               displayName: user.displayName || user.email?.split('@')[0] || "User",
-              role: "ReadOnly", // Default role if not found
-              createdAt: Timestamp.now(), // Use Firestore Timestamp
+              role: "ReadOnly", 
+              createdAt: Timestamp.now(),
               isActive: true,
             });
           }
         } catch (error) {
-            console.error("Error fetching user document from Firestore:", error);
-            setCurrentUser(null); // Or handle error more gracefully
+            console.error("Error fetching user document from Firestore during auth state change:", error);
+            setCurrentUser(null); 
         }
       } else {
-        // User is signed out
         setCurrentUser(null);
       }
-      setLoading(false); // Set loading to false after all processing for this auth change is done
+      setLoading(false); 
     });
 
-    return () => unsubscribe();
+    return () => unsubscribeAuth();
   }, []);
+
+  // New useEffect for Firestore onSnapshot listener
+  useEffect(() => {
+    if (!firebaseUser?.uid) {
+      // No authenticated user, so no listener needed, or cleanup if user logs out
+      return;
+    }
+
+    const userDocRef = doc(db, "users", firebaseUser.uid);
+    const unsubscribeSnapshot = onSnapshot(userDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        console.log("Live user doc update (onSnapshot):", docSnap.data());
+        setCurrentUser({ userId: firebaseUser.uid, ...docSnap.data() } as AppUser);
+      } else {
+        // User document was deleted from Firestore
+        console.warn("User document disappeared from Firestore for UID:", firebaseUser.uid, ". Logging user out.");
+        setCurrentUser(null); // This will trigger logout flow via MainLayout
+      }
+    }, (error) => {
+      console.error("Error in onSnapshot listener for user document:", error);
+      // Potentially set currentUser to null or handle error state
+      setCurrentUser(null);
+    });
+
+    // Cleanup function to unsubscribe from the snapshot listener
+    return () => unsubscribeSnapshot();
+  }, [firebaseUser?.uid]); // Re-run this effect if the firebaseUser.uid changes
 
   const isAdmin = currentUser?.role === "Admin";
   const isRegistrar = currentUser?.role === "Registrar" || isAdmin;
   const isInspector = currentUser?.role === "Inspector" || isAdmin;
   const isSupervisor = currentUser?.role === "Supervisor" || isAdmin;
 
-  // This initial loading screen is for the very first time the app loads
-  // and onAuthStateChanged hasn't fired yet, or is in its initial processing.
   if (currentUser === undefined && loading) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
