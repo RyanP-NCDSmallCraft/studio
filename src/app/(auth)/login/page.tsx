@@ -16,6 +16,12 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent>
           <LoginForm />
+          <p className="mt-6 text-center text-sm text-muted-foreground">
+            Need assistance? Contact{' '}
+            <a href="mailto:admin@ncdsmallcraft.com" className="font-medium text-primary hover:underline">
+              admin@ncdsmallcraft.com
+            </a>
+          </p>
         </CardContent>
       </Card>
       <footer className="mt-8 text-center text-sm text-primary-foreground/70">

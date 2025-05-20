@@ -2,7 +2,7 @@
 # see: https://firebase.google.com/docs/studio/customize-workspace
 { pkgs, ... }: {
   # Which nixpkgs channel to use
-  channel = "stable-24.11";
+  channel = "stable-23.11";
 
   # Packages used in the workspace
   packages = [
@@ -12,14 +12,13 @@
 
   # Set environment variables for your Next.js Firebase app
   env = {
-    NEXT_PUBLIC_FIREBASE_API_KEY = "AIzaSyDqFI4lztLRXbBK-CARVNfCVmdD4X0sEN0";
-    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN = "craftpal-5hvxp.firebaseapp.com";
-    NEXT_PUBLIC_FIREBASE_PROJECT_ID = "craftpal-5hvxp";
-    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET = "craftpal-5hvxp.firebasestorage.app";
-    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID = "231622630853";
-    NEXT_PUBLIC_FIREBASE_APP_ID = "1:231622630853:web:6a507f4d189852d0ca3fac";
+    NEXT_PUBLIC_FIREBASE_API_KEY = "AIzaSyC4fAqVemrsZjIHRPd91Nr92PE45Cwjbig";
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN = "regocraft.firebaseapp.com";
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID = "regocraft";
+    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET = "regocraft.firebasestorage.app";
+    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID = "294249520639";
+    NEXT_PUBLIC_FIREBASE_APP_ID = "1:294249520639:web:22f06cda3775e125539bca";
   };
-
   # Enable Firebase emulators (optional - adjust as needed)
   services.firebase.emulators = {
     detect = true;
