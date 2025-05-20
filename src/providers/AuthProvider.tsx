@@ -3,13 +3,13 @@
 
 import type { User as FirebaseUser } from "firebase/auth";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc, Timestamp, onSnapshot, FirestoreError } from "firebase/firestore"; // Added FirestoreError
+import { doc, getDoc, Timestamp, onSnapshot, FirestoreError } from "firebase/firestore";
 import type { ReactNode } from "react";
 import React, { createContext, useEffect, useState } from "react";
 import { auth, db } from "@/lib/firebase";
 import type { User as AppUser } from "@/types";
 import { Loader2 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast"; // Import useToast
+import { useToast } from "@/hooks/use-toast";
 
 interface AuthContextType {
   currentUser: AppUser | null | undefined; // undefined means loading, null means no user
@@ -27,7 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<AppUser | null | undefined>(undefined);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null | undefined>(undefined);
   const [loading, setLoading] = useState(true);
-  const { toast } = useToast(); // Initialize useToast
+  const { toast } = useToast();
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
@@ -52,29 +52,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         } catch (error: any) {
           console.error("Error fetching user document from Firestore during auth state change:", error);
-          if (error instanceof FirestoreError && error.code === 'unavailable') {
-            toast({
-              title: "Network Issue",
-              description: "Could not load user profile. The application may be offline.",
-              variant: "destructive",
-            });
-          } else {
-            toast({
-              title: "Error",
-              description: "Failed to load user profile.",
-              variant: "destructive",
-            });
+          let errorTitle = "Profile Load Error";
+          let errorDescription = "Failed to load user profile.";
+
+          if (error instanceof FirestoreError) {
+            if (error.code === 'unavailable') {
+              errorTitle = "Network Issue";
+              errorDescription = "Could not load user profile. The application may be offline.";
+            } else if (error.code === 'permission-denied') {
+              errorDescription = "Failed to load user profile due to insufficient permissions. Please check Firestore security rules.";
+            }
           }
+          
+          toast({
+            title: errorTitle,
+            description: errorDescription,
+            variant: "destructive",
+          });
           setCurrentUser(null);
+        } finally {
+          setLoading(false);
         }
       } else {
         setCurrentUser(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => unsubscribeAuth();
-  }, [toast]); // Added toast to dependency array
+  }, [toast]);
 
   useEffect(() => {
     if (!firebaseUser?.uid) {
@@ -86,30 +92,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (docSnap.exists()) {
         setCurrentUser({ userId: firebaseUser.uid, ...docSnap.data() } as AppUser);
       } else {
-        console.warn("User document disappeared from Firestore for UID:", firebaseUser.uid, ". Logging user out.");
-        setCurrentUser(null);
+        console.warn("User document disappeared from Firestore for UID:", firebaseUser.uid, ". Logging user out or setting to null.");
+        setCurrentUser(null); // User document no longer exists
       }
     }, (error) => {
       console.error("Error in onSnapshot listener for user document:", error);
-      if (error instanceof FirestoreError && error.code === 'unavailable') {
-        toast({
-          title: "Network Issue",
-          description: "Could not sync user profile. The application may be offline.",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to sync user profile.",
-          variant: "destructive",
-        });
+      let errorTitle = "Profile Sync Error";
+      let errorDescription = "Failed to sync user profile.";
+      if (error instanceof FirestoreError) {
+        if (error.code === 'unavailable') {
+          errorTitle = "Network Issue";
+          errorDescription = "Could not sync user profile. The application may be offline.";
+        } else if (error.code === 'permission-denied') {
+          errorDescription = "Profile sync failed due to insufficient permissions. Rules may have changed.";
+        }
       }
-      // Potentially set currentUser to null or handle error state if critical
-      // setCurrentUser(null); // Uncomment if profile sync failure should log out user
+      toast({
+        title: errorTitle,
+        description: errorDescription,
+        variant: "destructive",
+      });
+      // Optionally, set currentUser to null if profile sync is critical and fails
+      // setCurrentUser(null); 
     });
 
     return () => unsubscribeSnapshot();
-  }, [firebaseUser?.uid, toast]); // Added toast to dependency array
+  }, [firebaseUser?.uid, toast]);
 
   const isAdmin = currentUser?.role === "Admin";
   const isRegistrar = currentUser?.role === "Registrar" || isAdmin;
