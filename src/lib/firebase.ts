@@ -28,7 +28,7 @@ const firebaseConfig = {
   appId: appId,
 };
 
-console.log("Firebase Client Init: Constructed firebaseConfig object:", JSON.stringify(firebaseConfig, null, 2));
+console.log("Firebase Client Init: Constructed firebaseConfig object (values from process.env):", JSON.stringify(firebaseConfig, null, 2));
 
 let app: FirebaseApp;
 let auth: Auth;
@@ -47,10 +47,10 @@ if (getApps().length === 0) {
     NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '${firebaseConfig.messagingSenderId}'
     NEXT_PUBLIC_FIREBASE_APP_ID: '${firebaseConfig.appId}'
 
-    Please ensure these NEXT_PUBLIC_ prefixed environment variables are correctly set and accessible to your Next.js client-side build.
-    - If using Firebase Studio, verify its environment variable configuration section.
-    - If using a local .env.local file, ensure it's in the project root and the development server has been RESTARTED after any changes.
-    - Review your server/build logs for the 'Firebase Client Init: Attempting to read...' messages above to see the exact values being processed.`;
+    IMMEDIATE ACTION REQUIRED:
+    1. **Firebase Studio Users:** Verify your project's environment variable configuration section WITHIN FIREBASE STUDIO. Ensure all NEXT_PUBLIC_ prefixed variables listed above are correctly set with your actual Firebase project credentials. Restart/redeploy your app in Studio after changes.
+    2. **Local .env.local Users:** Ensure a .env.local file exists in your project root (not inside /src), contains all NEXT_PUBLIC_ prefixed variables with correct values, and that your development server has been FULLY RESTARTED after any changes.
+    3. **Review Server/Build Logs:** Carefully check your server-side console logs (or Firebase Studio build/runtime logs) for the "Firebase Client Init: Attempting to read..." messages. These logs show the exact values (or 'undefined') being read by the application.`;
     console.error(errorMsg);
     throw new Error(errorMsg);
   }
@@ -65,7 +65,13 @@ if (getApps().length === 0) {
     console.warn(
       "Firebase Client Init Warning: Some non-critical Firebase configuration values (authDomain, storageBucket, messagingSenderId, appId) " +
       "are missing or undefined. This might lead to issues with specific Firebase services. " +
-      "Current config being used:", JSON.stringify(firebaseConfig, null, 2)
+      "Current config being used for these potentially missing values:",
+      JSON.stringify({
+        authDomain: firebaseConfig.authDomain,
+        storageBucket: firebaseConfig.storageBucket,
+        messagingSenderId: firebaseConfig.messagingSenderId,
+        appId: firebaseConfig.appId,
+      }, null, 2)
     );
   }
   

@@ -9,9 +9,14 @@
     pkgs.zulu
   ];
   # Sets environment variables in the workspace
-  env = {};
-  # This adds a file watcher to startup the firebase emulators. The emulators will only start if
-  # a firebase.json file is written into the user's directory
+env = {
+  NEXT_PUBLIC_FIREBASE_API_KEY = "AIzaSyDqFI4lztLRXbBK-CARVNfCVmdD4X0sEN0";
+  NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN = "craftpal-5hvxp.firebaseapp.com";
+  NEXT_PUBLIC_FIREBASE_PROJECT_ID = "craftpal-5hvxp";
+  NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET = "craftpal-5hvxp.firebasestorage.app";
+  NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID = "231622630853";
+  NEXT_PUBLIC_FIREBASE_APP_ID = "1:231622630853:web:6a507f4d189852d0ca3fac";
+};
   services.firebase.emulators = {
     detect = true;
     projectId = "demo-app";
