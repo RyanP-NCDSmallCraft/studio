@@ -26,32 +26,40 @@ export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<AppUser | null | undefined>(undefined);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null | undefined>(undefined);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Initial state is true until first auth check completes
   const { toast } = useToast();
 
   useEffect(() => {
+    console.log("AuthProvider: Mounting and setting up onAuthStateChanged listener.");
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
-      setLoading(true);
+      setLoading(true); // SET LOADING TRUE IMMEDIATELY upon any auth state change detection
+      console.log(`AuthProvider onAuthStateChanged: Triggered. User UID: ${user?.uid || 'null'}. Set loading to true.`);
+
       setFirebaseUser(user);
+
       if (user) {
+        console.log(`AuthProvider onAuthStateChanged: User authenticated (UID: ${user.uid}). Fetching Firestore document...`);
         const userDocRef = doc(db, "users", user.uid);
+        let loadedUserProfile: AppUser | null = null;
         try {
           const userDocSnap = await getDoc(userDocRef);
           if (userDocSnap.exists()) {
-            setCurrentUser({ userId: user.uid, ...userDocSnap.data() } as AppUser);
+            loadedUserProfile = { userId: user.uid, ...userDocSnap.data() } as AppUser;
+            console.log(`AuthProvider onAuthStateChanged: User document for ${user.uid} exists. Profile:`, JSON.stringify(loadedUserProfile));
           } else {
-            console.warn("User document not found in Firestore for UID:", user.uid, "Setting to ReadOnly role.");
-            setCurrentUser({
+            console.warn(`AuthProvider onAuthStateChanged: User document for ${user.uid} NOT found. Creating default ReadOnly profile.`);
+            loadedUserProfile = {
               userId: user.uid,
               email: user.email || "",
               displayName: user.displayName || user.email?.split('@')[0] || "User",
               role: "ReadOnly",
               createdAt: Timestamp.now(),
               isActive: true,
-            });
+            };
+            console.log(`AuthProvider onAuthStateChanged: Default ReadOnly profile created for ${user.uid}:`, JSON.stringify(loadedUserProfile));
           }
         } catch (error: any) {
-          console.error("Error fetching user document from Firestore during auth state change:", error);
+          console.error(`AuthProvider onAuthStateChanged: Error fetching user document for ${user.uid}:`, error);
           let errorTitle = "Profile Load Error";
           let errorDescription = "Failed to load user profile.";
 
@@ -60,63 +68,70 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               errorTitle = "Network Issue";
               errorDescription = "Could not load user profile. The application may be offline.";
             } else if (error.code === 'permission-denied') {
-              errorDescription = "Failed to load user profile due to insufficient permissions. Please check Firestore security rules.";
+              errorTitle = "Permission Denied";
+              errorDescription = "Failed to load user profile due to insufficient Firestore permissions. Please check security rules for the 'users' collection.";
             }
           }
-          
-          toast({
-            title: errorTitle,
-            description: errorDescription,
-            variant: "destructive",
-          });
-          setCurrentUser(null);
+          toast({ title: errorTitle, description: errorDescription, variant: "destructive" });
+          loadedUserProfile = null; // Ensure it's null on error
         } finally {
+          setCurrentUser(loadedUserProfile);
           setLoading(false);
+          console.log(`AuthProvider onAuthStateChanged: Finished processing for ${user?.uid || 'null'}. Set currentUser to:`, JSON.stringify(loadedUserProfile), "Set loading to false.");
         }
       } else {
+        console.log("AuthProvider onAuthStateChanged: No user authenticated or user logged out.");
         setCurrentUser(null);
+        // firebaseUser is already set to null by setFirebaseUser(user) above
         setLoading(false);
+        console.log("AuthProvider onAuthStateChanged: Set currentUser to null, loading to false.");
       }
     });
 
-    return () => unsubscribeAuth();
+    return () => {
+      console.log("AuthProvider: Unmounting, cleaning up onAuthStateChanged listener.");
+      unsubscribeAuth();
+    };
   }, [toast]);
 
   useEffect(() => {
     if (!firebaseUser?.uid) {
+      // console.log("AuthProvider (onSnapshot effect): No firebaseUser.uid, skipping or cleaning up snapshot listener.");
       return;
     }
+    console.log(`AuthProvider (onSnapshot effect): firebaseUser.uid found (${firebaseUser.uid}). Setting up snapshot listener.`);
 
     const userDocRef = doc(db, "users", firebaseUser.uid);
     const unsubscribeSnapshot = onSnapshot(userDocRef, (docSnap) => {
+      console.log(`AuthProvider (onSnapshot): Snapshot received for user: ${firebaseUser.uid}`);
       if (docSnap.exists()) {
-        setCurrentUser({ userId: firebaseUser.uid, ...docSnap.data() } as AppUser);
+        const newProfileData = { userId: firebaseUser.uid, ...docSnap.data() } as AppUser;
+        console.log(`AuthProvider (onSnapshot): Document exists. New profile data:`, JSON.stringify(newProfileData));
+        setCurrentUser(newProfileData);
       } else {
-        console.warn("User document disappeared from Firestore for UID:", firebaseUser.uid, ". Logging user out or setting to null.");
-        setCurrentUser(null); // User document no longer exists
+        console.warn(`AuthProvider (onSnapshot): User document NO LONGER exists in Firestore for UID: ${firebaseUser.uid}. Setting currentUser to null.`);
+        setCurrentUser(null);
       }
     }, (error) => {
-      console.error("Error in onSnapshot listener for user document:", error);
+      console.error(`AuthProvider (onSnapshot): Error for user ${firebaseUser.uid}:`, error);
       let errorTitle = "Profile Sync Error";
-      let errorDescription = "Failed to sync user profile.";
+      let errorDescription = "Failed to sync user profile in real-time.";
       if (error instanceof FirestoreError) {
         if (error.code === 'unavailable') {
           errorTitle = "Network Issue";
           errorDescription = "Could not sync user profile. The application may be offline.";
         } else if (error.code === 'permission-denied') {
-          errorDescription = "Profile sync failed due to insufficient permissions. Rules may have changed.";
+          errorDescription = "Profile sync failed due to insufficient permissions. Rules may have changed for 'users' collection.";
         }
       }
-      toast({
-        title: errorTitle,
-        description: errorDescription,
-        variant: "destructive",
-      });
-      // Optionally, set currentUser to null if profile sync is critical and fails
-      // setCurrentUser(null); 
+      toast({ title: errorTitle, description: errorDescription, variant: "destructive" });
+      setCurrentUser(null); // If snapshot fails badly, clear user
     });
 
-    return () => unsubscribeSnapshot();
+    return () => {
+      console.log(`AuthProvider (onSnapshot effect): Cleaning up snapshot listener for user: ${firebaseUser.uid}`);
+      unsubscribeSnapshot();
+    };
   }, [firebaseUser?.uid, toast]);
 
   const isAdmin = currentUser?.role === "Admin";
@@ -124,7 +139,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isInspector = currentUser?.role === "Inspector" || isAdmin;
   const isSupervisor = currentUser?.role === "Supervisor" || isAdmin;
 
+  // This initial loading screen is for the very first load of the AuthProvider
   if (currentUser === undefined && loading) {
+    console.log("AuthProvider Render: Initial load - currentUser is undefined, loading is true. Showing global spinner.");
     return (
       <div className="flex h-screen w-full items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />

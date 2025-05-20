@@ -2,7 +2,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, type UserCredential } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
@@ -39,13 +39,14 @@ export function LoginForm() {
   });
 
   const onSubmit = async (data: LoginFormValues) => {
+    console.log("LoginForm: Attempting to sign in with email:", data.email);
     try {
-      await signInWithEmailAndPassword(auth, data.email, data.password);
-      toast({ title: "Login Successful", description: "Welcome back!" });
-      router.push("/dashboard"); // Navigate to dashboard
-      // Removed router.refresh() as AuthProvider state changes should trigger necessary updates.
+      const userCredential: UserCredential = await signInWithEmailAndPassword(auth, data.email, data.password);
+      console.log("LoginForm: signInWithEmailAndPassword successful. Firebase User UID:", userCredential.user.uid);
+      toast({ title: "Login Successful", description: "Welcome back! Redirecting..." });
+      router.push("/dashboard"); 
     } catch (error: any) {
-      console.error("Login error:", error);
+      console.error("LoginForm: Login error:", error);
       const errorMessage = error.code === "auth/invalid-credential" 
         ? "Invalid email or password."
         : "An error occurred during login. Please try again.";
