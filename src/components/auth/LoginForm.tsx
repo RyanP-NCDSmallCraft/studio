@@ -42,8 +42,8 @@ export function LoginForm() {
     try {
       await signInWithEmailAndPassword(auth, data.email, data.password);
       toast({ title: "Login Successful", description: "Welcome back!" });
-      router.push("/dashboard");
-      router.refresh(); // Ensure layout re-renders with new auth state
+      router.push("/dashboard"); // Navigate to dashboard
+      // Removed router.refresh() as AuthProvider state changes should trigger necessary updates.
     } catch (error: any) {
       console.error("Login error:", error);
       const errorMessage = error.code === "auth/invalid-credential" 
