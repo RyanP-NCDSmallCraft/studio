@@ -289,7 +289,7 @@ export default function RegistrationDetailPage() {
             <CardContent className="space-y-4">
               {registration.owners.map((owner: Owner, index: number) => (
                 <div key={owner.ownerId} className="p-3 border rounded-md bg-muted/30">
-                  <p className="font-semibold text-md">{owner.firstName} {owner.surname} <Badge variant="secondary">{owner.role}</Badge></p>
+                  <div className="font-semibold text-md">{owner.firstName} {owner.surname} <Badge variant="secondary">{owner.role}</Badge></div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm mt-1">
                     <p><strong>DOB:</strong> {formatFirebaseTimestamp(owner.dob, "PP")}</p>
                     <p><strong>Sex:</strong> {owner.sex}</p>
