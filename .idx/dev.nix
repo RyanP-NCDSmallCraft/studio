@@ -45,17 +45,14 @@
     previews = {
       # The following object sets web previews
       web = {
-        command = [
-          "npm"
-          "run"
-          "start"
-          "--"
-          "--port"
-          "$PORT"
-          "--host"
-          "0.0.0.0"
-          "--disable-host-check"
-        ];
+       command = [
+  "npm"
+  "run"
+  "dev"
+  "--"
+  "--port"
+  "$PORT"
+];
         manager = "web";
         # Optionally, specify a directory that contains your web app
         # cwd = "app/client";
