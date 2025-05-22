@@ -68,9 +68,9 @@ export interface Registration {
   propulsionOtherDesc?: string;
   hullMaterial: "Wood" | "Fiberglass" | "Metal" | "Inflatable" | "Other";
   hullMaterialOtherDesc?: string;
-  craftUse: "Pleasure" | "Passenger" | "Fishing" | "Cargo" | "Other";
+  craftUse: "Pleasure" | "Passenger" | "Fishing" | "Cargo" | "Mixed Use" | "Other";
   craftUseOtherDesc?: string;
-  fuelType: "Electric" | "Petrol" | "Diesel" | "Other"; // Changed Gasoline to Petrol
+  fuelType: "Electric" | "Petrol" | "Diesel" | "Other";
   fuelTypeOtherDesc?: string;
   vesselType: "OpenBoat" | "CabinCruiser" | "Sailboat" | "PWC" | "Other"; // Personal Water Craft
   vesselTypeOtherDesc?: string;
