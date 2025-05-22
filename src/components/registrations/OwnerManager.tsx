@@ -1,4 +1,3 @@
-
 "use client";
 import React, { useState } from "react";
 import type { Control, UseFormReturn } from "react-hook-form";
@@ -6,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label"; // Not directly used in JSX, but kept for consistency if modalForm were to use it
+// import { Label } from "@/components/ui/label"; // Not directly used in JSX, but kept for consistency if modalForm were to use it
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
@@ -24,7 +23,7 @@ import type { Owner } from "@/types";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { format, parseISO, isValid } from "date-fns"; // parseISO for robust date string parsing
-import { Badge } from "@/components/ui/badge"; // Added import for Badge
+import { Badge } from "@/components/ui/badge";
 
 // Simplified Zod schema for the modal form
 const ownerModalSchema = z.object({
@@ -60,7 +59,7 @@ export function OwnerManager({ owners, setOwners, form: mainForm }: OwnerManager
 
   const modalForm = useForm<OwnerModalFormValues>({
     resolver: zodResolver(ownerModalSchema),
-    defaultValues: { // Initialize all fields to prevent uncontrolled to controlled switch
+    defaultValues: { 
         role: "Primary",
         surname: "",
         firstName: "",
@@ -100,14 +99,13 @@ export function OwnerManager({ owners, setOwners, form: mainForm }: OwnerManager
     const owner = owners[index];
     setEditingOwner(owner);
     setEditingIndex(index);
-    let dobToFormat: Date | string = owner.dob as any; // Assuming dob can be Timestamp or Date
+    let dobToFormat: Date | string = owner.dob as any; 
     if (owner.dob && typeof (owner.dob as any).toDate === 'function') {
         dobToFormat = (owner.dob as any).toDate();
     }
     
     modalForm.reset({
         ...owner,
-        // Ensure all optional fields have a defined value for reset
         fax: owner.fax || "",
         email: owner.email || "",
         dobString: isValid(new Date(dobToFormat)) ? format(new Date(dobToFormat), "yyyy-MM-dd") : "",
@@ -120,7 +118,7 @@ export function OwnerManager({ owners, setOwners, form: mainForm }: OwnerManager
   };
 
   const onModalSubmit = (data: OwnerModalFormValues) => {
-    const dobDate = parseISO(data.dobString); // Parse the date string
+    const dobDate = parseISO(data.dobString); 
     if (!isValid(dobDate)) {
         modalForm.setError("dobString", { type: "manual", message: "Invalid date entered." });
         return;
@@ -128,8 +126,8 @@ export function OwnerManager({ owners, setOwners, form: mainForm }: OwnerManager
 
     const ownerData: Owner = {
       ...data,
-      ownerId: editingOwner?.ownerId || crypto.randomUUID(), // Use existing ID or generate new
-      dob: dobDate as any, // Store as Date object, RegistrationForm will convert to Timestamp
+      ownerId: editingOwner?.ownerId || crypto.randomUUID(), 
+      dob: dobDate as any, 
     };
 
     if (editingIndex !== null) {
@@ -164,7 +162,7 @@ export function OwnerManager({ owners, setOwners, form: mainForm }: OwnerManager
             {owners.map((owner, index) => (
               <li key={owner.ownerId || index} className="flex items-center justify-between p-3 border rounded-md bg-background">
                 <div>
-                  <p className="font-medium">{owner.firstName} {owner.surname} <Badge variant="secondary">{owner.role}</Badge></p>
+                  <div className="font-medium">{owner.firstName} {owner.surname} <Badge variant="secondary">{owner.role}</Badge></div>
                   <p className="text-xs text-muted-foreground">{owner.email || owner.phone}</p>
                 </div>
                 <div className="flex gap-2">
