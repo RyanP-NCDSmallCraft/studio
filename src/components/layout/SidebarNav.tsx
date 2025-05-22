@@ -43,15 +43,37 @@ const navItems: NavItem[] = [
 
 export function SidebarNav() {
   const pathname = usePathname();
-  const { currentUser, isAdmin, isRegistrar, isInspector, isSupervisor } = useAuth();
+  const { currentUser } = useAuth(); // Removed unused isAdmin, etc. for this specific log
+
+  console.log("SidebarNav: Rendering. currentUser from useAuth():", JSON.stringify(currentUser, null, 2));
+  if (currentUser) {
+    console.log("SidebarNav: currentUser.role:", currentUser.role);
+  } else {
+    console.log("SidebarNav: currentUser is null or undefined.");
+  }
 
   const userHasRole = (itemRoles?: Array<string>) => {
-    if (!itemRoles || itemRoles.length === 0) return true; // No specific roles means accessible to all authenticated
-    if (!currentUser) return false;
-    return itemRoles.includes(currentUser.role);
+    if (!itemRoles || itemRoles.length === 0) {
+      // console.log("SidebarNav userHasRole: No specific roles required for item, returning true.");
+      return true; // No specific roles means accessible to all authenticated (if currentUser check is elsewhere)
+    }
+    if (!currentUser || !currentUser.role) {
+      // console.log("SidebarNav userHasRole: No currentUser or currentUser.role, returning false for item roles:", itemRoles);
+      return false;
+    }
+    const hasRole = itemRoles.includes(currentUser.role);
+    // console.log(`SidebarNav userHasRole: User role "${currentUser.role}", item roles: [${itemRoles.join(", ")}]. Has role: ${hasRole}`);
+    return hasRole;
   };
   
   const filteredNavItems = navItems.filter(item => userHasRole(item.roles));
+
+  console.log("SidebarNav: Original navItems count:", navItems.length);
+  console.log("SidebarNav: Filtered navItems count:", filteredNavItems.length);
+  if (filteredNavItems.length === 0 && navItems.length > 0 && currentUser) {
+    console.warn("SidebarNav: No nav items are being rendered for the current user. Check role and item.roles definitions. User role:", currentUser.role);
+  }
+
 
   return (
     <nav className="flex flex-col gap-2">

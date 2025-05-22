@@ -17,13 +17,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { toast } = useToast();
 
+  console.log("AppShell: Rendering. currentUser from useAuth():", currentUser ? `User UID: ${currentUser.userId}, Role: ${currentUser.role}` : currentUser);
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
       router.push('/login');
       router.refresh();
-    } catch (error) {
+    } catch (error) { // Added curly braces here
       console.error("Logout error:", error);
       toast({ title: "Logout Failed", description: "Could not log you out. Please try again.", variant: "destructive" });
     }
