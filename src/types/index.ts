@@ -70,7 +70,7 @@ export interface Registration {
   hullMaterialOtherDesc?: string;
   craftUse: "Pleasure" | "Passenger" | "Fishing" | "Cargo" | "Other";
   craftUseOtherDesc?: string;
-  fuelType: "Electric" | "Gasoline" | "Diesel" | "Other";
+  fuelType: "Electric" | "Petrol" | "Diesel" | "Other"; // Changed Gasoline to Petrol
   fuelTypeOtherDesc?: string;
   vesselType: "OpenBoat" | "CabinCruiser" | "Sailboat" | "PWC" | "Other"; // Personal Water Craft
   vesselTypeOtherDesc?: string;
@@ -128,4 +128,3 @@ export interface ChecklistTemplate {
 
 // For GenAI flow
 export type { SuggestChecklistItemsInput, SuggestChecklistItemsOutput } from '@/ai/flows/suggest-checklist-items';
-

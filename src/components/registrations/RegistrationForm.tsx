@@ -25,8 +25,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { Save, Send, Users, FileUp, Trash2, PlusCircle } from "lucide-react";
 import React, { useState } from "react";
-import { Timestamp, doc } from "firebase/firestore"; // Added doc import
-import { db } from "@/lib/firebase"; // Ensured db is imported
+import { Timestamp, doc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { OwnerManager } from "./OwnerManager";
 import { FileUploadManager } from "./FileUploadManager";
 
@@ -66,10 +66,10 @@ const registrationFormSchema = z.object({
 
   craftMake: z.string().min(1, "Craft make is required"),
   craftModel: z.string().min(1, "Craft model is required"),
-  craftYear: z.number().int().min(1900, "Invalid year").max(new Date().getFullYear() + 1, "Invalid year"),
+  craftYear: z.number({invalid_type_error: "Year must be a number"}).int().min(1900, "Invalid year").max(new Date().getFullYear() + 1, "Invalid year"),
   craftColor: z.string().min(1, "Craft color is required"),
   hullIdNumber: z.string().min(1, "Hull ID number is required"),
-  craftLength: z.number().positive("Length must be positive"),
+  craftLength: z.number({invalid_type_error: "Length must be a number"}).positive("Length must be positive"),
   lengthUnits: z.enum(["m", "ft"]),
   distinguishingFeatures: z.string().optional().default(""),
   
@@ -79,7 +79,7 @@ const registrationFormSchema = z.object({
   hullMaterialOtherDesc: z.string().optional().default(""),
   craftUse: z.enum(["Pleasure", "Passenger", "Fishing", "Cargo", "Other"]),
   craftUseOtherDesc: z.string().optional().default(""),
-  fuelType: z.enum(["Electric", "Gasoline", "Diesel", "Other"]),
+  fuelType: z.enum(["Electric", "Petrol", "Diesel", "Other"]), // Changed Gasoline to Petrol
   fuelTypeOtherDesc: z.string().optional().default(""),
   vesselType: z.enum(["OpenBoat", "CabinCruiser", "Sailboat", "PWC", "Other"]),
   vesselTypeOtherDesc: z.string().optional().default(""),
@@ -87,7 +87,7 @@ const registrationFormSchema = z.object({
   paymentMethod: z.enum(["Cash", "Card", "BankDeposit"]).optional(),
   paymentReceiptNumber: z.string().optional().default(""),
   bankStampRef: z.string().optional().default(""),
-  paymentAmount: z.number().positive("Amount must be positive").optional(),
+  paymentAmount: z.number({invalid_type_error: "Amount must be a number"}).positive("Amount must be positive").optional(),
   paymentDate: z.date().optional(),
 
   safetyCertNumber: z.string().optional().default(""),
@@ -132,7 +132,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
   const router = useRouter();
 
   const defaultValues: RegistrationFormValues = existingRegistrationData
-  ? { // Edit mode: Ensure all fields are present and correctly typed
+  ? { 
       registrationType: existingRegistrationData.registrationType || "New",
       previousScaRegoNo: existingRegistrationData.previousScaRegoNo || "",
       provinceOfRegistration: existingRegistrationData.provinceOfRegistration || "",
@@ -174,7 +174,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       hullMaterialOtherDesc: existingRegistrationData.hullMaterialOtherDesc || "",
       craftUse: existingRegistrationData.craftUse || "Pleasure",
       craftUseOtherDesc: existingRegistrationData.craftUseOtherDesc || "",
-      fuelType: existingRegistrationData.fuelType || "Gasoline",
+      fuelType: existingRegistrationData.fuelType || "Petrol", // Default to Petrol if existing
       fuelTypeOtherDesc: existingRegistrationData.fuelTypeOtherDesc || "",
       vesselType: existingRegistrationData.vesselType || "OpenBoat",
       vesselTypeOtherDesc: existingRegistrationData.vesselTypeOtherDesc || "",
@@ -187,7 +187,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       safetyEquipIssued: existingRegistrationData.safetyEquipIssued === undefined ? false : existingRegistrationData.safetyEquipIssued,
       safetyEquipReceiptNumber: existingRegistrationData.safetyEquipReceiptNumber || "",
     }
-  : { // Create mode defaults: Initialize ALL fields
+  : { 
       registrationType: "New",
       previousScaRegoNo: "",
       provinceOfRegistration: "",
@@ -207,7 +207,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       hullMaterialOtherDesc: "",
       craftUse: "Pleasure",
       craftUseOtherDesc: "",
-      fuelType: "Gasoline",
+      fuelType: "Petrol", // Default to Petrol for new registrations
       fuelTypeOtherDesc: "",
       vesselType: "OpenBoat",
       vesselTypeOtherDesc: "",
@@ -359,7 +359,8 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                       value={field.value === undefined || isNaN(Number(field.value)) ? '' : Number(field.value)}
                       onChange={e => {
                         const val = e.target.value;
-                        field.onChange(val === '' ? undefined : parseInt(val, 10));
+                        const parsed = parseInt(val, 10);
+                        field.onChange(isNaN(parsed) ? undefined : parsed);
                       }} 
                     />
                   </FormControl>
@@ -379,11 +380,12 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                       step="0.01" 
                       placeholder="e.g., 3.5" 
                       {...field} 
-                      value={field.value === undefined || isNaN(Number(field.value)) ? '' : Number(field.value)}
+                       value={field.value === undefined || isNaN(Number(field.value)) ? '' : Number(field.value)}
                       onChange={e => {
                         const val = e.target.value;
-                        field.onChange(val === '' ? undefined : parseFloat(val));
-                      }} 
+                        const parsed = parseFloat(val);
+                        field.onChange(isNaN(parsed) ? undefined : parsed);
+                      }}
                     />
                   </FormControl>
                   <FormMessage />
@@ -409,7 +411,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
             <FormField control={form.control} name="craftUse" render={({ field }) => (<FormItem><FormLabel>Craft Use *</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{["Pleasure", "Passenger", "Fishing", "Cargo", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
             {watchCraftUse === "Other" && <FormField control={form.control} name="craftUseOtherDesc" render={({ field }) => (<FormItem><FormLabel>Other Craft Use Desc. *</FormLabel><FormControl><Input placeholder="Specify other" {...field} /></FormControl><FormMessage /></FormItem>)} />}
 
-            <FormField control={form.control} name="fuelType" render={({ field }) => (<FormItem><FormLabel>Fuel Type *</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{["Electric", "Gasoline", "Diesel", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="fuelType" render={({ field }) => (<FormItem><FormLabel>Fuel Type *</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{["Electric", "Petrol", "Diesel", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
             {watchFuelType === "Other" && <FormField control={form.control} name="fuelTypeOtherDesc" render={({ field }) => (<FormItem><FormLabel>Other Fuel Type Desc. *</FormLabel><FormControl><Input placeholder="Specify other" {...field} /></FormControl><FormMessage /></FormItem>)} />}
             
             <FormField control={form.control} name="vesselType" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Vessel Type *</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{["OpenBoat", "CabinCruiser", "Sailboat", "PWC", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
@@ -433,7 +435,8 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                       value={field.value === undefined || isNaN(Number(field.value)) ? '' : Number(field.value)}
                       onChange={e => {
                         const val = e.target.value;
-                        field.onChange(val === '' ? undefined : parseFloat(val));
+                         const parsed = parseFloat(val);
+                        field.onChange(val === '' || isNaN(parsed) ? undefined : parsed);
                       }} 
                     />
                   </FormControl>
