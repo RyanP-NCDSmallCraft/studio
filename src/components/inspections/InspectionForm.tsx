@@ -28,6 +28,7 @@ import React, { useState, useEffect } from "react";
 import { Timestamp } from "firebase/firestore";
 import { suggestChecklistItems } from "@/ai/flows/suggest-checklist-items"; // GenAI flow
 import Link from "next/link";
+import { format } from 'date-fns'; // Added import
 
 const checklistItemSchema = z.object({
   itemId: z.string(),
