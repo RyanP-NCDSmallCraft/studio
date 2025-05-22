@@ -53,18 +53,11 @@ export function SidebarNav() {
   }
 
   const userHasRole = (itemRoles?: Array<string>) => {
-    if (!itemRoles || itemRoles.length === 0) {
-      // console.log("SidebarNav userHasRole: No specific roles required for item, returning true.");
-      return true; // No specific roles means accessible to all authenticated (if currentUser check is elsewhere)
-    }
-    if (!currentUser || !currentUser.role) {
-      // console.log("SidebarNav userHasRole: No currentUser or currentUser.role, returning false for item roles:", itemRoles);
-      return false;
-    }
-    const hasRole = itemRoles.includes(currentUser.role);
-    // console.log(`SidebarNav userHasRole: User role "${currentUser.role}", item roles: [${itemRoles.join(", ")}]. Has role: ${hasRole}`);
-    return hasRole;
-  };
+    if (!itemRoles || itemRoles.length === 0) return true;
+    if (!currentUser || !currentUser.role) return false;
+    const userRole = currentUser.role.toLowerCase();
+    return itemRoles.some(role => role.toLowerCase() === userRole);
+  };  
   
   const filteredNavItems = navItems.filter(item => userHasRole(item.roles));
 

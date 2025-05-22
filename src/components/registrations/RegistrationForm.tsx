@@ -39,8 +39,8 @@ const ownerSchema = z.object({
   dob: z.date({ required_error: "Date of birth is required"}),
   sex: z.enum(["Male", "Female", "Other"]),
   phone: z.string().min(1, "Phone number is required"),
-  fax: z.string().optional(),
-  email: z.string().email("Invalid email address").optional().or(z.literal("")),
+  fax: z.string().optional().default(""),
+  email: z.string().email("Invalid email address").optional().or(z.literal("")).default(""),
   postalAddress: z.string().min(1, "Postal address is required"),
   townDistrict: z.string().min(1, "Town/District is required"),
   llg: z.string().min(1, "LLG is required"),
@@ -57,7 +57,7 @@ const proofOfOwnershipDocSchema = z.object({
 
 const registrationFormSchema = z.object({
   registrationType: z.enum(["New", "Renewal"]),
-  previousScaRegoNo: z.string().optional(),
+  previousScaRegoNo: z.string().optional().default(""),
   provinceOfRegistration: z.string().min(1, "Province is required"),
   
   owners: z.array(ownerSchema).min(1, "At least one owner is required").max(5, "Maximum of 5 owners"),
@@ -70,30 +70,28 @@ const registrationFormSchema = z.object({
   hullIdNumber: z.string().min(1, "Hull ID number is required"),
   craftLength: z.number().positive("Length must be positive"),
   lengthUnits: z.enum(["m", "ft"]),
-  distinguishingFeatures: z.string().optional(),
+  distinguishingFeatures: z.string().optional().default(""),
   
   propulsionType: z.enum(["Inboard", "Outboard", "Both", "Sail", "Other"]),
-  propulsionOtherDesc: z.string().optional(),
+  propulsionOtherDesc: z.string().optional().default(""),
   hullMaterial: z.enum(["Wood", "Fiberglass", "Metal", "Inflatable", "Other"]),
-  hullMaterialOtherDesc: z.string().optional(),
+  hullMaterialOtherDesc: z.string().optional().default(""),
   craftUse: z.enum(["Pleasure", "Passenger", "Fishing", "Cargo", "Other"]),
-  craftUseOtherDesc: z.string().optional(),
+  craftUseOtherDesc: z.string().optional().default(""),
   fuelType: z.enum(["Electric", "Gasoline", "Diesel", "Other"]),
-  fuelTypeOtherDesc: z.string().optional(),
+  fuelTypeOtherDesc: z.string().optional().default(""),
   vesselType: z.enum(["OpenBoat", "CabinCruiser", "Sailboat", "PWC", "Other"]),
-  vesselTypeOtherDesc: z.string().optional(),
+  vesselTypeOtherDesc: z.string().optional().default(""),
 
-  // Payment fields (optional at draft stage)
   paymentMethod: z.enum(["Cash", "Card", "BankDeposit"]).optional(),
-  paymentReceiptNumber: z.string().optional(),
-  bankStampRef: z.string().optional(),
+  paymentReceiptNumber: z.string().optional().default(""),
+  bankStampRef: z.string().optional().default(""),
   paymentAmount: z.number().positive("Amount must be positive").optional(),
   paymentDate: z.date().optional(),
 
-  // Safety cert fields (optional at draft stage)
-  safetyCertNumber: z.string().optional(),
-  safetyEquipIssued: z.boolean().optional(),
-  safetyEquipReceiptNumber: z.string().optional(),
+  safetyCertNumber: z.string().optional().default(""),
+  safetyEquipIssued: z.boolean().optional().default(false),
+  safetyEquipReceiptNumber: z.string().optional().default(""),
 }).superRefine((data, ctx) => {
   if (data.registrationType === "Renewal" && !data.previousScaRegoNo) {
     ctx.addIssue({
@@ -132,40 +130,111 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
   const { toast } = useToast();
   const router = useRouter();
 
-  const defaultValues: Partial<RegistrationFormValues> = existingRegistrationData 
-  ? {
-      ...existingRegistrationData,
-      craftYear: existingRegistrationData.craftYear || undefined,
-      craftLength: existingRegistrationData.craftLength || undefined,
-      owners: existingRegistrationData.owners.map(o => ({...o, dob: o.dob.toDate()})), // Convert Timestamps to Dates
-      proofOfOwnershipDocs: existingRegistrationData.proofOfOwnershipDocs, // Assuming these are already correct type or handled by FileUploadManager
-      paymentDate: existingRegistrationData.paymentDate?.toDate(),
+  const defaultValues: RegistrationFormValues = existingRegistrationData
+  ? { // Edit mode: Ensure all fields are present and correctly typed
+      registrationType: existingRegistrationData.registrationType,
+      previousScaRegoNo: existingRegistrationData.previousScaRegoNo || "",
+      provinceOfRegistration: existingRegistrationData.provinceOfRegistration || "",
+      owners: existingRegistrationData.owners.map(o => ({
+        ...o,
+        dob: o.dob instanceof Timestamp ? o.dob.toDate() : (o.dob || new Date()),
+        ownerId: o.ownerId || crypto.randomUUID(),
+        role: o.role || "Primary",
+        surname: o.surname || "",
+        firstName: o.firstName || "",
+        sex: o.sex || "Male",
+        phone: o.phone || "",
+        fax: o.fax || "",
+        email: o.email || "",
+        postalAddress: o.postalAddress || "",
+        townDistrict: o.townDistrict || "",
+        llg: o.llg || "",
+        wardVillage: o.wardVillage || "",
+      })),
+      proofOfOwnershipDocs: existingRegistrationData.proofOfOwnershipDocs.map(d => ({
+        ...d,
+        docId: d.docId || crypto.randomUUID(),
+        description: d.description || "",
+        fileName: d.fileName || "",
+        fileUrl: d.fileUrl || "",
+        uploadedAt: d.uploadedAt || Timestamp.now(),
+      })),
+      craftMake: existingRegistrationData.craftMake || "",
+      craftModel: existingRegistrationData.craftModel || "",
+      craftYear: existingRegistrationData.craftYear || new Date().getFullYear(),
+      craftColor: existingRegistrationData.craftColor || "",
+      hullIdNumber: existingRegistrationData.hullIdNumber || "",
+      craftLength: typeof existingRegistrationData.craftLength === 'number' ? existingRegistrationData.craftLength : 0,
+      lengthUnits: existingRegistrationData.lengthUnits || "m",
+      distinguishingFeatures: existingRegistrationData.distinguishingFeatures || "",
+      propulsionType: existingRegistrationData.propulsionType || "Outboard",
+      propulsionOtherDesc: existingRegistrationData.propulsionOtherDesc || "",
+      hullMaterial: existingRegistrationData.hullMaterial || "Fiberglass",
+      hullMaterialOtherDesc: existingRegistrationData.hullMaterialOtherDesc || "",
+      craftUse: existingRegistrationData.craftUse || "Pleasure",
+      craftUseOtherDesc: existingRegistrationData.craftUseOtherDesc || "",
+      fuelType: existingRegistrationData.fuelType || "Gasoline",
+      fuelTypeOtherDesc: existingRegistrationData.fuelTypeOtherDesc || "",
+      vesselType: existingRegistrationData.vesselType || "OpenBoat",
+      vesselTypeOtherDesc: existingRegistrationData.vesselTypeOtherDesc || "",
+      paymentMethod: existingRegistrationData.paymentMethod || undefined,
+      paymentReceiptNumber: existingRegistrationData.paymentReceiptNumber || "",
+      bankStampRef: existingRegistrationData.bankStampRef || "",
+      paymentAmount: existingRegistrationData.paymentAmount === undefined ? undefined : (existingRegistrationData.paymentAmount || 0),
+      paymentDate: existingRegistrationData.paymentDate instanceof Timestamp ? existingRegistrationData.paymentDate.toDate() : existingRegistrationData.paymentDate || undefined,
+      safetyCertNumber: existingRegistrationData.safetyCertNumber || "",
+      safetyEquipIssued: existingRegistrationData.safetyEquipIssued === undefined ? false : existingRegistrationData.safetyEquipIssued,
+      safetyEquipReceiptNumber: existingRegistrationData.safetyEquipReceiptNumber || "",
     }
-  : {
+  : { // Create mode defaults: Initialize ALL fields
       registrationType: "New",
-      lengthUnits: "m",
-      propulsionType: "Outboard",
-      hullMaterial: "Fiberglass",
-      craftUse: "Pleasure",
-      fuelType: "Gasoline",
-      vesselType: "OpenBoat",
+      previousScaRegoNo: "",
+      provinceOfRegistration: "",
       owners: [],
       proofOfOwnershipDocs: [],
+      craftMake: "",
+      craftModel: "",
       craftYear: new Date().getFullYear(),
+      craftColor: "",
+      hullIdNumber: "",
+      craftLength: 0, // Initialize to 0 to make it controlled
+      lengthUnits: "m",
+      distinguishingFeatures: "",
+      propulsionType: "Outboard",
+      propulsionOtherDesc: "",
+      hullMaterial: "Fiberglass",
+      hullMaterialOtherDesc: "",
+      craftUse: "Pleasure",
+      craftUseOtherDesc: "",
+      fuelType: "Gasoline",
+      fuelTypeOtherDesc: "",
+      vesselType: "OpenBoat",
+      vesselTypeOtherDesc: "",
+      paymentMethod: undefined, // For Select, undefined means no selection
+      paymentReceiptNumber: "",
+      bankStampRef: "",
+      paymentAmount: undefined, // Optional number, input will be empty
+      paymentDate: undefined, // Optional date, input will be empty
+      safetyCertNumber: "",
+      safetyEquipIssued: false, // Default for boolean
+      safetyEquipReceiptNumber: "",
     };
 
   const form = useForm<RegistrationFormValues>({
     resolver: zodResolver(registrationFormSchema),
-    defaultValues,
-    mode: "onChange", // Validate on change for better UX
+    defaultValues, // Use the fully defined defaultValues
+    mode: "onChange",
   });
 
-  const [owners, setOwners] = useState<Owner[]>(existingRegistrationData?.owners || []);
-  const [proofDocs, setProofDocs] = useState<ProofOfOwnershipDoc[]>(existingRegistrationData?.proofOfOwnershipDocs || []);
+  const [owners, setOwners] = useState<Owner[]>(defaultValues.owners);
+  const [proofDocs, setProofDocs] = useState<ProofOfOwnershipDoc[]>(defaultValues.proofOfOwnershipDocs);
 
 
   React.useEffect(() => {
-    form.setValue("owners", owners as any); // Cast needed because Zod schema expects Date, but Firestore stores Timestamp
+    // Cast to any because Zod schema expects Date for dob, but Firestore might store Timestamp
+    // and our OwnerManager deals with Date objects for its internal modal form.
+    // The defaultValues conversion already handles Timestamp -> Date.
+    form.setValue("owners", owners as any); 
   }, [owners, form]);
 
   React.useEffect(() => {
@@ -178,26 +247,32 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       return;
     }
 
-    // In a real app, convert Dates back to Timestamps for Firestore
     const submissionData = {
       ...data,
       owners: data.owners.map(o => ({...o, dob: Timestamp.fromDate(o.dob)})),
       paymentDate: data.paymentDate ? Timestamp.fromDate(data.paymentDate) : undefined,
+      // Ensure optional number fields that might be "" from input are converted to undefined or number
+      paymentAmount: data.paymentAmount === undefined || data.paymentAmount === null || isNaN(Number(data.paymentAmount)) ? undefined : Number(data.paymentAmount),
+      craftLength: Number(data.craftLength), // Ensure it's a number
+      craftYear: Number(data.craftYear), // Ensure it's a number
       status,
-      // createdByRef, lastUpdatedByRef, createdAt, lastUpdatedAt would be set on server or here
+      createdAt: mode === 'create' ? Timestamp.now() : (existingRegistrationData?.createdAt || Timestamp.now()),
+      lastUpdatedAt: Timestamp.now(),
+      createdByRef: mode === 'create' ? doc(db, "users", currentUser.userId) : existingRegistrationData?.createdByRef,
+      lastUpdatedByRef: doc(db, "users", currentUser.userId),
     };
 
     console.log("Submitting registration data:", submissionData);
 
     try {
       if (mode === "create") {
-        // Add to Firestore: db.collection("registrations").add(submissionData)
-        toast({ title: "Registration Saved", description: `Status: ${status}` });
-        router.push("/registrations"); // Redirect to list page
+        // const docRef = await addDoc(collection(db, "registrations"), submissionData);
+        toast({ title: "Registration Saved (Simulated)", description: `ID: new_id_placeholder, Status: ${status}` });
+        router.push("/registrations"); 
       } else if (registrationId) {
-        // Update in Firestore: db.collection("registrations").doc(registrationId).update(submissionData)
-        toast({ title: "Registration Updated", description: `Status: ${status}` });
-        router.push(`/registrations/${registrationId}`); // Redirect to detail page
+        // await updateDoc(doc(db, "registrations", registrationId), submissionData);
+        toast({ title: "Registration Updated (Simulated)", description: `ID: ${registrationId}, Status: ${status}` });
+        router.push(`/registrations/${registrationId}`);
       }
        router.refresh();
     } catch (error) {
@@ -212,6 +287,10 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
   const watchFuelType = form.watch("fuelType");
   const watchVesselType = form.watch("vesselType");
   const watchRegistrationType = form.watch("registrationType");
+
+  // Import doc, addDoc, updateDoc, collection from firebase/firestore if doing real DB operations
+  // For now, assume they are imported elsewhere (e.g. in a service) or not used in this placeholder submit.
+  const db = {}; // Placeholder for db, remove if actual db operations are added here
 
   return (
     <Form {...form}>
@@ -254,7 +333,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
               control={form.control}
               name="provinceOfRegistration"
               render={({ field }) => (
-                <FormItem className={watchRegistrationType === "New" ? "md:col-span-2" : ""}>
+                <FormItem className={watchRegistrationType === "New" && !form.getValues("previousScaRegoNo") ? "md:col-span-2" : ""}>
                   <FormLabel>Province of Registration *</FormLabel>
                   <FormControl><Input placeholder="e.g., National Capital District" {...field} /></FormControl>
                   <FormMessage />
@@ -264,11 +343,9 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
           </CardContent>
         </Card>
         
-        {/* Owners Section */}
-        <OwnerManager owners={owners} setOwners={setOwners} form={form as any /* Pass form for triggering validation if needed */} />
+        <OwnerManager owners={owners} setOwners={setOwners} form={form} />
 
-        {/* Proof of Ownership */}
-        <FileUploadManager title="Proof of Ownership Documents *" docs={proofDocs} setDocs={setProofDocs} storagePath="proof_of_ownership/" form={form as any} fieldName="proofOfOwnershipDocs" />
+        <FileUploadManager title="Proof of Ownership Documents *" docs={proofDocs} setDocs={setProofDocs} storagePath="proof_of_ownership/" form={form} fieldName="proofOfOwnershipDocs" />
 
 
         {/* Craft Details */}
@@ -277,11 +354,11 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FormField control={form.control} name="craftMake" render={({ field }) => (<FormItem><FormLabel>Craft Make *</FormLabel><FormControl><Input placeholder="e.g., Yamaha" {...field} /></FormControl><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="craftModel" render={({ field }) => (<FormItem><FormLabel>Craft Model *</FormLabel><FormControl><Input placeholder="e.g., FX Cruiser HO" {...field} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="craftYear" render={({ field }) => (<FormItem><FormLabel>Craft Year *</FormLabel><FormControl><Input type="number" placeholder="e.g., 2023" {...field} onChange={e => field.onChange(parseInt(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="craftYear" render={({ field }) => (<FormItem><FormLabel>Craft Year *</FormLabel><FormControl><Input type="number" placeholder="e.g., 2023" {...field} onChange={e => field.onChange(parseInt(e.target.value, 10))} /></FormControl><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="craftColor" render={({ field }) => (<FormItem><FormLabel>Craft Color *</FormLabel><FormControl><Input placeholder="e.g., Blue/White" {...field} /></FormControl><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="hullIdNumber" render={({ field }) => (<FormItem><FormLabel>Hull ID / Serial No. *</FormLabel><FormControl><Input placeholder="Enter HIN" {...field} /></FormControl><FormMessage /></FormItem>)} />
             <div className="grid grid-cols-2 gap-4">
-              <FormField control={form.control} name="craftLength" render={({ field }) => (<FormItem><FormLabel>Craft Length *</FormLabel><FormControl><Input type="number" placeholder="e.g., 3.5" {...field} onChange={e => field.onChange(parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
+              <FormField control={form.control} name="craftLength" render={({ field }) => (<FormItem><FormLabel>Craft Length *</FormLabel><FormControl><Input type="number" step="0.01" placeholder="e.g., 3.5" {...field} onChange={e => field.onChange(parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
               <FormField control={form.control} name="lengthUnits" render={({ field }) => (<FormItem><FormLabel>Units *</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="m">Meters (m)</SelectItem><SelectItem value="ft">Feet (ft)</SelectItem></SelectContent></Select><FormMessage /></FormItem>)} />
             </div>
             <FormField control={form.control} name="distinguishingFeatures" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Distinguishing Features</FormLabel><FormControl><Textarea placeholder="e.g., Custom decals, Bimini top" {...field} /></FormControl><FormMessage /></FormItem>)} />
@@ -309,15 +386,14 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
           </CardContent>
         </Card>
 
-        {/* Optional Sections: Payment and Safety (shown for completeness) */}
          <Card>
           <CardHeader><CardTitle>Payment Information (Optional)</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FormField control={form.control} name="paymentMethod" render={({ field }) => (<FormItem><FormLabel>Payment Method</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select method"/></SelectTrigger></FormControl><SelectContent>{["Cash", "Card", "BankDeposit"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="paymentAmount" render={({ field }) => (<FormItem><FormLabel>Payment Amount</FormLabel><FormControl><Input type="number" placeholder="e.g., 150.00" {...field} onChange={e => field.onChange(parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="paymentAmount" render={({ field }) => (<FormItem><FormLabel>Payment Amount</FormLabel><FormControl><Input type="number" step="0.01" placeholder="e.g., 150.00" {...field} onChange={e => field.onChange(parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="paymentReceiptNumber" render={({ field }) => (<FormItem><FormLabel>Payment Receipt No.</FormLabel><FormControl><Input placeholder="Receipt number" {...field} /></FormControl><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="bankStampRef" render={({ field }) => (<FormItem><FormLabel>Bank Stamp Ref.</FormLabel><FormControl><Input placeholder="Bank stamp reference" {...field} /></FormControl><FormMessage /></FormItem>)} />
-            {/* Payment Date: Use ShadCN DatePicker if needed */}
+            <FormField control={form.control} name="paymentDate" render={({ field }) => (<FormItem><FormLabel>Payment Date</FormLabel><FormControl><Input type="date" {...field} value={field.value ? new Date(field.value).toISOString().split('T')[0] : ''} onChange={e => field.onChange(new Date(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
           </CardContent>
         </Card>
 
@@ -325,17 +401,17 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
           <CardHeader><CardTitle>Safety Certificate (Optional)</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FormField control={form.control} name="safetyCertNumber" render={({ field }) => (<FormItem><FormLabel>Safety Certificate No.</FormLabel><FormControl><Input placeholder="Certificate number" {...field} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="safetyEquipIssued" render={({ field }) => (<FormItem><FormLabel>Safety Equipment Issued?</FormLabel><Select onValueChange={val => field.onChange(val === "true")} defaultValue={field.value?.toString()}><FormControl><SelectTrigger><SelectValue placeholder="Select an option"/></SelectTrigger></FormControl><SelectContent><SelectItem value="true">Yes</SelectItem><SelectItem value="false">No</SelectItem></SelectContent></Select><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="safetyEquipIssued" render={({ field }) => (<FormItem><FormLabel>Safety Equipment Issued?</FormLabel><Select onValueChange={val => field.onChange(val === "true")} defaultValue={field.value === undefined ? undefined : String(field.value)}><FormControl><SelectTrigger><SelectValue placeholder="Select an option"/></SelectTrigger></FormControl><SelectContent><SelectItem value="true">Yes</SelectItem><SelectItem value="false">No</SelectItem></SelectContent></Select><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="safetyEquipReceiptNumber" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Safety Equipment Receipt No.</FormLabel><FormControl><Input placeholder="Equipment receipt number" {...field} /></FormControl><FormMessage /></FormItem>)} />
           </CardContent>
         </Card>
 
 
         <CardFooter className="flex justify-end gap-4 p-0 pt-8">
-          <Button type="button" variant="outline" onClick={() => form.handleSubmit((data) => onSubmit(data, "Draft"))()} disabled={form.formState.isSubmitting}>
+          <Button type="button" variant="outline" onClick={form.handleSubmit((data) => onSubmit(data, "Draft"))} disabled={form.formState.isSubmitting}>
             <Save className="mr-2 h-4 w-4" /> Save Draft
           </Button>
-          <Button type="button" onClick={() => form.handleSubmit((data) => onSubmit(data, "Submitted"))()} disabled={form.formState.isSubmitting}>
+          <Button type="button" onClick={form.handleSubmit((data) => onSubmit(data, "Submitted"))} disabled={form.formState.isSubmitting}>
             <Send className="mr-2 h-4 w-4" /> Submit for Review
           </Button>
         </CardFooter>
@@ -344,3 +420,4 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
   );
 }
 
+    

@@ -1,159 +1,136 @@
-
 "use client";
+
+import { useState } from "react";
+import { useForm, useFieldArray } from "react-hook-form";
+import { db } from "@/lib/firebase";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import Link from "next/link";
-import { PlusCircle, Ship, Eye, Edit, Filter } from "lucide-react";
-import type { Registration } from "@/types";
-import { useAuth } from "@/hooks/useAuth";
-import { formatFirebaseTimestamp } from '@/lib/utils';
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 
-// Placeholder data - in a real app, this would come from Firestore
-const placeholderRegistrations: Registration[] = [
-  {
-    registrationId: "REG001",
-    scaRegoNo: "SCA123",
-    owners: [{ ownerId: "owner1", role: "Primary", surname: "Smith", firstName: "John", dob: new Date() as any, sex: "Male", phone: "123", postalAddress: "1 Street", townDistrict: "Town", llg: "LLG A", wardVillage: "Village 1" }],
-    craftMake: "Yamaha",
-    craftModel: "WaveRunner",
-    status: "Approved",
-    createdAt: new Date() as any, // Firestore Timestamp
-    lastUpdatedAt: new Date() as any,
-    createdByRef: {} as any, 
-    registrationType: "New",
-    craftYear: 2022,
-    craftColor: "Blue",
-    hullIdNumber: "YAM12345X122",
-    craftLength: 3.5,
-    lengthUnits: "m",
-    propulsionType: "Outboard",
-    hullMaterial: "Fiberglass",
-    craftUse: "Pleasure",
-    fuelType: "Gasoline",
-    vesselType: "PWC",
-    proofOfOwnershipDocs: [],
-    // submittedAt is optional, if not present, createdAt is used for display
-  },
-  {
-    registrationId: "REG002",
-    interimRegoNo: "INT456",
-    owners: [{ ownerId: "owner2", role: "Primary", surname: "Doe", firstName: "Jane", dob: new Date() as any, sex: "Female", phone: "456", postalAddress: "2 Avenue", townDistrict: "City", llg: "LLG B", wardVillage: "Village 2" }],
-    craftMake: "Bayliner",
-    craftModel: "Element E18",
-    status: "PendingReview",
-    createdAt: new Date() as any,
-    lastUpdatedAt: new Date() as any,
-    createdByRef: {} as any,
-    registrationType: "New",
-    craftYear: 2023,
-    craftColor: "White",
-    hullIdNumber: "BAY67890Y223",
-    craftLength: 18,
-    lengthUnits: "ft",
-    propulsionType: "Outboard",
-    hullMaterial: "Fiberglass",
-    craftUse: "Pleasure",
-    fuelType: "Gasoline",
-    vesselType: "OpenBoat",
-    proofOfOwnershipDocs: [],
-    // submittedAt is optional
-  },
-];
+export default function NewRegistrationForm() {
+  const { register, handleSubmit, control, reset } = useForm({
+    defaultValues: {
+      scaRegoNo: "",
+      craftMake: "",
+      craftModel: "",
+      craftUse: "Pleasure",
+      fuelType: "Gasoline",
+      owners: [{ firstName: "", surname: "", role: "Primary" }],
+    },
+  });
 
-export default function RegistrationListPage() {
-  const { isRegistrar } = useAuth();
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: "owners",
+  });
 
-  const getStatusBadgeVariant = (status: Registration["status"]) => {
-    switch (status) {
-      case "Approved": return "default"; // Default is primary, which is blue
-      case "PendingReview": return "secondary";
-      case "Submitted": return "secondary";
-      case "Rejected": return "destructive";
-      case "Draft": return "outline";
-      case "Expired": return "destructive";
-      case "RequiresInfo": return "outline"; // Use outline like draft for info needed
-      default: return "outline";
+  const [loading, setLoading] = useState(false);
+
+  const onSubmit = async (data) => {
+    setLoading(true);
+    try {
+      await addDoc(collection(db, "registrations"), {
+        ...data,
+        status: "Draft",
+        createdAt: serverTimestamp(),
+      });
+      reset();
+      alert("Registration created successfully.");
+    } catch (error) {
+      console.error("Error adding registration:", error);
+      alert("Error submitting form.");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <Ship className="h-8 w-8 text-primary" />
-          <h1 className="text-3xl font-bold">Craft Registrations</h1>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" disabled>
-            <Filter className="mr-2 h-4 w-4" /> Filter
-          </Button>
-          {isRegistrar && (
-            <Button asChild>
-              <Link href="/registrations/new">
-                <PlusCircle className="mr-2 h-4 w-4" /> Add New Registration
-              </Link>
-            </Button>
-          )}
-        </div>
-      </div>
-
-      <Card className="shadow-lg">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 max-w-4xl mx-auto">
+      <Card>
         <CardHeader>
-          <CardTitle>Registration Overview</CardTitle>
-          <CardDescription>Manage and track all craft registrations.</CardDescription>
+          <CardTitle>Craft Registration</CardTitle>
         </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Rego No.</TableHead>
-                <TableHead>Owner</TableHead>
-                <TableHead>Craft Make/Model</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {placeholderRegistrations.map((reg) => {
-                const dateToDisplay = reg.submittedAt 
-                  ? formatFirebaseTimestamp(reg.submittedAt, "PP") 
-                  : formatFirebaseTimestamp(reg.createdAt, "PP");
-                return (
-                  <TableRow key={reg.registrationId}>
-                    <TableCell>{reg.scaRegoNo || reg.interimRegoNo || "N/A"}</TableCell>
-                    <TableCell>{reg.owners[0]?.firstName} {reg.owners[0]?.surname}</TableCell>
-                    <TableCell>{reg.craftMake} {reg.craftModel}</TableCell>
-                    <TableCell>
-                      <Badge variant={getStatusBadgeVariant(reg.status)}>{reg.status}</Badge>
-                    </TableCell>
-                    <TableCell>{dateToDisplay}</TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" asChild title="View Details">
-                        <Link href={`/registrations/${reg.registrationId}`}><Eye className="h-4 w-4" /></Link>
-                      </Button>
-                      {(isRegistrar && (reg.status === "Draft" || reg.status === "RequiresInfo" || reg.status === "Submitted")) && (
-                         <Button variant="ghost" size="icon" asChild title="Edit Registration">
-                          <Link href={`/registrations/${reg.registrationId}/edit`}><Edit className="h-4 w-4" /></Link>
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+        <CardContent className="space-y-4">
+          <div>
+            <Label htmlFor="scaRegoNo">SCA Registration No.</Label>
+            <Input id="scaRegoNo" {...register("scaRegoNo", { required: true })} />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="craftMake">Craft Make</Label>
+              <Input id="craftMake" {...register("craftMake", { required: true })} />
+            </div>
+            <div>
+              <Label htmlFor="craftModel">Craft Model</Label>
+              <Input id="craftModel" {...register("craftModel", { required: true })} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Craft Use</Label>
+              <Select {...register("craftUse")}
+                defaultValue="Pleasure">
+                <SelectTrigger>
+                  <SelectValue placeholder="Select craft use" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Pleasure">Pleasure</SelectItem>
+                  <SelectItem value="Fishing">Fishing</SelectItem>
+                  <SelectItem value="Transport">Transport</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Fuel Type</Label>
+              <Select {...register("fuelType")}
+                defaultValue="Gasoline">
+                <SelectTrigger>
+                  <SelectValue placeholder="Select fuel type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Gasoline">Gasoline</SelectItem>
+                  <SelectItem value="Diesel">Diesel</SelectItem>
+                  <SelectItem value="Electric">Electric</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h3 className="font-semibold text-lg">Owners</h3>
+            {fields.map((field, index) => (
+              <div key={field.id} className="grid grid-cols-2 gap-4 items-end">
+                <div>
+                  <Label>First Name</Label>
+                  <Input {...register(`owners.${index}.firstName`, { required: true })} />
+                </div>
+                <div>
+                  <Label>Surname</Label>
+                  <Input {...register(`owners.${index}.surname`, { required: true })} />
+                </div>
+                <div className="col-span-2">
+                  <Button type="button" variant="destructive" onClick={() => remove(index)}>
+                    Remove Owner
+                  </Button>
+                </div>
+              </div>
+            ))}
+            <Button type="button" onClick={() => append({ firstName: "", surname: "", role: "Secondary" })}>
+              Add Another Owner
+            </Button>
+          </div>
+
+          <Button type="submit" disabled={loading}>
+            {loading ? "Submitting..." : "Submit Registration"}
+          </Button>
         </CardContent>
       </Card>
-       {placeholderRegistrations.length === 0 && (
-        <Card>
-            <CardContent className="pt-6 text-center text-muted-foreground">
-                No registrations found.
-            </CardContent>
-        </Card>
-      )}
-    </div>
+    </form>
   );
 }
