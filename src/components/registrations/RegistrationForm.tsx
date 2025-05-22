@@ -25,7 +25,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { Save, Send, Users, FileUp, Trash2, PlusCircle } from "lucide-react";
 import React, { useState } from "react";
-import { Timestamp } from "firebase/firestore";
+import { Timestamp, doc } from "firebase/firestore"; // Added doc import
+import { db } from "@/lib/firebase"; // Ensured db is imported
 import { OwnerManager } from "./OwnerManager";
 import { FileUploadManager } from "./FileUploadManager";
 
@@ -132,16 +133,16 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
 
   const defaultValues: RegistrationFormValues = existingRegistrationData
   ? { // Edit mode: Ensure all fields are present and correctly typed
-      registrationType: existingRegistrationData.registrationType,
+      registrationType: existingRegistrationData.registrationType || "New",
       previousScaRegoNo: existingRegistrationData.previousScaRegoNo || "",
       provinceOfRegistration: existingRegistrationData.provinceOfRegistration || "",
-      owners: existingRegistrationData.owners.map(o => ({
+      owners: (existingRegistrationData.owners || []).map(o => ({
         ...o,
-        dob: o.dob instanceof Timestamp ? o.dob.toDate() : (o.dob || new Date()),
         ownerId: o.ownerId || crypto.randomUUID(),
         role: o.role || "Primary",
         surname: o.surname || "",
         firstName: o.firstName || "",
+        dob: o.dob instanceof Timestamp ? o.dob.toDate() : (o.dob ? new Date(o.dob as any) : new Date()),
         sex: o.sex || "Male",
         phone: o.phone || "",
         fax: o.fax || "",
@@ -151,7 +152,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
         llg: o.llg || "",
         wardVillage: o.wardVillage || "",
       })),
-      proofOfOwnershipDocs: existingRegistrationData.proofOfOwnershipDocs.map(d => ({
+      proofOfOwnershipDocs: (existingRegistrationData.proofOfOwnershipDocs || []).map(d => ({
         ...d,
         docId: d.docId || crypto.randomUUID(),
         description: d.description || "",
@@ -181,7 +182,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       paymentReceiptNumber: existingRegistrationData.paymentReceiptNumber || "",
       bankStampRef: existingRegistrationData.bankStampRef || "",
       paymentAmount: existingRegistrationData.paymentAmount === undefined ? undefined : (existingRegistrationData.paymentAmount || 0),
-      paymentDate: existingRegistrationData.paymentDate instanceof Timestamp ? existingRegistrationData.paymentDate.toDate() : existingRegistrationData.paymentDate || undefined,
+      paymentDate: existingRegistrationData.paymentDate instanceof Timestamp ? existingRegistrationData.paymentDate.toDate() : (existingRegistrationData.paymentDate ? new Date(existingRegistrationData.paymentDate as any) : undefined),
       safetyCertNumber: existingRegistrationData.safetyCertNumber || "",
       safetyEquipIssued: existingRegistrationData.safetyEquipIssued === undefined ? false : existingRegistrationData.safetyEquipIssued,
       safetyEquipReceiptNumber: existingRegistrationData.safetyEquipReceiptNumber || "",
@@ -197,7 +198,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       craftYear: new Date().getFullYear(),
       craftColor: "",
       hullIdNumber: "",
-      craftLength: 0, // Initialize to 0 to make it controlled
+      craftLength: 0, 
       lengthUnits: "m",
       distinguishingFeatures: "",
       propulsionType: "Outboard",
@@ -210,19 +211,19 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       fuelTypeOtherDesc: "",
       vesselType: "OpenBoat",
       vesselTypeOtherDesc: "",
-      paymentMethod: undefined, // For Select, undefined means no selection
+      paymentMethod: undefined, 
       paymentReceiptNumber: "",
       bankStampRef: "",
-      paymentAmount: undefined, // Optional number, input will be empty
-      paymentDate: undefined, // Optional date, input will be empty
+      paymentAmount: undefined, 
+      paymentDate: undefined, 
       safetyCertNumber: "",
-      safetyEquipIssued: false, // Default for boolean
+      safetyEquipIssued: false, 
       safetyEquipReceiptNumber: "",
     };
 
   const form = useForm<RegistrationFormValues>({
     resolver: zodResolver(registrationFormSchema),
-    defaultValues, // Use the fully defined defaultValues
+    defaultValues, 
     mode: "onChange",
   });
 
@@ -231,9 +232,6 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
 
 
   React.useEffect(() => {
-    // Cast to any because Zod schema expects Date for dob, but Firestore might store Timestamp
-    // and our OwnerManager deals with Date objects for its internal modal form.
-    // The defaultValues conversion already handles Timestamp -> Date.
     form.setValue("owners", owners as any); 
   }, [owners, form]);
 
@@ -251,10 +249,9 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       ...data,
       owners: data.owners.map(o => ({...o, dob: Timestamp.fromDate(o.dob)})),
       paymentDate: data.paymentDate ? Timestamp.fromDate(data.paymentDate) : undefined,
-      // Ensure optional number fields that might be "" from input are converted to undefined or number
       paymentAmount: data.paymentAmount === undefined || data.paymentAmount === null || isNaN(Number(data.paymentAmount)) ? undefined : Number(data.paymentAmount),
-      craftLength: Number(data.craftLength), // Ensure it's a number
-      craftYear: Number(data.craftYear), // Ensure it's a number
+      craftLength: Number(data.craftLength), 
+      craftYear: Number(data.craftYear), 
       status,
       createdAt: mode === 'create' ? Timestamp.now() : (existingRegistrationData?.createdAt || Timestamp.now()),
       lastUpdatedAt: Timestamp.now(),
@@ -288,9 +285,6 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
   const watchVesselType = form.watch("vesselType");
   const watchRegistrationType = form.watch("registrationType");
 
-  // Import doc, addDoc, updateDoc, collection from firebase/firestore if doing real DB operations
-  // For now, assume they are imported elsewhere (e.g. in a service) or not used in this placeholder submit.
-  const db = {}; // Placeholder for db, remove if actual db operations are added here
 
   return (
     <Form {...form}>
@@ -354,11 +348,48 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FormField control={form.control} name="craftMake" render={({ field }) => (<FormItem><FormLabel>Craft Make *</FormLabel><FormControl><Input placeholder="e.g., Yamaha" {...field} /></FormControl><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="craftModel" render={({ field }) => (<FormItem><FormLabel>Craft Model *</FormLabel><FormControl><Input placeholder="e.g., FX Cruiser HO" {...field} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="craftYear" render={({ field }) => (<FormItem><FormLabel>Craft Year *</FormLabel><FormControl><Input type="number" placeholder="e.g., 2023" {...field} onChange={e => field.onChange(parseInt(e.target.value, 10))} /></FormControl><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="craftYear" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Craft Year *</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="number" 
+                      placeholder="e.g., 2023" 
+                      {...field} 
+                      value={field.value === undefined || isNaN(Number(field.value)) ? '' : Number(field.value)}
+                      onChange={e => {
+                        const val = e.target.value;
+                        field.onChange(val === '' ? undefined : parseInt(val, 10));
+                      }} 
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} 
+            />
             <FormField control={form.control} name="craftColor" render={({ field }) => (<FormItem><FormLabel>Craft Color *</FormLabel><FormControl><Input placeholder="e.g., Blue/White" {...field} /></FormControl><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="hullIdNumber" render={({ field }) => (<FormItem><FormLabel>Hull ID / Serial No. *</FormLabel><FormControl><Input placeholder="Enter HIN" {...field} /></FormControl><FormMessage /></FormItem>)} />
             <div className="grid grid-cols-2 gap-4">
-              <FormField control={form.control} name="craftLength" render={({ field }) => (<FormItem><FormLabel>Craft Length *</FormLabel><FormControl><Input type="number" step="0.01" placeholder="e.g., 3.5" {...field} onChange={e => field.onChange(parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="craftLength" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Craft Length *</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="number" 
+                      step="0.01" 
+                      placeholder="e.g., 3.5" 
+                      {...field} 
+                      value={field.value === undefined || isNaN(Number(field.value)) ? '' : Number(field.value)}
+                      onChange={e => {
+                        const val = e.target.value;
+                        field.onChange(val === '' ? undefined : parseFloat(val));
+                      }} 
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} 
+            />
               <FormField control={form.control} name="lengthUnits" render={({ field }) => (<FormItem><FormLabel>Units *</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="m">Meters (m)</SelectItem><SelectItem value="ft">Feet (ft)</SelectItem></SelectContent></Select><FormMessage /></FormItem>)} />
             </div>
             <FormField control={form.control} name="distinguishingFeatures" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Distinguishing Features</FormLabel><FormControl><Textarea placeholder="e.g., Custom decals, Bimini top" {...field} /></FormControl><FormMessage /></FormItem>)} />
@@ -390,7 +421,26 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
           <CardHeader><CardTitle>Payment Information (Optional)</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FormField control={form.control} name="paymentMethod" render={({ field }) => (<FormItem><FormLabel>Payment Method</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select method"/></SelectTrigger></FormControl><SelectContent>{["Cash", "Card", "BankDeposit"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="paymentAmount" render={({ field }) => (<FormItem><FormLabel>Payment Amount</FormLabel><FormControl><Input type="number" step="0.01" placeholder="e.g., 150.00" {...field} onChange={e => field.onChange(parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="paymentAmount" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Payment Amount</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="number" 
+                      step="0.01" 
+                      placeholder="e.g., 150.00" 
+                      {...field} 
+                      value={field.value === undefined || isNaN(Number(field.value)) ? '' : Number(field.value)}
+                      onChange={e => {
+                        const val = e.target.value;
+                        field.onChange(val === '' ? undefined : parseFloat(val));
+                      }} 
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} 
+            />
             <FormField control={form.control} name="paymentReceiptNumber" render={({ field }) => (<FormItem><FormLabel>Payment Receipt No.</FormLabel><FormControl><Input placeholder="Receipt number" {...field} /></FormControl><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="bankStampRef" render={({ field }) => (<FormItem><FormLabel>Bank Stamp Ref.</FormLabel><FormControl><Input placeholder="Bank stamp reference" {...field} /></FormControl><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="paymentDate" render={({ field }) => (<FormItem><FormLabel>Payment Date</FormLabel><FormControl><Input type="date" {...field} value={field.value ? new Date(field.value).toISOString().split('T')[0] : ''} onChange={e => field.onChange(new Date(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
@@ -419,5 +469,3 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
     </Form>
   );
 }
-
-    
