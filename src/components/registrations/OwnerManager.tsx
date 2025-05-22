@@ -2,11 +2,11 @@
 "use client";
 import React, { useState } from "react";
 import type { Control, UseFormReturn } from "react-hook-form";
-import { useFieldArray, useForm } from "react-hook-form"; // Added useForm here
+import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@/components/ui/label"; // Not directly used in JSX, but kept for consistency if modalForm were to use it
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
@@ -15,7 +15,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
+  // DialogTrigger, // DialogTrigger is not explicitly used as open state is managed
   DialogClose,
 } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -23,18 +23,22 @@ import { PlusCircle, Trash2, Edit, UserPlus } from "lucide-react";
 import type { Owner } from "@/types";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { format, parse } from "date-fns";
+import { format, parseISO, isValid } from "date-fns"; // parseISO for robust date string parsing
+import { Badge } from "@/components/ui/badge"; // Added import for Badge
 
 // Simplified Zod schema for the modal form
 const ownerModalSchema = z.object({
   role: z.enum(["Primary", "CoOwner"]),
   surname: z.string().min(1, "Surname is required"),
   firstName: z.string().min(1, "First name is required"),
-  dobString: z.string().min(1, "Date of birth is required").refine(val => !isNaN(Date.parse(val)), { message: "Invalid date format"}),
+  dobString: z.string().min(1, "Date of birth is required").refine(val => {
+    const date = parseISO(val); // Use parseISO for better compatibility
+    return isValid(date);
+  }, { message: "Invalid date format. Use YYYY-MM-DD."}),
   sex: z.enum(["Male", "Female", "Other"]),
   phone: z.string().min(1, "Phone number is required"),
-  fax: z.string().optional(),
-  email: z.string().email("Invalid email address").optional().or(z.literal("")),
+  fax: z.string().optional().default(""),
+  email: z.string().email("Invalid email address").optional().or(z.literal("")).default(""),
   postalAddress: z.string().min(1, "Postal address is required"),
   townDistrict: z.string().min(1, "Town/District is required"),
   llg: z.string().min(1, "LLG is required"),
@@ -56,6 +60,20 @@ export function OwnerManager({ owners, setOwners, form: mainForm }: OwnerManager
 
   const modalForm = useForm<OwnerModalFormValues>({
     resolver: zodResolver(ownerModalSchema),
+    defaultValues: { // Initialize all fields to prevent uncontrolled to controlled switch
+        role: "Primary",
+        surname: "",
+        firstName: "",
+        dobString: "",
+        sex: "Male",
+        phone: "",
+        fax: "",
+        email: "",
+        postalAddress: "",
+        townDistrict: "",
+        llg: "",
+        wardVillage: "",
+    }
   });
   
   const handleAddOwner = () => {
@@ -63,9 +81,17 @@ export function OwnerManager({ owners, setOwners, form: mainForm }: OwnerManager
     setEditingIndex(null);
     modalForm.reset({
         role: "Primary",
-        sex: "Male",
+        surname: "",
+        firstName: "",
         dobString: "",
-        // other fields empty
+        sex: "Male",
+        phone: "",
+        fax: "",
+        email: "",
+        postalAddress: "",
+        townDistrict: "",
+        llg: "",
+        wardVillage: "",
     });
     setIsModalOpen(true);
   };
@@ -74,9 +100,17 @@ export function OwnerManager({ owners, setOwners, form: mainForm }: OwnerManager
     const owner = owners[index];
     setEditingOwner(owner);
     setEditingIndex(index);
+    let dobToFormat: Date | string = owner.dob as any; // Assuming dob can be Timestamp or Date
+    if (owner.dob && typeof (owner.dob as any).toDate === 'function') {
+        dobToFormat = (owner.dob as any).toDate();
+    }
+    
     modalForm.reset({
         ...owner,
-        dobString: format(owner.dob.toDate(), "yyyy-MM-dd"), // Convert Timestamp to yyyy-MM-dd string
+        // Ensure all optional fields have a defined value for reset
+        fax: owner.fax || "",
+        email: owner.email || "",
+        dobString: isValid(new Date(dobToFormat)) ? format(new Date(dobToFormat), "yyyy-MM-dd") : "",
     });
     setIsModalOpen(true);
   };
@@ -86,10 +120,16 @@ export function OwnerManager({ owners, setOwners, form: mainForm }: OwnerManager
   };
 
   const onModalSubmit = (data: OwnerModalFormValues) => {
+    const dobDate = parseISO(data.dobString); // Parse the date string
+    if (!isValid(dobDate)) {
+        modalForm.setError("dobString", { type: "manual", message: "Invalid date entered." });
+        return;
+    }
+
     const ownerData: Owner = {
       ...data,
       ownerId: editingOwner?.ownerId || crypto.randomUUID(), // Use existing ID or generate new
-      dob: new Date(data.dobString) as any, // Convert string to Date, then to Timestamp on main form submit
+      dob: dobDate as any, // Store as Date object, RegistrationForm will convert to Timestamp
     };
 
     if (editingIndex !== null) {
@@ -174,4 +214,3 @@ export function OwnerManager({ owners, setOwners, form: mainForm }: OwnerManager
     </Card>
   );
 }
-
