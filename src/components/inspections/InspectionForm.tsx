@@ -19,16 +19,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import type { Inspection, ChecklistItemResult, ChecklistTemplate, ChecklistTemplateItem, SuggestChecklistItemsInput } from "@/types";
+import type { Inspection, ChecklistItemResult, ChecklistTemplate, ChecklistTemplateItem, SuggestChecklistItemsInput, User } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
-import { Save, Send, Ship, User, CalendarDays, Trash2, PlusCircle, Lightbulb, Loader2, ImageUp } from "lucide-react";
+import { Save, Send, Ship, User as UserIcon, CalendarDays, Trash2, PlusCircle, Lightbulb, Loader2, ImageUp } from "lucide-react"; // Renamed User from lucide-react to UserIcon
 import React, { useState, useEffect } from "react";
 import { Timestamp } from "firebase/firestore";
-import { suggestChecklistItems } from "@/ai/flows/suggest-checklist-items"; // GenAI flow
+import { suggestChecklistItems } from "@/ai/flows/suggest-checklist-items";
 import Link from "next/link";
-import { format } from 'date-fns'; // Added import
+import { format } from 'date-fns';
 
 const checklistItemSchema = z.object({
   itemId: z.string(),
@@ -39,8 +39,8 @@ const checklistItemSchema = z.object({
 });
 
 const inspectionFormSchema = z.object({
-  registrationRefId: z.string().min(1, "Registration ID is required"), // Store as ID, convert to Ref on submit
-  inspectorRefId: z.string().optional(), // Store as ID, convert to Ref on submit
+  registrationRefId: z.string().min(1, "Registration ID is required"),
+  inspectorRefId: z.string().min(1, "Inspector assignment is required"), // Made required
   inspectionType: z.enum(["Initial", "Annual", "Compliance", "FollowUp"]),
   scheduledDate: z.date().optional(),
   inspectionDate: z.date().optional(),
@@ -78,6 +78,16 @@ const placeholderChecklistTemplates: ChecklistTemplate[] = [
   }
 ];
 
+// Mock inspectors for the select dropdown
+const mockInspectorsForSelect: Array<Pick<User, 'userId' | 'displayName'>> = [
+  { userId: "USER001", displayName: "Admin User" },
+  { userId: "USER002", displayName: "Inspector Bob" },
+  { userId: "USER003", displayName: "Registrar Ray" },
+  { userId: "USER004", displayName: "Supervisor Sue" },
+  // Add more users as needed, especially those with an "Inspector" role
+];
+
+
 interface InspectionFormProps {
   mode: "create" | "edit";
   inspectionId?: string;
@@ -86,26 +96,44 @@ interface InspectionFormProps {
 }
 
 export function InspectionForm({ mode, inspectionId, existingInspectionData, prefilledRegistrationId }: InspectionFormProps) {
-  const { currentUser } = useAuth();
+  const { currentUser, isAdmin, isRegistrar, isSupervisor, isInspector } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
   const [isAISuggesting, setIsAISuggesting] = useState(false);
 
+  const canAssignInspector = isAdmin || isRegistrar || isSupervisor;
+
+  let initialInspectorId = "";
+  if (existingInspectionData?.inspectorRef?.id) {
+    initialInspectorId = existingInspectionData.inspectorRef.id;
+  } else if (mode === 'create') {
+    if (!canAssignInspector && isInspector && currentUser?.userId) {
+      initialInspectorId = currentUser.userId; // Auto-assign for pure inspectors
+    }
+    // If canAssignInspector, it remains "" - they must select one, triggering validation if not selected
+  }
+
+
   const defaultValues: Partial<InspectionFormValues> = existingInspectionData
-  ? {
+  ? { // Edit mode
       ...existingInspectionData,
       registrationRefId: existingInspectionData.registrationRef.id,
-      inspectorRefId: existingInspectionData.inspectorRef?.id,
+      inspectorRefId: initialInspectorId,
       scheduledDate: existingInspectionData.scheduledDate?.toDate(),
       inspectionDate: existingInspectionData.inspectionDate?.toDate(),
       checklistItems: existingInspectionData.checklistItems.map(item => ({...item, evidenceUrls: item.evidenceUrls || [] })),
     }
-  : {
+  : { // Create mode
       inspectionType: "Initial",
       followUpRequired: false,
       checklistItems: [],
       registrationRefId: prefilledRegistrationId || "",
-      inspectorRefId: currentUser?.userId || "",
+      inspectorRefId: initialInspectorId,
+      findings: "",
+      correctiveActions: "",
+      overallResult: undefined,
+      scheduledDate: undefined,
+      inspectionDate: undefined,
     };
 
   const form = useForm<InspectionFormValues>({
@@ -113,7 +141,7 @@ export function InspectionForm({ mode, inspectionId, existingInspectionData, pre
     defaultValues,
   });
   
-  const { fields, append, remove, update } = useFieldArray({
+  const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: "checklistItems",
   });
@@ -121,19 +149,19 @@ export function InspectionForm({ mode, inspectionId, existingInspectionData, pre
   const watchInspectionType = form.watch("inspectionType");
 
   useEffect(() => {
-    if (mode === 'create' && !existingInspectionData) { // Only on create and if no existing data (e.g. not loading an edit)
+    if (mode === 'create' && !existingInspectionData) { 
         const template = placeholderChecklistTemplates.find(t => t.inspectionType === watchInspectionType);
         if (template) {
             const newItems = template.items.map(item => ({
                 itemId: item.itemId,
                 itemDescription: item.itemDescription,
-                result: "N/A" as "N/A", // Default to N/A
+                result: "N/A" as "N/A", 
                 comments: "",
                 evidenceUrls: [],
             }));
             form.setValue("checklistItems", newItems);
         } else {
-            form.setValue("checklistItems", []); // Clear if no template found
+            form.setValue("checklistItems", []);
         }
     }
   }, [watchInspectionType, mode, form, existingInspectionData]);
@@ -142,9 +170,8 @@ export function InspectionForm({ mode, inspectionId, existingInspectionData, pre
   const handleAISuggestions = async () => {
     setIsAISuggesting(true);
     try {
-      // In a real app, fetch craft details from registrationRefId
       const craftDetails: SuggestChecklistItemsInput = {
-        craftMake: "SampleMake", // Replace with actual data
+        craftMake: "SampleMake", 
         craftModel: "SampleModel",
         craftYear: 2020,
         craftType: "OpenBoat",
@@ -159,7 +186,6 @@ export function InspectionForm({ mode, inspectionId, existingInspectionData, pre
         evidenceUrls: [],
       }));
       
-      // Append new suggestions, avoiding duplicates by description
       const existingDescriptions = new Set(fields.map(f => f.itemDescription));
       newChecklistItems.forEach(newItem => {
         if (!existingDescriptions.has(newItem.itemDescription)) {
@@ -185,33 +211,28 @@ export function InspectionForm({ mode, inspectionId, existingInspectionData, pre
     
     let finalStatus: Inspection['status'] = status;
     if (status === "Completed" && !data.overallResult) {
-        // This logic might be better in a modal or separate step after "Complete" is clicked
         toast({ title: "Missing Information", description: "Please provide an Overall Result to complete the inspection.", variant: "destructive"});
         return;
     }
     if (status === "Completed" && data.overallResult) {
-        finalStatus = data.overallResult === "Pass" ? "Passed" : data.overallResult === "Fail" ? "Failed" : "Completed"; // if N/A overall -> Completed
+        finalStatus = data.overallResult === "Pass" ? "Passed" : data.overallResult === "Fail" ? "Failed" : "Completed";
     }
 
 
     const submissionData = {
       ...data,
-      // Convert IDs to DocumentReferences, Dates to Timestamps
-      // registrationRef: doc(db, "registrations", data.registrationRefId),
-      // inspectorRef: data.inspectorRefId ? doc(db, "users", data.inspectorRefId) : null,
       scheduledDate: data.scheduledDate ? Timestamp.fromDate(data.scheduledDate) : undefined,
       inspectionDate: data.inspectionDate ? Timestamp.fromDate(data.inspectionDate) : undefined,
       status: finalStatus,
-      // createdByRef, lastUpdatedByRef, createdAt, lastUpdatedAt
     };
 
-    console.log("Submitting inspection data:", submissionData);
+    console.log("Submitting inspection data (placeholder):", submissionData);
     try {
       if (mode === "create") {
-        toast({ title: "Inspection Saved", description: `Status: ${finalStatus}` });
+        toast({ title: "Inspection Saved (Placeholder)", description: `Status: ${finalStatus}` });
         router.push("/inspections");
       } else if (inspectionId) {
-        toast({ title: "Inspection Updated", description: `Status: ${finalStatus}` });
+        toast({ title: "Inspection Updated (Placeholder)", description: `Status: ${finalStatus}` });
         router.push(`/inspections/${inspectionId}`);
       }
       router.refresh();
@@ -224,7 +245,6 @@ export function InspectionForm({ mode, inspectionId, existingInspectionData, pre
   return (
     <Form {...form}>
       <form className="space-y-8">
-        {/* Basic Info */}
         <Card>
           <CardHeader><CardTitle>Inspection Details</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -239,16 +259,60 @@ export function InspectionForm({ mode, inspectionId, existingInspectionData, pre
                 </FormItem>
               )}
             />
-            <FormField control={form.control} name="inspectorRefId" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Inspector ID</FormLabel>
-                  <FormControl><Input placeholder="Defaults to current user" {...field} disabled />
-                  </FormControl>
-                  <FormDescription>Inspector: {currentUser?.displayName || currentUser?.email}</FormDescription>
-                  <FormMessage />
-                </FormItem>
+
+            <FormField
+              control={form.control}
+              name="inspectorRefId"
+              render={({ field }) => (
+                canAssignInspector ? (
+                  <FormItem>
+                    <FormLabel>Assign Inspector *</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value || ""}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select an inspector" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {mockInspectorsForSelect.map((inspector) => (
+                          <SelectItem key={inspector.userId} value={inspector.userId}>
+                            {inspector.displayName || inspector.userId}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Select the user who will perform this inspection.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                ) : (
+                  <FormItem>
+                    <FormLabel>Inspector</FormLabel>
+                    <FormControl>
+                      <Input
+                        value={
+                          field.value
+                            ? (mockInspectorsForSelect.find(u => u.userId === field.value)?.displayName || field.value)
+                            : (currentUser?.displayName || currentUser?.email || "N/A")
+                        }
+                        disabled
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {mode === 'create' && isInspector && !canAssignInspector 
+                        ? "Auto-assigned to you." 
+                        : "Assigned Inspector."}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )
               )}
             />
+
             <FormField control={form.control} name="inspectionType" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Inspection Type *</FormLabel>
@@ -263,7 +327,7 @@ export function InspectionForm({ mode, inspectionId, existingInspectionData, pre
             <FormField control={form.control} name="scheduledDate" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Scheduled Date</FormLabel>
-                  <FormControl><Input type="date" {...field} value={field.value ? format(field.value, 'yyyy-MM-dd') : ''} onChange={e => field.onChange(new Date(e.target.value))} /></FormControl>
+                  <FormControl><Input type="date" {...field} value={field.value ? format(field.value, 'yyyy-MM-dd') : ''} onChange={e => field.onChange(e.target.value ? new Date(e.target.value) : undefined)} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -271,7 +335,7 @@ export function InspectionForm({ mode, inspectionId, existingInspectionData, pre
             <FormField control={form.control} name="inspectionDate" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Actual Inspection Date</FormLabel>
-                  <FormControl><Input type="date" {...field} value={field.value ? format(field.value, 'yyyy-MM-dd') : ''} onChange={e => field.onChange(new Date(e.target.value))} /></FormControl>
+                  <FormControl><Input type="date" {...field} value={field.value ? format(field.value, 'yyyy-MM-dd') : ''} onChange={e => field.onChange(e.target.value ? new Date(e.target.value) : undefined)} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -279,7 +343,6 @@ export function InspectionForm({ mode, inspectionId, existingInspectionData, pre
           </CardContent>
         </Card>
 
-        {/* Checklist Items */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Checklist</CardTitle>
@@ -294,8 +357,8 @@ export function InspectionForm({ mode, inspectionId, existingInspectionData, pre
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {fields.map((field, index) => (
-              <Card key={field.id} className="p-4 bg-muted/30">
+            {fields.map((item, index) => (
+              <Card key={item.id} className="p-4 bg-muted/30">
                 <FormField
                   control={form.control}
                   name={`checklistItems.${index}.itemDescription`}
@@ -334,7 +397,6 @@ export function InspectionForm({ mode, inspectionId, existingInspectionData, pre
                     )}
                     />
                 </div>
-                 {/* Placeholder for evidence upload UI per item */}
                 <div className="mt-2">
                     <FormLabel className="text-xs">Evidence URLs (comma-separated)</FormLabel>
                      <FormField
@@ -362,7 +424,6 @@ export function InspectionForm({ mode, inspectionId, existingInspectionData, pre
           </CardContent>
         </Card>
 
-        {/* Findings and Actions */}
         <Card>
           <CardHeader><CardTitle>Overall Assessment</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 gap-6">
@@ -372,7 +433,7 @@ export function InspectionForm({ mode, inspectionId, existingInspectionData, pre
             <FormField control={form.control} name="overallResult" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Overall Result (Set when completing)</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value || undefined}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Select overall result" /></SelectTrigger></FormControl>
                     <SelectContent>{["Pass", "Fail", "N/A"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent>
                   </Select>
@@ -385,10 +446,10 @@ export function InspectionForm({ mode, inspectionId, existingInspectionData, pre
         </Card>
 
         <CardFooter className="flex justify-end gap-4 p-0 pt-8">
-          <Button type="button" variant="outline" onClick={() => form.handleSubmit((data) => onSubmit(data, "InProgress"))()} disabled={form.formState.isSubmitting}>
+          <Button type="button" variant="outline" onClick={form.handleSubmit((data) => onSubmit(data, "InProgress"))} disabled={form.formState.isSubmitting}>
             <Save className="mr-2 h-4 w-4" /> Save Progress
           </Button>
-          <Button type="button" onClick={() => form.handleSubmit((data) => onSubmit(data, "Completed"))()} disabled={form.formState.isSubmitting}>
+          <Button type="button" onClick={form.handleSubmit((data) => onSubmit(data, "Completed"))} disabled={form.formState.isSubmitting}>
             <Send className="mr-2 h-4 w-4" /> Complete Inspection
           </Button>
         </CardFooter>
