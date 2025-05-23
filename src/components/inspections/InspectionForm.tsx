@@ -43,13 +43,13 @@ const inspectionFormSchema = z.object({
   registrationRefId: z.string().min(1, "Registration ID is required"),
   inspectorRefId: z.string().min(1, "Inspector assignment is required"),
   inspectionType: z.enum(["Initial", "Annual", "Compliance", "FollowUp"]),
-  scheduledDate: z.date({ required_error: "Scheduled date is required" }), // Made required for scheduling
-  inspectionDate: z.date().optional(), // Actual date inspector conducts it
-  findings: z.string().optional(), // Optional initially, required for "conduct" submission
+  scheduledDate: z.date({ required_error: "Scheduled date is required" }),
+  inspectionDate: z.date().optional(),
+  findings: z.string().optional(),
   correctiveActions: z.string().optional(),
   followUpRequired: z.boolean().default(false),
   checklistItems: z.array(checklistItemSchema).optional().default([]),
-  overallResult: z.enum(["Pass", "Fail", "N/A"]).optional(), // Inspector's assessment
+  overallResult: z.enum(["Pass", "Fail", "N/A"]).optional(),
 });
 
 type InspectionFormValues = z.infer<typeof inspectionFormSchema>;
@@ -98,7 +98,7 @@ const mockInspectorsForSelect: Array<Pick<User, 'userId' | 'displayName'>> = [
 
 interface InspectionFormProps {
   mode: "create" | "edit";
-  usageContext: "schedule" | "conduct"; // New prop to differentiate form usage
+  usageContext: "schedule" | "conduct";
   inspectionId?: string;
   existingInspectionData?: Inspection | null;
   prefilledRegistrationId?: string;
@@ -120,14 +120,25 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
       initialInspectorId = currentUser.userId; 
     }
   }
+  
+  const scheduledDateFromExisting = existingInspectionData?.scheduledDate;
+  const inspectionDateFromExisting = existingInspectionData?.inspectionDate;
 
   const defaultValues: Partial<InspectionFormValues> = existingInspectionData
   ? { 
       ...existingInspectionData,
       registrationRefId: existingInspectionData.registrationRef.id,
       inspectorRefId: initialInspectorId,
-      scheduledDate: existingInspectionData.scheduledDate?.toDate(),
-      inspectionDate: existingInspectionData.inspectionDate?.toDate(),
+      scheduledDate: scheduledDateFromExisting
+        ? typeof (scheduledDateFromExisting as any).toDate === 'function'
+          ? (scheduledDateFromExisting as Timestamp).toDate()
+          : (scheduledDateFromExisting as Date)
+        : undefined,
+      inspectionDate: inspectionDateFromExisting
+        ? typeof (inspectionDateFromExisting as any).toDate === 'function'
+          ? (inspectionDateFromExisting as Timestamp).toDate()
+          : (inspectionDateFromExisting as Date)
+        : undefined,
       checklistItems: (existingInspectionData.checklistItems || []).map(item => ({...item, result: item.result || "N/A" })),
       findings: existingInspectionData.findings || "",
       correctiveActions: existingInspectionData.correctiveActions || "",
@@ -142,7 +153,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
       findings: "",
       correctiveActions: "",
       overallResult: undefined,
-      scheduledDate: new Date(), // Default to today for scheduling
+      scheduledDate: new Date(), 
       inspectionDate: undefined,
     };
 
@@ -159,7 +170,6 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
   const watchInspectionType = form.watch("inspectionType");
 
   useEffect(() => {
-    // Auto-populate checklist for "conduct" mode when creating or when type changes
     if (usageContext === 'conduct' && (mode === 'create' || (mode === 'edit' && !existingInspectionData?.checklistItems?.length)) ) {
         const template = placeholderChecklistTemplates.find(t => t.inspectionType === watchInspectionType);
         if (template) {
@@ -186,13 +196,12 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
         setIsAISuggesting(false);
         return;
       }
-      // Placeholder: In a real app, fetch craft details using currentRegId to pass to AI
       let craftDetailsInput: SuggestChecklistItemsInput = {
-        craftMake: "GenericCraft", // Replace with actual fetched data
-        craftModel: "ModelX", // Replace with actual fetched data
-        craftYear: new Date().getFullYear() - 2, // Replace with actual fetched data
-        craftType: "OpenBoat", // Replace with actual fetched data
-        registrationHistory: "No prior issues noted.", // Replace with actual fetched data
+        craftMake: "GenericCraft", 
+        craftModel: "ModelX", 
+        craftYear: new Date().getFullYear() - 2, 
+        craftType: "OpenBoat", 
+        registrationHistory: "No prior issues noted.", 
       };
       
       const suggestions = await suggestChecklistItems(craftDetailsInput);
@@ -231,15 +240,14 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
 
     if (action === "schedule") {
       finalStatus = "Scheduled";
-      // For scheduling, we only care about a few fields
       submissionPayload = {
         registrationRefId: data.registrationRefId,
         inspectorRefId: data.inspectorRefId,
         inspectionType: data.inspectionType,
         scheduledDate: data.scheduledDate,
-        followUpRequired: false, // Default for scheduling
-        checklistItems: [], // Empty for scheduling
-      } as any; // Cast as any to bypass stricter type checking for partial object
+        followUpRequired: false, 
+        checklistItems: [], 
+      } as any; 
     } else if (action === "saveProgress") {
       finalStatus = "InProgress";
     } else if (action === "submitReview") {
@@ -258,7 +266,6 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
       scheduledDate: submissionPayload.scheduledDate ? Timestamp.fromDate(submissionPayload.scheduledDate) : undefined,
       inspectionDate: submissionPayload.inspectionDate ? Timestamp.fromDate(submissionPayload.inspectionDate) : undefined,
       status: finalStatus,
-      // Ensure these are part of the payload if not scheduling
       ...(action !== "schedule" && { 
         findings: submissionPayload.findings,
         correctiveActions: submissionPayload.correctiveActions,
@@ -266,11 +273,10 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
         followUpRequired: submissionPayload.followUpRequired,
         checklistItems: submissionPayload.checklistItems,
       }),
-      // Timestamps and user refs
-      ...(mode === 'create' && { createdAt: Timestamp.now(), createdByRef: currentUser?.userId as any }), // Simulate doc ref
+      ...(mode === 'create' && { createdAt: Timestamp.now(), createdByRef: currentUser?.userId as any }), 
       ...(mode === 'edit' && existingInspectionData && { createdAt: existingInspectionData.createdAt, createdByRef: existingInspectionData.createdByRef }),
       lastUpdatedAt: Timestamp.now(),
-      lastUpdatedByRef: currentUser?.userId as any, // Simulate doc ref
+      lastUpdatedByRef: currentUser?.userId as any, 
       ...(action === "submitReview" && { completedAt: Timestamp.now() }),
     };
 
@@ -312,13 +318,13 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
               control={form.control}
               name="inspectorRefId"
               render={({ field }) => (
-                canAssignInspector || (mode === 'edit' && !!existingInspectionData?.inspectorRef) ? ( // Allow select if can assign OR if editing existing with inspector
+                canAssignInspector || (mode === 'edit' && !!existingInspectionData?.inspectorRef) ? ( 
                   <FormItem>
                     <FormLabel>Assign Inspector *</FormLabel>
                     <Select
                       onValueChange={field.onChange}
                       value={field.value || ""}
-                      disabled={!canAssignInspector && mode === 'edit'} // Disable if editing and not assigner
+                      disabled={!canAssignInspector && mode === 'edit'} 
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -512,7 +518,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
         <CardFooter className="flex justify-end gap-4 p-0 pt-8">
           {usageContext === "schedule" && (
             <Button type="button" onClick={form.handleSubmit((data) => onSubmit(data, "schedule"))} disabled={form.formState.isSubmitting}>
-              <CalendarDays className="mr-2 h-4 w-4" /> Schedule Inspection
+              <CalendarDays className="mr-2 h-4 w-4" /> {mode === "create" ? "Schedule Inspection" : "Update Schedule"}
             </Button>
           )}
           {usageContext === "conduct" && (
