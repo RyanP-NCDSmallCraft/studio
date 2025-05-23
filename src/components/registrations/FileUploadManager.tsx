@@ -26,7 +26,7 @@ import { Timestamp } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 // import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-// import { storage } from "@/lib/firebase"; // Assuming storage is exported from firebase.ts
+// import { storage } from "@/lib/firebase"; // Assuming storage is exported from ts
 
 // Simplified Zod schema for the modal form
 const docModalSchema = z.object({
