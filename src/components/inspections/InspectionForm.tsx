@@ -60,10 +60,10 @@ type InspectionFormValues = z.infer<typeof inspectionFormSchema>;
 const ncdChecklistTemplate: ChecklistTemplate = {
   templateId: "NCD_SCA_COMPREHENSIVE_V1",
   name: "NCD Small Craft Inspection Checklist (Comprehensive)",
-  inspectionType: "Initial",
+  inspectionType: "Initial", // This primarily indicates its origin or primary use case
   isActive: true,
-  createdAt: Timestamp.now(), // Placeholder
-  createdByRef: {} as any, // Placeholder
+  createdAt: Timestamp.now(),
+  createdByRef: {} as any,
   items: [
     // A. Marking and Load Line Requirements (Schedule 1)
     { itemId: "A_1_a", itemDescription: "Registration Number Marking: Legibly & permanently printed on BOTH sides?", category: "A. Marking: Registration Number", order: 10 },
@@ -80,47 +80,47 @@ const ncdChecklistTemplate: ChecklistTemplate = {
     { itemId: "A_3", itemDescription: "Marking and Load Line: Exemption Notice Presented (if applicable)?", category: "A. Marking: Exemptions", order: 120 },
 
     // B. Safety Standards (Schedule 3)
-    { itemId: "B_1_a", itemDescription: "For ALL Craft: ISO 12402 compliant Lifejackets (sufficient for all persons, incl. children sizes)?", category: "B. Safety: All Craft", order: 200 },
-    { itemId: "B_1_b", itemDescription: "For ALL Craft: Pair of oars or paddles?", category: "B. Safety: All Craft", order: 210 },
-    { itemId: "B_1_c", itemDescription: "For ALL Craft: Functioning waterproof torch?", category: "B. Safety: All Craft", order: 220 },
-    { itemId: "B_1_d", itemDescription: "For ALL Craft: Mirror or similar signalling device?", category: "B. Safety: All Craft", order: 230 },
-    { itemId: "B_1_e", itemDescription: "For ALL Craft: Anchor with at least 20 meters of rope?", category: "B. Safety: All Craft", order: 240 },
-    { itemId: "B_1_f", itemDescription: "For ALL Craft: Sea anchor/tarpaulin with deployment rope?", category: "B. Safety: All Craft", order: 250 },
-    { itemId: "B_1_g", itemDescription: "For ALL Craft: Bucket or bailer?", category: "B. Safety: All Craft", order: 260 },
-    { itemId: "B_1_h", itemDescription: "For ALL Craft: First aid kit present?", category: "B. Safety: All Craft", order: 270 },
-    { itemId: "B_1_i", itemDescription: "For ALL Craft: Fire extinguisher (if enclosed hull craft)?", category: "B. Safety: All Craft", order: 280 },
-    { itemId: "B_1_j", itemDescription: "For ALL Craft: Engine (if fitted) appears maintained & functional?", category: "B. Safety: All Craft", order: 290 },
-    { itemId: "B_1_k", itemDescription: "For ALL Craft: Basic engine tools/spares (e.g., sparkplug, tool if petrol engine)?", category: "B. Safety: All Craft", order: 300 },
-    { itemId: "B_1_l", itemDescription: "For ALL Craft: Sail or tarpaulin (bright color) for alternative use?", category: "B. Safety: All Craft", order: 310 },
-    { itemId: "B_1_m", itemDescription: "For ALL Craft: Sufficient fuel observed for intended short journey/operation?", category: "B. Safety: All Craft", order: 320 },
-    { itemId: "B_2_a", itemDescription: "OUT OF SIGHT OF LAND: Reliable compass OR mobile phone with emergency call capability?", category: "B. Safety: Out of Sight of Land", order: 330 },
-    { itemId: "B_2_b", itemDescription: "OUT OF SIGHT OF LAND: Emergency food and water (sufficient for persons/24hrs)?", category: "B. Safety: Out of Sight of Land", order: 340 },
-    { itemId: "B_2_c", itemDescription: "OUT OF SIGHT OF LAND: Reserve fuel supply (25% of journey needs)?", category: "B. Safety: Out of Sight of Land", order: 350 },
-    { itemId: "B_3_a", itemDescription: "NIGHT TRAVEL: Bright light(s) visible from all directions?", category: "B. Safety: Night Travel", order: 360 },
-    { itemId: "B_3_b", itemDescription: "NIGHT TRAVEL: Other navigation lights (as required/approved)?", category: "B. Safety: Night Travel", order: 370 },
-    { itemId: "B_4_a", itemDescription: "COMMERCIAL Craft: Reliable compass OR GPS (device or phone)?", category: "B. Safety: Commercial Craft", order: 380 },
-    { itemId: "B_4_b", itemDescription: "COMMERCIAL Craft: Emergency food and water (sufficient for persons/24hrs)?", category: "B. Safety: Commercial Craft", order: 390 },
-    { itemId: "B_4_c", itemDescription: "COMMERCIAL Craft: Whistle or horn?", category: "B. Safety: Commercial Craft", order: 400 },
+    { itemId: "B_1_a", itemDescription: "For ALL Registered Craft: ISO 12402 compliant Lifejackets (sufficient for all persons, incl. children sizes)?", category: "B. Safety: All Registered Craft", order: 200 },
+    { itemId: "B_1_b", itemDescription: "For ALL Registered Craft: Pair of oars or paddles?", category: "B. Safety: All Registered Craft", order: 210 },
+    { itemId: "B_1_c", itemDescription: "For ALL Registered Craft: Functioning waterproof torch?", category: "B. Safety: All Registered Craft", order: 220 },
+    { itemId: "B_1_d", itemDescription: "For ALL Registered Craft: Mirror or similar signalling device?", category: "B. Safety: All Registered Craft", order: 230 },
+    { itemId: "B_1_e", itemDescription: "For ALL Registered Craft: Anchor with at least 20 meters of rope?", category: "B. Safety: All Registered Craft", order: 240 },
+    { itemId: "B_1_f", itemDescription: "For ALL Registered Craft: Sea anchor/tarpaulin with deployment rope?", category: "B. Safety: All Registered Craft", order: 250 },
+    { itemId: "B_1_g", itemDescription: "For ALL Registered Craft: Bucket or bailer?", category: "B. Safety: All Registered Craft", order: 260 },
+    { itemId: "B_1_h", itemDescription: "For ALL Registered Craft: First aid kit present?", category: "B. Safety: All Registered Craft", order: 270 },
+    { itemId: "B_1_i", itemDescription: "For ALL Registered Craft: Fire extinguisher (if enclosed hull craft)?", category: "B. Safety: All Registered Craft", order: 280 },
+    { itemId: "B_1_j", itemDescription: "For ALL Registered Craft: Engine (if fitted) appears maintained & functional?", category: "B. Safety: All Registered Craft", order: 290 },
+    { itemId: "B_1_k", itemDescription: "For ALL Registered Craft: Basic engine tools/spares (e.g., sparkplug, tool if petrol engine)?", category: "B. Safety: All Registered Craft", order: 300 },
+    { itemId: "B_1_l", itemDescription: "For ALL Registered Craft: Sail or tarpaulin (bright color) for alternative use?", category: "B. Safety: All Registered Craft", order: 310 },
+    { itemId: "B_1_m", itemDescription: "For ALL Registered Craft: Sufficient fuel observed for intended short journey/operation?", category: "B. Safety: All Registered Craft", order: 320 },
+    { itemId: "B_2_a", itemDescription: "For Craft Traveling OUT OF SIGHT OF LAND: Reliable compass OR mobile phone with emergency call capability?", category: "B. Safety: Out of Sight of Land", order: 330 },
+    { itemId: "B_2_b", itemDescription: "For Craft Traveling OUT OF SIGHT OF LAND: Emergency food and water (sufficient for persons/24hrs)?", category: "B. Safety: Out of Sight of Land", order: 340 },
+    { itemId: "B_2_c", itemDescription: "For Craft Traveling OUT OF SIGHT OF LAND: Reserve fuel supply (25% of journey needs)?", category: "B. Safety: Out of Sight of Land", order: 350 },
+    { itemId: "B_3_a", itemDescription: "For Craft Traveling AT NIGHT: Bright light(s) visible from all directions?", category: "B. Safety: Night Travel", order: 360 },
+    { itemId: "B_3_b", itemDescription: "For Craft Traveling AT NIGHT: Other navigation lights (as required/approved)?", category: "B. Safety: Night Travel", order: 370 },
+    { itemId: "B_4_a", itemDescription: "For COMMERCIAL Small Craft (Licensed): Reliable compass OR GPS (device or phone)?", category: "B. Safety: Commercial Craft", order: 380 },
+    { itemId: "B_4_b", itemDescription: "For COMMERCIAL Small Craft (Licensed): Emergency food and water (sufficient for persons/24hrs)?", category: "B. Safety: Commercial Craft", order: 390 },
+    { itemId: "B_4_c", itemDescription: "For COMMERCIAL Small Craft (Licensed): Whistle or horn?", category: "B. Safety: Commercial Craft", order: 400 },
     { itemId: "B_5", itemDescription: "Safety Standards: Exemption Notice Presented (if applicable)?", category: "B. Safety: Exemptions", order: 410 },
 
     // C. Construction Standards (Schedule 2 - Simplified Visual Checks)
     { itemId: "C_1_a", itemDescription: "General Condition: Hull appears sound, no obvious major damage/leaks?", category: "C. Construction: General Condition", order: 500 },
-    { itemId: "C_2_a", itemDescription: "Builder's Plate: Visible and legible (if fitted/required)?", category: "C. Construction: Builder's Plate", order: 510 },
-    { itemId: "C_2_b", itemDescription: "Builder's Plate: Shows max power, load, persons capacity (if fitted/required)?", category: "C. Construction: Builder's Plate", order: 520 },
-    { itemId: "C_2_c", itemDescription: "Builder's Plate: Shows constructor's serial number & completion date (if fitted/required)?", category: "C. Construction: Builder's Plate", order: 530 },
-    { itemId: "C_3_a", itemDescription: "Flotation: Evidence of built-in flotation (material/air chambers)?", category: "C. Construction: Flotation & Buoyancy", order: 540 },
-    { itemId: "C_3_b", itemDescription: "Flotation: Air compartments (if used for buoyancy) marked with \"Caution...\" label?", category: "C. Construction: Flotation & Buoyancy", order: 550 },
-    { itemId: "C_4_a", itemDescription: "Hull & Fittings: Bilge pump functional OR bucket/bailer present?", category: "C. Construction: Hull Integrity & Fittings", order: 560 },
-    { itemId: "C_4_b", itemDescription: "Hull & Fittings: Drain plugs appear secure, in good condition, and lockable?", category: "C. Construction: Hull Integrity & Fittings", order: 570 },
-    { itemId: "C_4_c", itemDescription: "Hull & Fittings: Deck surfaces intended for walking appear slip-resistant?", category: "C. Construction: Hull Integrity & Fittings", order: 580 },
-    { itemId: "C_4_d", itemDescription: "Hull & Fittings: Toe rail or similar on outboard edges of deck?", category: "C. Construction: Hull Integrity & Fittings", order: 590 },
-    { itemId: "C_4_e", itemDescription: "Hull & Fittings: Transom appears sound and able to support engine?", category: "C. Construction: Hull Integrity & Fittings", order: 600 },
-    { itemId: "C_4_f", itemDescription: "Hull & Fittings: Motor well (if present) appears watertight to hull & drains properly?", category: "C. Construction: Hull Integrity & Fittings", order: 610 },
-    { itemId: "C_4_g", itemDescription: "Hull & Fittings: Hardware/fittings (cleats, etc.) secure, good condition, no sharp edges?", category: "C. Construction: Hull Integrity & Fittings", order: 620 },
-    { itemId: "C_4_h", itemDescription: "Hull & Fittings: Bow eye suitable for towing, secure, above waterline?", category: "C. Construction: Hull Integrity & Fittings", order: 630 },
+    { itemId: "C_2_a", itemDescription: "Builder's Plate (if fitted/required): Builder's Plate visible and legible?", category: "C. Construction: Builder's Plate", order: 510 },
+    { itemId: "C_2_b", itemDescription: "Builder's Plate (if fitted/required): Plate shows max power, load, persons capacity?", category: "C. Construction: Builder's Plate", order: 520 },
+    { itemId: "C_2_c", itemDescription: "Builder's Plate (if fitted/required): Plate shows constructor's serial number & completion date?", category: "C. Construction: Builder's Plate", order: 530 },
+    { itemId: "C_3_a", itemDescription: "Flotation & Buoyancy: Evidence of built-in flotation (material/air chambers)?", category: "C. Construction: Flotation & Buoyancy", order: 540 },
+    { itemId: "C_3_b", itemDescription: "Flotation & Buoyancy: Air compartments (if used for buoyancy) marked with \"Caution...\" label?", category: "C. Construction: Flotation & Buoyancy", order: 550 },
+    { itemId: "C_4_a", itemDescription: "Hull Integrity & Fittings: Bilge pump functional OR bucket/bailer present?", category: "C. Construction: Hull Integrity & Fittings", order: 560 },
+    { itemId: "C_4_b", itemDescription: "Hull Integrity & Fittings: Drain plugs appear secure, in good condition, and lockable?", category: "C. Construction: Hull Integrity & Fittings", order: 570 },
+    { itemId: "C_4_c", itemDescription: "Hull Integrity & Fittings: Deck surfaces intended for walking appear slip-resistant?", category: "C. Construction: Hull Integrity & Fittings", order: 580 },
+    { itemId: "C_4_d", itemDescription: "Hull Integrity & Fittings: Toe rail or similar on outboard edges of deck?", category: "C. Construction: Hull Integrity & Fittings", order: 590 },
+    { itemId: "C_4_e", itemDescription: "Hull Integrity & Fittings: Transom appears sound and able to support engine?", category: "C. Construction: Hull Integrity & Fittings", order: 600 },
+    { itemId: "C_4_f", itemDescription: "Hull Integrity & Fittings: Motor well (if present) appears watertight to hull & drains properly?", category: "C. Construction: Hull Integrity & Fittings", order: 610 },
+    { itemId: "C_4_g", itemDescription: "Hull Integrity & Fittings: Hardware/fittings (cleats, etc.) secure, good condition, no sharp edges?", category: "C. Construction: Hull Integrity & Fittings", order: 620 },
+    { itemId: "C_4_h", itemDescription: "Hull Integrity & Fittings: Bow eye suitable for towing, secure, above waterline?", category: "C. Construction: Hull Integrity & Fittings", order: 630 },
     { itemId: "C_5_a", itemDescription: "Visibility: Sufficient area of hull painted NMSA approved marine orange?", category: "C. Construction: Visibility", order: 640 },
-    { itemId: "C_6_a", itemDescription: "Fire Safety: Fire extinguisher(s) properly mounted & accessible? (If required by type for Enclosed / Inboard)", category: "C. Construction: Fire Safety", order: 650 },
-    { itemId: "C_6_b", itemDescription: "Fire Safety: Discharge port for extinguisher into inboard engine compartment (if applicable)?", category: "C. Construction: Fire Safety", order: 660 },
+    { itemId: "C_6_a", itemDescription: "Fire Safety (Enclosed / Inboard): Fire extinguisher(s) properly mounted & accessible? (If required by type)", category: "C. Construction: Fire Safety", order: 650 },
+    { itemId: "C_6_b", itemDescription: "Fire Safety (Enclosed / Inboard): Discharge port for extinguisher into inboard engine compartment (if applicable)?", category: "C. Construction: Fire Safety", order: 660 },
     { itemId: "C_7", itemDescription: "Construction Standards: Exemption Notice Presented (if applicable)?", category: "C. Construction: Exemptions & Certifications", order: 670 },
     { itemId: "C_8", itemDescription: "Construction Standards: Construction Certification Presented (if post Oct 2016 commercial)?", category: "C. Construction: Exemptions & Certifications", order: 680 },
   ]
@@ -220,20 +220,18 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
 
   useEffect(() => {
     if (usageContext === 'conduct' && (mode === 'create' || (mode === 'edit' && !existingInspectionData?.checklistItems?.length)) ) {
-        const template = placeholderChecklistTemplates.find(t => t.inspectionType === watchInspectionType);
-        if (template) {
-            const newItems = template.items.map(item => ({
-                itemId: item.itemId,
-                itemDescription: item.itemDescription,
-                result: "N/A" as "N/A", 
-                comments: "",
-            }));
-            form.setValue("checklistItems", newItems);
-        } else {
-            form.setValue("checklistItems", []);
-        }
+        console.log("InspectionForm: Attempting to load default checklist. Inspection Type:", watchInspectionType, "Mode:", mode, "UsageContext:", usageContext);
+        // Always default to NCD checklist if checklist is empty when starting/continuing an inspection conduct session
+        const ncdItems = ncdChecklistTemplate.items.map(item => ({
+            itemId: item.itemId,
+            itemDescription: item.itemDescription,
+            result: "N/A" as "N/A", 
+            comments: "",
+        }));
+        form.setValue("checklistItems", ncdItems);
+        console.log("InspectionForm: NCD checklist loaded with", ncdItems.length, "items.");
     }
-  }, [watchInspectionType, mode, form, existingInspectionData, usageContext]);
+  }, [mode, usageContext, existingInspectionData, form, watchInspectionType]); // watchInspectionType included for logging, not essential for the simplified logic
 
 
   const handleAISuggestions = async () => {
@@ -295,8 +293,8 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
         inspectorRefId: data.inspectorRefId,
         inspectionType: data.inspectionType,
         scheduledDate: data.scheduledDate,
-        followUpRequired: false,
-        checklistItems: [],
+        followUpRequired: false, // Reset this for scheduling context
+        checklistItems: [], // Reset this for scheduling context
         findings: undefined,
         correctiveActions: undefined,
         overallResult: undefined,
@@ -305,7 +303,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     } else if (action === "saveProgress") {
       finalStatus = "InProgress";
        if (!data.inspectionDate) { 
-        submissionPayload.inspectionDate = new Date();
+        submissionPayload.inspectionDate = new Date(); // Set inspection date if not already set
       }
     } else if (action === "submitReview") {
       if (!data.inspectionDate) {
@@ -323,11 +321,15 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     }
 
     const fullSubmissionData: Partial<Inspection> = {
-      ...submissionPayload,
+      // Spread all fields from submissionPayload
+      ...(submissionPayload as Omit<InspectionFormValues, 'registrationRefId' | 'inspectorRefId'>), // Cast to avoid TS error on incompatible spread
+      registrationRef: { id: submissionPayload.registrationRefId } as any, // Placeholder reference
+      inspectorRef: submissionPayload.inspectorRefId ? { id: submissionPayload.inspectorRefId } as any : undefined, // Placeholder reference
+
       scheduledDate: submissionPayload.scheduledDate ? Timestamp.fromDate(new Date(submissionPayload.scheduledDate)) : undefined,
       inspectionDate: submissionPayload.inspectionDate ? Timestamp.fromDate(new Date(submissionPayload.inspectionDate)) : undefined,
       status: finalStatus,
-      ...(action !== "schedule" && {
+      ...(action !== "schedule" && { // Only include these for conduct-related actions
         findings: submissionPayload.findings,
         correctiveActions: submissionPayload.correctiveActions,
         overallResult: submissionPayload.overallResult,
@@ -346,7 +348,8 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     try {
       if (mode === "create") {
         toast({ title: `Inspection ${action === "schedule" ? "Scheduled" : "Saved"} (Placeholder)`, description: `Status: ${finalStatus}` });
-        router.push(action === "schedule" ? "/inspections" : `/inspections`); 
+        // For a new schedule, go to the list page. For a new conduct (if that mode was allowed directly), go to its detail page.
+        router.push(action === "schedule" ? "/inspections" : `/inspections`); // Simplified, assuming create only used for schedule
       } else if (inspectionId) {
         toast({ title: "Inspection Updated (Placeholder)", description: `Status: ${finalStatus}` });
         router.push(`/inspections/${inspectionId}`);
@@ -368,6 +371,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     return "N/A";
   }
 
+  // For display in the conduct header
   const currentRegistrationScaRegoNo = existingInspectionData?.registrationData?.scaRegoNo || watchRegistrationRefId || "N/A";
   const currentRegistrationHullId = existingInspectionData?.registrationData?.hullIdNumber || "N/A (Link craft)";
   const currentCraftType = existingInspectionData?.registrationData?.craftType || "N/A (Link craft)";
@@ -411,13 +415,13 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
               control={form.control}
               name="inspectorRefId"
               render={({ field }) => (
-                canAssignInspector || (mode === 'edit' && !!existingInspectionData?.inspectorRef) ? (
+                canAssignInspector || (mode === 'edit' && !!existingInspectionData?.inspectorRef) ? ( // Show select if user can assign OR if editing an existing assignment
                   <FormItem>
                     <FormLabel>Assign Inspector *</FormLabel>
                     <Select
                       onValueChange={field.onChange}
                       value={field.value || ""}
-                      disabled={!canAssignInspector && mode === 'edit' && usageContext !== 'schedule'}
+                      disabled={!canAssignInspector && mode === 'edit' && usageContext !== 'schedule'} // Only non-assigners are disabled if editing conduct context
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -437,13 +441,13 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
-                ) : (
+                ) : ( // This case is for mode 'create' and user cannot assign (is only inspector)
                   <FormItem>
                     <FormLabel>Inspector</FormLabel>
                     <FormControl>
                       <Input
                         value={
-                          field.value
+                          field.value // Should be pre-filled by initialInspectorId logic
                             ? (mockInspectorsForSelect.find(u => u.userId === field.value)?.displayName || field.value)
                             : (currentUser?.displayName || currentUser?.email || "N/A")
                         }
@@ -532,19 +536,26 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
                             <FormControl>
                                 <RadioGroup
                                     onValueChange={resultField.onChange}
+                                    // value={resultField.value} // Use defaultValue if RadioGroup manages its own state internally for selection
                                     defaultValue={resultField.value}
                                     className="flex space-x-4 items-center pt-1"
                                 >
                                     <FormItem className="flex items-center space-x-2 space-y-0">
-                                        <RadioGroupItem value="Yes" id={`yes-${item.itemId}-${index}`} />
+                                        <FormControl>
+                                            <RadioGroupItem value="Yes" id={`yes-${item.itemId}-${index}`} />
+                                        </FormControl>
                                         <Label htmlFor={`yes-${item.itemId}-${index}`} className="font-normal text-green-600">Yes</Label>
                                     </FormItem>
                                     <FormItem className="flex items-center space-x-2 space-y-0">
-                                        <RadioGroupItem value="No" id={`no-${item.itemId}-${index}`} />
+                                        <FormControl>
+                                            <RadioGroupItem value="No" id={`no-${item.itemId}-${index}`} />
+                                        </FormControl>
                                         <Label htmlFor={`no-${item.itemId}-${index}`} className="font-normal text-red-600">No</Label>
                                     </FormItem>
                                     <FormItem className="flex items-center space-x-2 space-y-0">
-                                        <RadioGroupItem value="N/A" id={`na-${item.itemId}-${index}`} />
+                                         <FormControl>
+                                            <RadioGroupItem value="N/A" id={`na-${item.itemId}-${index}`} />
+                                         </FormControl>
                                         <Label htmlFor={`na-${item.itemId}-${index}`} className="font-normal text-muted-foreground">N/A</Label>
                                     </FormItem>
                                 </RadioGroup>
@@ -628,6 +639,3 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     </Form>
   );
 }
-
-
-    
