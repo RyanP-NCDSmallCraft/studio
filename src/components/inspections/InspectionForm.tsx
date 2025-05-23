@@ -29,6 +29,8 @@ import { Timestamp } from "firebase/firestore";
 import { suggestChecklistItems } from "@/ai/flows/suggest-checklist-items";
 import Link from "next/link";
 import { format } from 'date-fns';
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 
 const checklistItemSchema = z.object({
   itemId: z.string(),
@@ -40,7 +42,7 @@ const checklistItemSchema = z.object({
 
 const inspectionFormSchema = z.object({
   registrationRefId: z.string().min(1, "Registration ID is required"),
-  inspectorRefId: z.string().min(1, "Inspector assignment is required"), // Made required
+  inspectorRefId: z.string().min(1, "Inspector assignment is required"),
   inspectionType: z.enum(["Initial", "Annual", "Compliance", "FollowUp"]),
   scheduledDate: z.date().optional(),
   inspectionDate: z.date().optional(),
@@ -53,22 +55,32 @@ const inspectionFormSchema = z.object({
 
 type InspectionFormValues = z.infer<typeof inspectionFormSchema>;
 
-// Placeholder data for checklist templates
+// Updated placeholder checklist templates based on SCHEDULE 3, TABLE 1
 const placeholderChecklistTemplates: ChecklistTemplate[] = [
   {
-    templateId: "TPL001", name: "Initial Safety Inspection", inspectionType: "Initial", isActive: true, createdAt: new Date() as any, createdByRef: {} as any,
+    templateId: "PNGSCA_SCH3_T1_ALL",
+    name: "Standard Safety Inspection (PNG Small Craft Act Schedule 3)",
+    inspectionType: "Initial",
+    isActive: true,
+    createdAt: new Date() as any,
+    createdByRef: {} as any,
     items: [
-      { itemId: "tpl_chk01", itemDescription: "Hull Integrity Check", order: 1, category: "Hull" },
-      { itemId: "tpl_chk02", itemDescription: "Life Jackets (min quantity & condition)", order: 2, category: "Safety Gear" },
-      { itemId: "tpl_chk03", itemDescription: "Fire Extinguisher (charged & accessible)", order: 3, category: "Safety Gear" },
-      { itemId: "tpl_chk04", itemDescription: "Navigation Lights", order: 4, category: "Electrical" },
-      { itemId: "tpl_chk05", itemDescription: "Anchor and Rode", order: 5, category: "Equipment" },
-      { itemId: "tpl_chk06", itemDescription: "First Aid Kit", order: 6, category: "Safety Gear" },
-      { itemId: "tpl_chk07", itemDescription: "Bilge Pump/Bailing Device", order: 7, category: "Equipment" },
-      { itemId: "tpl_chk08", itemDescription: "Sound Producing Device (Horn/Whistle)", order: 8, category: "Safety Gear" },
+      { itemId: "sch3_a", itemDescription: "Lifejackets (ISO 12402 compliant, correctly sized for all persons including children)", order: 1, category: "Safety Equipment" },
+      { itemId: "sch3_b", itemDescription: "Pair of oars or paddles", order: 2, category: "Safety Equipment" },
+      { itemId: "sch3_c", itemDescription: "Functioning waterproof torch", order: 3, category: "Safety Equipment" },
+      { itemId: "sch3_d", itemDescription: "Mirror or similar device for signalling", order: 4, category: "Safety Equipment" },
+      { itemId: "sch3_e", itemDescription: "Anchor with rope (min 20 meters)", order: 5, category: "Safety Equipment" },
+      { itemId: "sch3_f", itemDescription: "Sea anchor/drogue (e.g., tarpaulin) with rope for deployment", order: 6, category: "Safety Equipment" },
+      { itemId: "sch3_g", itemDescription: "Bucket or bailer", order: 7, category: "Safety Equipment" },
+      { itemId: "sch3_h", itemDescription: "First aid kit", order: 8, category: "Safety Equipment" },
+      { itemId: "sch3_i", itemDescription: "Fire extinguisher (for enclosed hull craft)", order: 9, category: "Safety Equipment" },
+      { itemId: "sch3_j", itemDescription: "Properly functioning and maintained engine (if fitted)", order: 10, category: "Craft Condition" },
+      { itemId: "sch3_k", itemDescription: "Engine tools and spare parts (incl. sparkplug & tool, if petrol engine fitted)", order: 11, category: "Craft Condition" },
+      { itemId: "sch3_l", itemDescription: "Sail or tarpaulin (bright orange/yellow) for alternative propulsion/shelter/visibility", order: 12, category: "Safety Equipment" },
+      { itemId: "sch3_m", itemDescription: "Sufficient fuel for the proposed journey (as per regulations)", order: 13, category: "Craft Condition" },
     ]
   },
-   {
+   { // Keeping the annual template as a placeholder for now
     templateId: "TPL002", name: "Annual Renewal Inspection", inspectionType: "Annual", isActive: true, createdAt: new Date() as any, createdByRef: {} as any,
     items: [
       { itemId: "tpl_annual_01", itemDescription: "Verify Registration Documents", order: 1, category: "Documentation" },
@@ -76,7 +88,10 @@ const placeholderChecklistTemplates: ChecklistTemplate[] = [
       { itemId: "tpl_annual_03", itemDescription: "Inspect Steering System", order: 3, category: "Mechanical" },
     ]
   }
+  // Other templates for "Traveling out of sight of land", "Traveling at night", "Commercial" can be added here
+  // based on the other sections of SCHEDULE 3.
 ];
+
 
 // Mock inspectors for the select dropdown
 const mockInspectorsForSelect: Array<Pick<User, 'userId' | 'displayName'>> = [
@@ -84,7 +99,6 @@ const mockInspectorsForSelect: Array<Pick<User, 'userId' | 'displayName'>> = [
   { userId: "USER002", displayName: "Inspector Bob" },
   { userId: "USER003", displayName: "Registrar Ray" },
   { userId: "USER004", displayName: "Supervisor Sue" },
-  // Add more users as needed, especially those with an "Inspector" role
 ];
 
 
@@ -108,22 +122,21 @@ export function InspectionForm({ mode, inspectionId, existingInspectionData, pre
     initialInspectorId = existingInspectionData.inspectorRef.id;
   } else if (mode === 'create') {
     if (!canAssignInspector && isInspector && currentUser?.userId) {
-      initialInspectorId = currentUser.userId; // Auto-assign for pure inspectors
+      initialInspectorId = currentUser.userId; 
     }
-    // If canAssignInspector, it remains "" - they must select one, triggering validation if not selected
   }
 
 
   const defaultValues: Partial<InspectionFormValues> = existingInspectionData
-  ? { // Edit mode
+  ? { 
       ...existingInspectionData,
       registrationRefId: existingInspectionData.registrationRef.id,
       inspectorRefId: initialInspectorId,
       scheduledDate: existingInspectionData.scheduledDate?.toDate(),
       inspectionDate: existingInspectionData.inspectionDate?.toDate(),
-      checklistItems: existingInspectionData.checklistItems.map(item => ({...item, evidenceUrls: item.evidenceUrls || [] })),
+      checklistItems: existingInspectionData.checklistItems.map(item => ({...item, evidenceUrls: item.evidenceUrls || [], result: item.result || "N/A" })),
     }
-  : { // Create mode
+  : { 
       inspectionType: "Initial",
       followUpRequired: false,
       checklistItems: [],
@@ -170,14 +183,24 @@ export function InspectionForm({ mode, inspectionId, existingInspectionData, pre
   const handleAISuggestions = async () => {
     setIsAISuggesting(true);
     try {
-      const craftDetails: SuggestChecklistItemsInput = {
-        craftMake: "SampleMake", 
-        craftModel: "SampleModel",
-        craftYear: 2020,
-        craftType: "OpenBoat",
-        registrationHistory: "No prior issues.",
+      // This needs a real registration to fetch details from, or mock data.
+      // For now, using static mock details for the AI prompt.
+      const currentRegId = form.getValues("registrationRefId");
+      let craftDetailsInput: SuggestChecklistItemsInput = {
+        craftMake: "GenericCraft",
+        craftModel: "ModelX",
+        craftYear: new Date().getFullYear() - 2,
+        craftType: "OpenBoat", // Example, should be derived
+        registrationHistory: "No prior issues noted.", // Example
       };
-      const suggestions = await suggestChecklistItems(craftDetails);
+
+      // In a real app, you'd fetch registration details here using currentRegId to populate craftDetailsInput
+      // For example: const regData = await getRegistration(currentRegId); 
+      // craftDetailsInput.craftMake = regData.craftMake; ... etc.
+
+      toast({ title: "AI Suggestion", description: "Using generic craft details for AI. Link a registration for better suggestions."})
+      
+      const suggestions = await suggestChecklistItems(craftDetailsInput);
       const newChecklistItems: ChecklistItemResult[] = suggestions.map((desc, index) => ({
         itemId: `ai_sugg_${Date.now()}_${index}`,
         itemDescription: desc,
@@ -347,7 +370,7 @@ export function InspectionForm({ mode, inspectionId, existingInspectionData, pre
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Checklist</CardTitle>
             <div className="flex gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={handleAISuggestions} disabled={isAISuggesting}>
+                <Button type="button" variant="outline" size="sm" onClick={handleAISuggestions} disabled={isAISuggesting || !form.getValues("registrationRefId")}>
                     {isAISuggesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Lightbulb className="mr-2 h-4 w-4" />}
                     Suggest Items (AI)
                 </Button>
@@ -365,39 +388,61 @@ export function InspectionForm({ mode, inspectionId, existingInspectionData, pre
                   render={({ field: descField }) => (
                     <FormItem className="mb-2">
                       <FormLabel>Item #{index + 1}: Description *</FormLabel>
-                      <FormControl><Input placeholder="Checklist item description" {...descField} /></FormControl>
+                      <FormControl><Textarea placeholder="Checklist item description" {...descField} rows={2} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2">
+                  <FormField
                     control={form.control}
                     name={`checklistItems.${index}.result`}
                     render={({ field: resultField }) => (
-                        <FormItem>
+                      <FormItem className="space-y-2">
                         <FormLabel>Result *</FormLabel>
-                        <Select onValueChange={resultField.onChange} defaultValue={resultField.value}>
-                            <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                            <SelectContent>{["Pass", "Fail", "N/A"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent>
-                        </Select>
+                        <FormControl>
+                          <RadioGroup
+                            onValueChange={resultField.onChange}
+                            value={resultField.value}
+                            className="flex space-x-4 items-center pt-1"
+                          >
+                            <FormItem className="flex items-center space-x-2 space-y-0">
+                              <FormControl>
+                                <RadioGroupItem value="Pass" id={`pass-${item.id}`} />
+                              </FormControl>
+                              <Label htmlFor={`pass-${item.id}`} className="font-normal text-green-600">Pass</Label>
+                            </FormItem>
+                            <FormItem className="flex items-center space-x-2 space-y-0">
+                              <FormControl>
+                                <RadioGroupItem value="Fail" id={`fail-${item.id}`} />
+                              </FormControl>
+                              <Label htmlFor={`fail-${item.id}`} className="font-normal text-red-600">Fail</Label>
+                            </FormItem>
+                            <FormItem className="flex items-center space-x-2 space-y-0">
+                              <FormControl>
+                                <RadioGroupItem value="N/A" id={`na-${item.id}`} />
+                              </FormControl>
+                              <Label htmlFor={`na-${item.id}`} className="font-normal text-muted-foreground">N/A</Label>
+                            </FormItem>
+                          </RadioGroup>
+                        </FormControl>
                         <FormMessage />
-                        </FormItem>
+                      </FormItem>
                     )}
-                    />
-                    <FormField
+                  />
+                  <FormField
                     control={form.control}
                     name={`checklistItems.${index}.comments`}
                     render={({ field: commentsField }) => (
-                        <FormItem>
+                      <FormItem>
                         <FormLabel>Comments</FormLabel>
                         <FormControl><Textarea placeholder="Optional comments" {...commentsField} rows={1} /></FormControl>
                         <FormMessage />
-                        </FormItem>
+                      </FormItem>
                     )}
-                    />
+                  />
                 </div>
-                <div className="mt-2">
+                <div className="mt-3">
                     <FormLabel className="text-xs">Evidence URLs (comma-separated)</FormLabel>
                      <FormField
                         control={form.control}
@@ -410,14 +455,17 @@ export function InspectionForm({ mode, inspectionId, existingInspectionData, pre
                                 const urls = e.target.value.split(',').map(url => url.trim()).filter(url => url);
                                 evidenceField.onChange(urls);
                             }}
+                            className="mt-1"
                             />
                         )}
                         />
-                    <Button type="button" size="sm" variant="outline" className="mt-1" disabled><ImageUp className="mr-2 h-3 w-3" /> Upload (UI Only)</Button>
+                    <Button type="button" size="sm" variant="outline" className="mt-2" disabled><ImageUp className="mr-2 h-3 w-3" /> Upload (UI Only)</Button>
                 </div>
-                <Button type="button" variant="ghost" size="sm" onClick={() => remove(index)} className="mt-2 text-destructive hover:text-destructive-foreground hover:bg-destructive">
-                  <Trash2 className="mr-1 h-4 w-4" /> Remove Item
-                </Button>
+                <div className="mt-3 text-right">
+                  <Button type="button" variant="ghost" size="sm" onClick={() => remove(index)} className="text-destructive hover:text-destructive-foreground hover:bg-destructive">
+                    <Trash2 className="mr-1 h-4 w-4" /> Remove Item
+                  </Button>
+                </div>
               </Card>
             ))}
             {fields.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No checklist items. Add items manually or use AI suggestions.</p>}
@@ -457,3 +505,5 @@ export function InspectionForm({ mode, inspectionId, existingInspectionData, pre
     </Form>
   );
 }
+
+    
