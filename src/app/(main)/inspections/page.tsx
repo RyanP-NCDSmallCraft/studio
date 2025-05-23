@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
-import { PlusCircle, ClipboardList, Eye, Edit, Filter, Play, CheckSquare, ShieldAlert } from "lucide-react"; // Added Play, CheckSquare, ShieldAlert
+import { PlusCircle, ClipboardList, Eye, Edit, Filter, Play, CheckSquare, ShieldAlert, CalendarDays } from "lucide-react"; // Added CalendarDays
 import type { Inspection } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
@@ -74,11 +74,11 @@ export default function InspectionListPage() {
 
   const getStatusBadgeVariant = (status: Inspection["status"]) => {
     switch (status) {
-      case "Passed": return "default"; // Greenish in default theme
+      case "Passed": return "default";
       case "Failed": return "destructive";
       case "Scheduled": return "secondary";
-      case "InProgress": return "outline"; // Consider a blueish/yellowish custom variant
-      case "PendingReview": return "outline"; // Consider a yellowish custom variant
+      case "InProgress": return "outline"; 
+      case "PendingReview": return "outline"; 
       case "Cancelled": return "destructive";
       default: return "outline";
     }
@@ -95,7 +95,7 @@ export default function InspectionListPage() {
           <Button variant="outline" disabled>
             <Filter className="mr-2 h-4 w-4" /> Filter
           </Button>
-          {(isRegistrar || isAdmin || isSupervisor) && ( // Only these roles can schedule new ones
+          {(isRegistrar || isAdmin || isSupervisor) && (
             <Button asChild>
               <Link href="/inspections/new">
                 <PlusCircle className="mr-2 h-4 w-4" /> Schedule New Inspection
@@ -125,10 +125,10 @@ export default function InspectionListPage() {
             </TableHeader>
             <TableBody>
               {placeholderInspections.map((insp) => {
-                const canStart = (isInspector && insp.inspectorData?.id === currentUser?.userId) || isAdmin || isRegistrar || isSupervisor;
-                const canEditScheduled = (isAdmin || isRegistrar || isSupervisor); // Broader edit for scheduled items
-                const canEditInProgress = (isInspector && insp.inspectorData?.id === currentUser?.userId && insp.status === "InProgress") || isAdmin || isRegistrar || isSupervisor;
-                const canReview = (isRegistrar || isAdmin); // isRegistrar implicitly covers Admin for review
+                const canBeStartedByCurrentUser = (isInspector && insp.inspectorData?.id === currentUser?.userId) || isAdmin || isRegistrar || isSupervisor;
+                const canEditScheduleByCurrentUser = (isAdmin || isRegistrar || isSupervisor);
+                const canContinueConductingByCurrentUser = (isInspector && insp.inspectorData?.id === currentUser?.userId && insp.status === "InProgress") || ((isAdmin || isRegistrar || isSupervisor) && insp.status === "InProgress");
+                const canReviewByCurrentUser = (isRegistrar || isAdmin);
 
                 return (
                 <TableRow key={insp.inspectionId}>
@@ -148,25 +148,25 @@ export default function InspectionListPage() {
                       <Link href={`/inspections/${insp.inspectionId}`}><Eye className="h-4 w-4" /></Link>
                     </Button>
                     
-                    {insp.status === "Scheduled" && canStart && (
+                    {insp.status === "Scheduled" && canBeStartedByCurrentUser && (
                        <Button variant="ghost" size="icon" asChild title="Start Inspection">
-                        <Link href={`/inspections/${insp.inspectionId}/edit`}><Play className="h-4 w-4 text-green-500" /></Link>
+                        <Link href={`/inspections/${insp.inspectionId}/conduct`}><Play className="h-4 w-4 text-green-500" /></Link>
                       </Button>
                     )}
 
-                    {(insp.status === "Scheduled" || insp.status === "InProgress") && canEditScheduled && (
+                    {(insp.status === "Scheduled" || insp.status === "InProgress") && canEditScheduleByCurrentUser && (
                        <Button variant="ghost" size="icon" asChild title="Edit Schedule/Assignment">
-                        <Link href={`/inspections/${insp.inspectionId}/edit`}><Edit className="h-4 w-4" /></Link>
+                        <Link href={`/inspections/${insp.inspectionId}/edit-schedule`}><CalendarDays className="h-4 w-4" /></Link>
                       </Button>
                     )}
                     
-                    {insp.status === "InProgress" && canEditInProgress && (
+                    {insp.status === "InProgress" && canContinueConductingByCurrentUser && (
                        <Button variant="ghost" size="icon" asChild title="Continue/Edit Inspection">
-                        <Link href={`/inspections/${insp.inspectionId}/edit`}><Edit className="h-4 w-4" /></Link>
+                        <Link href={`/inspections/${insp.inspectionId}/conduct`}><Edit className="h-4 w-4" /></Link>
                       </Button>
                     )}
 
-                    {insp.status === "PendingReview" && canReview && (
+                    {insp.status === "PendingReview" && canReviewByCurrentUser && (
                        <Button variant="ghost" size="icon" asChild title="Review Inspection">
                         <Link href={`/inspections/${insp.inspectionId}`}><CheckSquare className="h-4 w-4 text-blue-500" /></Link>
                       </Button>

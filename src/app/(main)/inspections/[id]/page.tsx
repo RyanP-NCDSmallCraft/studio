@@ -42,9 +42,9 @@ const placeholderInspection: Inspection = {
   followUpRequired: false,
   checklistItems: [
     { itemId: "chk01", itemDescription: "Hull Integrity Check", result: "Pass", comments: "No cracks or damage found." },
-    { itemId: "chk02", itemDescription: "Life Jackets (min quantity & condition)", result: "Pass", comments: "5 adult, 2 child PFDs, all serviceable." , /* evidenceUrls: ["https://placehold.co/300x200.png?text=Life+Jackets", "https://placehold.co/300x200.png?text=PFD+Close+Up"] */},
+    { itemId: "chk02", itemDescription: "Life Jackets (min quantity & condition)", result: "Pass", comments: "5 adult, 2 child PFDs, all serviceable." },
     { itemId: "chk03", itemDescription: "Fire Extinguisher (charged & accessible)", result: "Pass", comments: "Type B, fully charged, mounted correctly." },
-    { itemId: "chk04", itemDescription: "Navigation Lights", result: "Fail", comments: "Port side light not working.", /* evidenceUrls: ["https://placehold.co/300x200.png?text=Nav+Lights"] */ },
+    { itemId: "chk04", itemDescription: "Navigation Lights", result: "Fail", comments: "Port side light not working." },
     { itemId: "chk05", itemDescription: "Anchor and Rode", result: "N/A", comments: "Craft type does not require anchor for intended use." },
   ],
   completedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000) as any, // Inspector submitted
@@ -85,7 +85,6 @@ export default function InspectionDetailPage() {
   const router = useRouter();
   const { toast } = useToast();
   
-  // Simulate fetching the correct inspection based on ID
   const [inspection, setInspection] = useState<Inspection | null>(
     inspectionId === "INSP003_Pending" ? placeholderPendingReviewInspection : placeholderInspection
   );
@@ -93,7 +92,6 @@ export default function InspectionDetailPage() {
 
 
   if (!inspection) {
-    // In a real app, you'd fetch data here and show a proper loading state
     return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
 
@@ -117,15 +115,16 @@ export default function InspectionDetailPage() {
     }
   };
 
-  const canEditCurrentInspection = 
+  const canConductOrContinueInspection = 
     (isInspector && inspection.inspectorData?.id === currentUser?.userId && (inspection.status === "Scheduled" || inspection.status === "InProgress")) ||
     ((isAdmin || isRegistrar || isSupervisor) && (inspection.status === "Scheduled" || inspection.status === "InProgress"));
+
+  const canEditSchedule = (isAdmin || isRegistrar || isSupervisor) && (inspection.status === "Scheduled" || inspection.status === "InProgress");
 
   const canReview = (isRegistrar || isAdmin) && inspection.status === "PendingReview";
 
   const handleReviewAction = async (action: "approve" | "reject") => {
     setIsReviewing(true);
-    // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1000));
     const newStatus = action === "approve" ? "Passed" : "Failed";
     setInspection(prev => prev ? ({ ...prev, status: newStatus, reviewedAt: new Date() as any, reviewedByRef: {id: currentUser?.userId} as any }) : null);
@@ -134,7 +133,7 @@ export default function InspectionDetailPage() {
         description: `Inspection ${inspection.inspectionId} has been marked as ${newStatus}.`
     });
     setIsReviewing(false);
-    router.refresh(); // Or navigate away / update list data source
+    router.refresh();
   };
 
 
@@ -149,14 +148,19 @@ export default function InspectionDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          {canEditCurrentInspection && (
+          {canEditSchedule && (
             <Button asChild variant="outline">
-              <Link href={`/inspections/${inspectionId}/edit`}><Edit className="mr-2 h-4 w-4" /> Edit</Link>
+              <Link href={`/inspections/${inspectionId}/edit-schedule`}><CalendarDays className="mr-2 h-4 w-4" /> Edit Schedule</Link>
             </Button>
           )}
-          {inspection.status === "Scheduled" && ((isInspector && inspection.inspectorData?.id === currentUser?.userId) || isAdmin || isRegistrar || isSupervisor) && (
+          {inspection.status === "Scheduled" && canConductOrContinueInspection && (
              <Button asChild variant="default">
-              <Link href={`/inspections/${inspectionId}/edit`}><Play className="mr-2 h-4 w-4" /> Start Inspection</Link>
+              <Link href={`/inspections/${inspectionId}/conduct`}><Play className="mr-2 h-4 w-4" /> Start Inspection</Link>
+            </Button>
+          )}
+          {inspection.status === "InProgress" && canConductOrContinueInspection && (
+             <Button asChild variant="outline">
+              <Link href={`/inspections/${inspectionId}/conduct`}><Edit className="mr-2 h-4 w-4" /> Continue Inspection</Link>
             </Button>
           )}
           {canReview && (
@@ -279,7 +283,7 @@ export default function InspectionDetailPage() {
                     </Badge>
                   </div>
                   {item.comments && <p className="text-sm text-muted-foreground mt-1 ml-7 pl-1 border-l-2 border-muted"><strong>Comments:</strong> {item.comments}</p>}
-                  {/* Placeholder for evidence images if they were to be displayed */}
+                  
                 </Card>
               ))}
             </div>
