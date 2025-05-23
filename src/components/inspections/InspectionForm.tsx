@@ -60,10 +60,10 @@ type InspectionFormValues = z.infer<typeof inspectionFormSchema>;
 const ncdChecklistTemplate: ChecklistTemplate = {
   templateId: "NCD_SCA_COMPREHENSIVE_V1",
   name: "NCD Small Craft Inspection Checklist (Comprehensive)",
-  inspectionType: "Initial", // This primarily indicates its origin or primary use case
+  inspectionType: "Initial",
   isActive: true,
   createdAt: Timestamp.now(),
-  createdByRef: {} as any,
+  createdByRef: {} as any, // Placeholder
   items: [
     // A. Marking and Load Line Requirements (Schedule 1)
     { itemId: "A_1_a", itemDescription: "Registration Number Marking: Legibly & permanently printed on BOTH sides?", category: "A. Marking: Registration Number", order: 10 },
@@ -219,9 +219,9 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
 
 
   useEffect(() => {
+    console.log("InspectionForm Effect: usageContext:", usageContext, "mode:", mode, "existing items count:", existingInspectionData?.checklistItems?.length);
     if (usageContext === 'conduct' && (mode === 'create' || (mode === 'edit' && !existingInspectionData?.checklistItems?.length)) ) {
-        console.log("InspectionForm: Attempting to load default checklist. Inspection Type:", watchInspectionType, "Mode:", mode, "UsageContext:", usageContext);
-        // Always default to NCD checklist if checklist is empty when starting/continuing an inspection conduct session
+        console.log("InspectionForm: Attempting to load NCD default checklist. Mode:", mode, "UsageContext:", usageContext);
         const ncdItems = ncdChecklistTemplate.items.map(item => ({
             itemId: item.itemId,
             itemDescription: item.itemDescription,
@@ -231,7 +231,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
         form.setValue("checklistItems", ncdItems);
         console.log("InspectionForm: NCD checklist loaded with", ncdItems.length, "items.");
     }
-  }, [mode, usageContext, existingInspectionData, form, watchInspectionType]); // watchInspectionType included for logging, not essential for the simplified logic
+  }, [mode, usageContext, existingInspectionData, form]); 
 
 
   const handleAISuggestions = async () => {
@@ -293,8 +293,8 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
         inspectorRefId: data.inspectorRefId,
         inspectionType: data.inspectionType,
         scheduledDate: data.scheduledDate,
-        followUpRequired: false, // Reset this for scheduling context
-        checklistItems: [], // Reset this for scheduling context
+        followUpRequired: false, 
+        checklistItems: [], 
         findings: undefined,
         correctiveActions: undefined,
         overallResult: undefined,
@@ -303,7 +303,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     } else if (action === "saveProgress") {
       finalStatus = "InProgress";
        if (!data.inspectionDate) { 
-        submissionPayload.inspectionDate = new Date(); // Set inspection date if not already set
+        submissionPayload.inspectionDate = new Date(); 
       }
     } else if (action === "submitReview") {
       if (!data.inspectionDate) {
@@ -321,15 +321,14 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     }
 
     const fullSubmissionData: Partial<Inspection> = {
-      // Spread all fields from submissionPayload
-      ...(submissionPayload as Omit<InspectionFormValues, 'registrationRefId' | 'inspectorRefId'>), // Cast to avoid TS error on incompatible spread
-      registrationRef: { id: submissionPayload.registrationRefId } as any, // Placeholder reference
-      inspectorRef: submissionPayload.inspectorRefId ? { id: submissionPayload.inspectorRefId } as any : undefined, // Placeholder reference
+      ...(submissionPayload as Omit<InspectionFormValues, 'registrationRefId' | 'inspectorRefId'>), 
+      registrationRef: { id: submissionPayload.registrationRefId } as any, 
+      inspectorRef: submissionPayload.inspectorRefId ? { id: submissionPayload.inspectorRefId } as any : undefined, 
 
       scheduledDate: submissionPayload.scheduledDate ? Timestamp.fromDate(new Date(submissionPayload.scheduledDate)) : undefined,
       inspectionDate: submissionPayload.inspectionDate ? Timestamp.fromDate(new Date(submissionPayload.inspectionDate)) : undefined,
       status: finalStatus,
-      ...(action !== "schedule" && { // Only include these for conduct-related actions
+      ...(action !== "schedule" && { 
         findings: submissionPayload.findings,
         correctiveActions: submissionPayload.correctiveActions,
         overallResult: submissionPayload.overallResult,
@@ -348,8 +347,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     try {
       if (mode === "create") {
         toast({ title: `Inspection ${action === "schedule" ? "Scheduled" : "Saved"} (Placeholder)`, description: `Status: ${finalStatus}` });
-        // For a new schedule, go to the list page. For a new conduct (if that mode was allowed directly), go to its detail page.
-        router.push(action === "schedule" ? "/inspections" : `/inspections`); // Simplified, assuming create only used for schedule
+        router.push(action === "schedule" ? "/inspections" : `/inspections`); 
       } else if (inspectionId) {
         toast({ title: "Inspection Updated (Placeholder)", description: `Status: ${finalStatus}` });
         router.push(`/inspections/${inspectionId}`);
@@ -371,7 +369,6 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     return "N/A";
   }
 
-  // For display in the conduct header
   const currentRegistrationScaRegoNo = existingInspectionData?.registrationData?.scaRegoNo || watchRegistrationRefId || "N/A";
   const currentRegistrationHullId = existingInspectionData?.registrationData?.hullIdNumber || "N/A (Link craft)";
   const currentCraftType = existingInspectionData?.registrationData?.craftType || "N/A (Link craft)";
@@ -415,13 +412,13 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
               control={form.control}
               name="inspectorRefId"
               render={({ field }) => (
-                canAssignInspector || (mode === 'edit' && !!existingInspectionData?.inspectorRef) ? ( // Show select if user can assign OR if editing an existing assignment
+                canAssignInspector || (mode === 'edit' && !!existingInspectionData?.inspectorRef) ? ( 
                   <FormItem>
                     <FormLabel>Assign Inspector *</FormLabel>
                     <Select
                       onValueChange={field.onChange}
                       value={field.value || ""}
-                      disabled={!canAssignInspector && mode === 'edit' && usageContext !== 'schedule'} // Only non-assigners are disabled if editing conduct context
+                      disabled={!canAssignInspector && mode === 'edit' && usageContext !== 'schedule'} 
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -441,13 +438,13 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
-                ) : ( // This case is for mode 'create' and user cannot assign (is only inspector)
+                ) : ( 
                   <FormItem>
                     <FormLabel>Inspector</FormLabel>
                     <FormControl>
                       <Input
                         value={
-                          field.value // Should be pre-filled by initialInspectorId logic
+                          field.value 
                             ? (mockInspectorsForSelect.find(u => u.userId === field.value)?.displayName || field.value)
                             : (currentUser?.displayName || currentUser?.email || "N/A")
                         }
@@ -507,56 +504,46 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
                         {isAISuggesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Lightbulb className="mr-2 h-4 w-4" />}
                         Suggest Items (AI)
                     </Button>
-                    <Button type="button" variant="outline" size="sm" onClick={() => append({ itemId: `custom_${Date.now()}`, itemDescription: "", result: "N/A", comments: "" })}>
+                    <Button type="button" variant="outline" size="sm" onClick={() => append({ itemId: `custom_${Date.now()}`, itemDescription: "New Custom Item", result: "N/A", comments: "" })}>
                         <PlusCircle className="mr-2 h-4 w-4" /> Add Custom Item
                     </Button>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-3">
                 {fields.map((item, index) => (
-                  <Card key={item.id} className="p-4 bg-muted/20">
-                    <FormField
-                      control={form.control}
-                      name={`checklistItems.${index}.itemDescription`}
-                      render={({ field: descField }) => (
-                        <FormItem className="mb-2">
-                          <FormLabel>Item #{index + 1}: Description *</FormLabel>
-                          <FormControl><Textarea placeholder="Checklist item description" {...descField} rows={2} /></FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                  <Card key={item.id} className="p-3 bg-muted/20">
+                     <p className="font-medium mb-2 text-sm">{item.itemDescription}</p>
+                    
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 items-start">
                        <FormField
                         control={form.control}
                         name={`checklistItems.${index}.result`}
                         render={({ field: resultField }) => (
-                          <FormItem className="space-y-2">
-                            <FormLabel>Result *</FormLabel>
+                          <FormItem className="space-y-1">
+                            <FormLabel className="text-xs">Result *</FormLabel>
                             <FormControl>
                                 <RadioGroup
                                     onValueChange={resultField.onChange}
-                                    // value={resultField.value} // Use defaultValue if RadioGroup manages its own state internally for selection
                                     defaultValue={resultField.value}
-                                    className="flex space-x-4 items-center pt-1"
+                                    className="flex space-x-3 items-center pt-1"
                                 >
-                                    <FormItem className="flex items-center space-x-2 space-y-0">
+                                    <FormItem className="flex items-center space-x-1.5 space-y-0">
                                         <FormControl>
-                                            <RadioGroupItem value="Yes" id={`yes-${item.itemId}-${index}`} />
+                                            <RadioGroupItem value="Yes" id={`${item.itemId}-${index}-yes`} />
                                         </FormControl>
-                                        <Label htmlFor={`yes-${item.itemId}-${index}`} className="font-normal text-green-600">Yes</Label>
+                                        <Label htmlFor={`${item.itemId}-${index}-yes`} className="font-normal text-xs text-green-600">Yes</Label>
                                     </FormItem>
-                                    <FormItem className="flex items-center space-x-2 space-y-0">
+                                    <FormItem className="flex items-center space-x-1.5 space-y-0">
                                         <FormControl>
-                                            <RadioGroupItem value="No" id={`no-${item.itemId}-${index}`} />
+                                            <RadioGroupItem value="No" id={`${item.itemId}-${index}-no`} />
                                         </FormControl>
-                                        <Label htmlFor={`no-${item.itemId}-${index}`} className="font-normal text-red-600">No</Label>
+                                        <Label htmlFor={`${item.itemId}-${index}-no`} className="font-normal text-xs text-red-600">No</Label>
                                     </FormItem>
-                                    <FormItem className="flex items-center space-x-2 space-y-0">
+                                    <FormItem className="flex items-center space-x-1.5 space-y-0">
                                          <FormControl>
-                                            <RadioGroupItem value="N/A" id={`na-${item.itemId}-${index}`} />
+                                            <RadioGroupItem value="N/A" id={`${item.itemId}-${index}-na`} />
                                          </FormControl>
-                                        <Label htmlFor={`na-${item.itemId}-${index}`} className="font-normal text-muted-foreground">N/A</Label>
+                                        <Label htmlFor={`${item.itemId}-${index}-na`} className="font-normal text-xs text-muted-foreground">N/A</Label>
                                     </FormItem>
                                 </RadioGroup>
                             </FormControl>
@@ -569,20 +556,20 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
                         name={`checklistItems.${index}.comments`}
                         render={({ field: commentsField }) => (
                           <FormItem>
-                            <FormLabel>Notes / Photo Ref.</FormLabel>
-                            <FormControl><Textarea placeholder="Optional comments or photo reference" {...commentsField} rows={1} /></FormControl>
+                            <FormLabel className="text-xs">Notes / Photo Ref.</FormLabel>
+                            <FormControl><Textarea placeholder="Optional comments" {...commentsField} rows={1} className="text-sm" /></FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
                     </div>
-                    <div className="mt-3">
-                        <Button type="button" size="sm" variant="outline" className="mt-2" disabled><ImageUp className="mr-2 h-3 w-3" /> Upload Photo Evidence (UI Only)</Button>
-                    </div>
-                    <div className="mt-3 text-right">
-                      <Button type="button" variant="ghost" size="sm" onClick={() => remove(index)} className="text-destructive hover:text-destructive-foreground hover:bg-destructive">
-                        <Trash2 className="mr-1 h-4 w-4" /> Remove Item
-                      </Button>
+                    <div className="mt-2 flex justify-between items-center">
+                        <Button type="button" size="xs" variant="outline" className="text-xs py-1 px-2 h-auto" disabled><ImageUp className="mr-1 h-3 w-3" /> Upload Photo</Button>
+                        { item.itemId.startsWith("custom_") && (
+                            <Button type="button" variant="ghost" size="xs" onClick={() => remove(index)} className="text-destructive hover:text-destructive-foreground hover:bg-destructive text-xs py-1 px-2 h-auto">
+                                <Trash2 className="mr-1 h-3 w-3" /> Remove
+                            </Button>
+                        )}
                     </div>
                   </Card>
                 ))}
@@ -639,3 +626,4 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     </Form>
   );
 }
+
