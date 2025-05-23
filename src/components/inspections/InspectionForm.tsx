@@ -173,7 +173,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
       initialInspectorId = currentUser.userId;
     }
   }
-
+  
   const defaultValues: Partial<InspectionFormValues> = existingInspectionData
   ? {
       ...existingInspectionData,
@@ -198,7 +198,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
       inspectorRefId: initialInspectorId,
       findings: "",
       correctiveActions: "",
-      overallResult: undefined,
+      overallResult: undefined, // Set to undefined initially
       scheduledDate: new Date(),
       inspectionDate: usageContext === 'conduct' ? new Date() : undefined,
     };
@@ -245,12 +245,13 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
         setIsAISuggesting(false);
         return;
       }
+      // Simulate fetching craft details for AI input
       let craftDetailsInput: SuggestChecklistItemsInput = {
         craftMake: existingInspectionData?.registrationData?.craftMake || "GenericCraft",
         craftModel: existingInspectionData?.registrationData?.craftModel || "ModelX",
-        craftYear: new Date().getFullYear() - 2,
-        craftType: existingInspectionData?.registrationData?.craftType || "OpenBoat",
-        registrationHistory: "No prior issues noted.",
+        craftYear: new Date().getFullYear() - 2, // Placeholder
+        craftType: existingInspectionData?.registrationData?.craftType || "OpenBoat", // Placeholder
+        registrationHistory: "No prior issues noted.", // Placeholder
       };
 
       const suggestions = await suggestChecklistItems(craftDetailsInput);
@@ -285,21 +286,27 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     }
 
     let finalStatus: Inspection['status'];
-    let submissionPayload = { ...data };
+    let submissionPayload = { ...data }; // Clone data to avoid mutating the form state directly
 
     if (action === "schedule") {
       finalStatus = "Scheduled";
+      // For scheduling, we only care about a subset of fields.
       submissionPayload = {
         registrationRefId: data.registrationRefId,
         inspectorRefId: data.inspectorRefId,
         inspectionType: data.inspectionType,
         scheduledDate: data.scheduledDate,
+        // Explicitly set other fields to sensible defaults or undefined for scheduling context
         followUpRequired: false,
         checklistItems: [],
-      } as any;
+        findings: undefined,
+        correctiveActions: undefined,
+        overallResult: undefined,
+        inspectionDate: undefined,
+      } as any; // Cast to any to allow partial structure for scheduling
     } else if (action === "saveProgress") {
       finalStatus = "InProgress";
-       if (!data.inspectionDate) { 
+       if (!data.inspectionDate) { // If inspection date not set, default to now
         submissionPayload.inspectionDate = new Date();
       }
     } else if (action === "submitReview") {
@@ -317,11 +324,14 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
       return;
     }
 
+    // Prepare full submission data for Firestore (placeholder)
     const fullSubmissionData: Partial<Inspection> = {
       ...submissionPayload,
+      // Convert dates to Timestamps for Firestore
       scheduledDate: submissionPayload.scheduledDate ? Timestamp.fromDate(new Date(submissionPayload.scheduledDate)) : undefined,
       inspectionDate: submissionPayload.inspectionDate ? Timestamp.fromDate(new Date(submissionPayload.inspectionDate)) : undefined,
       status: finalStatus,
+      // Only include conduct-specific fields if not scheduling
       ...(action !== "schedule" && {
         findings: submissionPayload.findings,
         correctiveActions: submissionPayload.correctiveActions,
@@ -329,24 +339,29 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
         followUpRequired: submissionPayload.followUpRequired,
         checklistItems: submissionPayload.checklistItems,
       }),
-      ...(mode === 'create' && { createdAt: Timestamp.now(), createdByRef: currentUser?.userId as any }),
+      // Timestamps and user refs
+      ...(mode === 'create' && { createdAt: Timestamp.now(), createdByRef: currentUser?.userId as any }), // In real app, use doc(db, 'users', currentUser.userId)
       ...(mode === 'edit' && existingInspectionData && { createdAt: existingInspectionData.createdAt, createdByRef: existingInspectionData.createdByRef }),
       lastUpdatedAt: Timestamp.now(),
-      lastUpdatedByRef: currentUser?.userId as any,
+      lastUpdatedByRef: currentUser?.userId as any, // In real app, use doc(db, 'users', currentUser.userId)
       ...(action === "submitReview" && { completedAt: Timestamp.now() }),
     };
 
 
     console.log("Submitting inspection data (placeholder):", { id: inspectionId || `new_insp_${Date.now()}`, ...fullSubmissionData });
     try {
+      // Placeholder for Firestore save operation
       if (mode === "create") {
+        // const docRef = await addDoc(collection(db, "inspections"), fullSubmissionData);
         toast({ title: `Inspection ${action === "schedule" ? "Scheduled" : "Saved"} (Placeholder)`, description: `Status: ${finalStatus}` });
-        router.push(action === "schedule" ? "/inspections" : `/inspections`); 
+        // Redirect based on action
+        router.push(action === "schedule" ? "/inspections" : `/inspections`); // Or specific detail page if ID known
       } else if (inspectionId) {
+        // await updateDoc(doc(db, "inspections", inspectionId), fullSubmissionData);
         toast({ title: "Inspection Updated (Placeholder)", description: `Status: ${finalStatus}` });
         router.push(`/inspections/${inspectionId}`);
       }
-      router.refresh();
+      router.refresh(); // To update lists or detail views
     } catch (error) {
       console.error("Error saving inspection:", error);
       toast({ title: "Save Failed", description: "Could not save inspection.", variant: "destructive" });
@@ -513,7 +528,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
                       )}
                     />
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2">
-                      <FormField
+                       <FormField
                         control={form.control}
                         name={`checklistItems.${index}.result`}
                         render={({ field: resultField }) => (
@@ -522,20 +537,20 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
                             <FormControl>
                               <RadioGroup
                                 onValueChange={resultField.onChange}
-                                defaultValue={resultField.value} 
+                                defaultValue={resultField.value}
                                 className="flex space-x-4 items-center pt-1"
                               >
                                 <FormItem className="flex items-center space-x-2 space-y-0">
-                                  <FormControl> <RadioGroupItem value="Yes" id={`yes-${item.id}`} /> </FormControl>
-                                  <Label htmlFor={`yes-${item.id}`} className="font-normal text-green-600">Yes</Label>
+                                   <RadioGroupItem value="Yes" id={`yes-${item.itemId}-${index}`} />
+                                  <Label htmlFor={`yes-${item.itemId}-${index}`} className="font-normal text-green-600">Yes</Label>
                                 </FormItem>
                                 <FormItem className="flex items-center space-x-2 space-y-0">
-                                  <FormControl> <RadioGroupItem value="No" id={`no-${item.id}`} /> </FormControl>
-                                  <Label htmlFor={`no-${item.id}`} className="font-normal text-red-600">No</Label>
+                                   <RadioGroupItem value="No" id={`no-${item.itemId}-${index}`} />
+                                  <Label htmlFor={`no-${item.itemId}-${index}`} className="font-normal text-red-600">No</Label>
                                 </FormItem>
                                 <FormItem className="flex items-center space-x-2 space-y-0">
-                                  <FormControl> <RadioGroupItem value="N/A" id={`na-${item.id}`} /> </FormControl>
-                                  <Label htmlFor={`na-${item.id}`} className="font-normal text-muted-foreground">N/A</Label>
+                                   <RadioGroupItem value="N/A" id={`na-${item.itemId}-${index}`} />
+                                  <Label htmlFor={`na-${item.itemId}-${index}`} className="font-normal text-muted-foreground">N/A</Label>
                                 </FormItem>
                               </RadioGroup>
                             </FormControl>
