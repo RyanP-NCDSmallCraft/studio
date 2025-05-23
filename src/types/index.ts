@@ -88,7 +88,7 @@ export interface ChecklistItemResult {
   itemDescription: string;
   result: "Pass" | "Fail" | "N/A";
   comments?: string;
-  evidenceUrls?: string[];
+  // evidenceUrls?: string[]; // Removed as per request
 }
 
 export interface Inspection {

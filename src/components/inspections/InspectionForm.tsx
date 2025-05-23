@@ -37,7 +37,7 @@ const checklistItemSchema = z.object({
   itemDescription: z.string().min(1, "Description is required"),
   result: z.enum(["Pass", "Fail", "N/A"]),
   comments: z.string().optional(),
-  evidenceUrls: z.array(z.string().url()).optional(),
+  // evidenceUrls: z.array(z.string().url()).optional(), // Removed as per request
 });
 
 const inspectionFormSchema = z.object({
@@ -134,7 +134,7 @@ export function InspectionForm({ mode, inspectionId, existingInspectionData, pre
       inspectorRefId: initialInspectorId,
       scheduledDate: existingInspectionData.scheduledDate?.toDate(),
       inspectionDate: existingInspectionData.inspectionDate?.toDate(),
-      checklistItems: existingInspectionData.checklistItems.map(item => ({...item, evidenceUrls: item.evidenceUrls || [], result: item.result || "N/A" })),
+      checklistItems: existingInspectionData.checklistItems.map(item => ({...item, result: item.result || "N/A" })),
     }
   : { 
       inspectionType: "Initial",
@@ -170,7 +170,6 @@ export function InspectionForm({ mode, inspectionId, existingInspectionData, pre
                 itemDescription: item.itemDescription,
                 result: "N/A" as "N/A", 
                 comments: "",
-                evidenceUrls: [],
             }));
             form.setValue("checklistItems", newItems);
         } else {
@@ -183,36 +182,29 @@ export function InspectionForm({ mode, inspectionId, existingInspectionData, pre
   const handleAISuggestions = async () => {
     setIsAISuggesting(true);
     try {
-      // This needs a real registration to fetch details from, or mock data.
-      // For now, using static mock details for the AI prompt.
       const currentRegId = form.getValues("registrationRefId");
       let craftDetailsInput: SuggestChecklistItemsInput = {
         craftMake: "GenericCraft",
         craftModel: "ModelX",
         craftYear: new Date().getFullYear() - 2,
-        craftType: "OpenBoat", // Example, should be derived
-        registrationHistory: "No prior issues noted.", // Example
+        craftType: "OpenBoat", 
+        registrationHistory: "No prior issues noted.", 
       };
-
-      // In a real app, you'd fetch registration details here using currentRegId to populate craftDetailsInput
-      // For example: const regData = await getRegistration(currentRegId); 
-      // craftDetailsInput.craftMake = regData.craftMake; ... etc.
 
       toast({ title: "AI Suggestion", description: "Using generic craft details for AI. Link a registration for better suggestions."})
       
       const suggestions = await suggestChecklistItems(craftDetailsInput);
-      const newChecklistItems: ChecklistItemResult[] = suggestions.map((desc, index) => ({
+      const newChecklistItems: Omit<ChecklistItemResult, "evidenceUrls">[] = suggestions.map((desc, index) => ({
         itemId: `ai_sugg_${Date.now()}_${index}`,
         itemDescription: desc,
         result: "N/A",
         comments: "",
-        evidenceUrls: [],
       }));
       
       const existingDescriptions = new Set(fields.map(f => f.itemDescription));
       newChecklistItems.forEach(newItem => {
         if (!existingDescriptions.has(newItem.itemDescription)) {
-          append(newItem);
+          append(newItem as ChecklistItemResult);
         }
       });
 
@@ -374,7 +366,7 @@ export function InspectionForm({ mode, inspectionId, existingInspectionData, pre
                     {isAISuggesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Lightbulb className="mr-2 h-4 w-4" />}
                     Suggest Items (AI)
                 </Button>
-                <Button type="button" variant="outline" size="sm" onClick={() => append({ itemId: `custom_${Date.now()}`, itemDescription: "", result: "N/A", comments: "", evidenceUrls: [] })}>
+                <Button type="button" variant="outline" size="sm" onClick={() => append({ itemId: `custom_${Date.now()}`, itemDescription: "", result: "N/A", comments: "" })}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Add Custom Item
                 </Button>
             </div>
@@ -443,23 +435,8 @@ export function InspectionForm({ mode, inspectionId, existingInspectionData, pre
                   />
                 </div>
                 <div className="mt-3">
-                    <FormLabel className="text-xs">Evidence URLs (comma-separated)</FormLabel>
-                     <FormField
-                        control={form.control}
-                        name={`checklistItems.${index}.evidenceUrls`}
-                        render={({ field: evidenceField }) => (
-                           <Input 
-                            placeholder="https://url1.com, https://url2.com" 
-                            value={Array.isArray(evidenceField.value) ? evidenceField.value.join(', ') : ''}
-                            onChange={e => {
-                                const urls = e.target.value.split(',').map(url => url.trim()).filter(url => url);
-                                evidenceField.onChange(urls);
-                            }}
-                            className="mt-1"
-                            />
-                        )}
-                        />
-                    <Button type="button" size="sm" variant="outline" className="mt-2" disabled><ImageUp className="mr-2 h-3 w-3" /> Upload (UI Only)</Button>
+                    {/* Removed FormField for evidenceUrls input */}
+                    <Button type="button" size="sm" variant="outline" className="mt-2" disabled><ImageUp className="mr-2 h-3 w-3" /> Upload Photo Evidence (UI Only)</Button>
                 </div>
                 <div className="mt-3 text-right">
                   <Button type="button" variant="ghost" size="sm" onClick={() => remove(index)} className="text-destructive hover:text-destructive-foreground hover:bg-destructive">
@@ -505,5 +482,3 @@ export function InspectionForm({ mode, inspectionId, existingInspectionData, pre
     </Form>
   );
 }
-
-    
