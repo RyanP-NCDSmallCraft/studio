@@ -12,9 +12,13 @@ export default function NewInspectionPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-2">
         <ClipboardList className="h-8 w-8 text-primary" />
-        <h1 className="text-3xl font-bold">New Craft Inspection</h1>
+        <h1 className="text-3xl font-bold">Schedule New Inspection</h1>
       </div>
-      <InspectionForm mode="create" prefilledRegistrationId={registrationId || undefined} />
+      <InspectionForm 
+        mode="create" 
+        usageContext="schedule" 
+        prefilledRegistrationId={registrationId || undefined} 
+      />
     </div>
   );
 }

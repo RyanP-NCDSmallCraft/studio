@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
-import { PlusCircle, ClipboardList, Eye, Edit, Filter } from "lucide-react";
+import { PlusCircle, ClipboardList, Eye, Edit, Filter, Play, CheckSquare, ShieldAlert } from "lucide-react"; // Added Play, CheckSquare, ShieldAlert
 import type { Inspection } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
@@ -14,8 +14,10 @@ import { formatFirebaseTimestamp } from '@/lib/utils';
 const placeholderInspections: Inspection[] = [
   {
     inspectionId: "INSP001",
-    registrationRef: { id: "REG001" } as any, // Simulate DocumentReference
+    registrationRef: { id: "REG001" } as any,
+    registrationData: { id: "REG001", craftMake: "Yamaha", craftModel: "FX Cruiser HO" },
     inspectorRef: { id: "USER002" } as any,
+    inspectorData: {id: "USER002", displayName: "Inspector Bob"},
     inspectionType: "Initial",
     scheduledDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000) as any,
     inspectionDate: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000) as any,
@@ -27,14 +29,17 @@ const placeholderInspections: Inspection[] = [
         { itemId: "chk01", itemDescription: "Hull integrity", result: "Pass" },
         { itemId: "chk02", itemDescription: "Life jackets", result: "Pass" },
     ],
-    completedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000) as any,
+    completedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000) as any, // Inspector submitted
+    reviewedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) as any, // Registrar reviewed
     createdAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000) as any,
     createdByRef: { id: "USER001" } as any,
   },
   {
     inspectionId: "INSP002",
     registrationRef: { id: "REG002" } as any,
+    registrationData: { id: "REG002", craftMake: "Sea-Doo", craftModel: "RXT-X 300" },
     inspectorRef: { id: "USER003" } as any,
+    inspectorData: {id: "USER003", displayName: "Supervisor Sue"},
     inspectionType: "Annual",
     scheduledDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000) as any,
     status: "Scheduled",
@@ -44,17 +49,36 @@ const placeholderInspections: Inspection[] = [
     createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000) as any,
     createdByRef: { id: "USER001" } as any,
   },
+  {
+    inspectionId: "INSP003_Pending",
+    registrationRef: { id: "REG003" } as any,
+    registrationData: { id: "REG003", craftMake: "Quintrex", craftModel: "Renegade" },
+    inspectorRef: { id: "USER002" } as any,
+    inspectorData: {id: "USER002", displayName: "Inspector Bob"},
+    inspectionType: "Initial",
+    scheduledDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) as any,
+    inspectionDate: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000) as any,
+    status: "PendingReview",
+    overallResult: "Pass", // Inspector's assessment
+    findings: "All checks passed, minor scuff marks.",
+    followUpRequired: false,
+    checklistItems: [{itemId: "chk01", itemDescription: "Hull", result: "Pass"}],
+    completedAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000) as any,
+    createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) as any,
+    createdByRef: { id: "USER001" } as any,
+  },
 ];
 
 export default function InspectionListPage() {
-  const { isInspector, isAdmin, isSupervisor } = useAuth();
+  const { currentUser, isInspector, isAdmin, isRegistrar, isSupervisor } = useAuth();
 
   const getStatusBadgeVariant = (status: Inspection["status"]) => {
     switch (status) {
-      case "Passed": return "default";
+      case "Passed": return "default"; // Greenish in default theme
       case "Failed": return "destructive";
-      case "Scheduled": case "InProgress": return "secondary";
-      case "Completed": case "PendingReview": return "outline";
+      case "Scheduled": return "secondary";
+      case "InProgress": return "outline"; // Consider a blueish/yellowish custom variant
+      case "PendingReview": return "outline"; // Consider a yellowish custom variant
       case "Cancelled": return "destructive";
       default: return "outline";
     }
@@ -71,7 +95,7 @@ export default function InspectionListPage() {
           <Button variant="outline" disabled>
             <Filter className="mr-2 h-4 w-4" /> Filter
           </Button>
-          {(isInspector || isAdmin || isSupervisor) && ( // Or specific roles that can create inspections
+          {(isRegistrar || isAdmin || isSupervisor) && ( // Only these roles can schedule new ones
             <Button asChild>
               <Link href="/inspections/new">
                 <PlusCircle className="mr-2 h-4 w-4" /> Schedule New Inspection
@@ -91,37 +115,65 @@ export default function InspectionListPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Inspection ID</TableHead>
-                <TableHead>Craft Rego (Ref)</TableHead>
+                <TableHead>Craft (Rego / Make/Model)</TableHead>
                 <TableHead>Type</TableHead>
-                <TableHead>Scheduled Date</TableHead>
+                <TableHead>Scheduled</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Inspector (Ref)</TableHead>
+                <TableHead>Inspector</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {placeholderInspections.map((insp) => (
+              {placeholderInspections.map((insp) => {
+                const canStart = (isInspector && insp.inspectorData?.id === currentUser?.userId) || isAdmin || isRegistrar || isSupervisor;
+                const canEditScheduled = (isAdmin || isRegistrar || isSupervisor); // Broader edit for scheduled items
+                const canEditInProgress = (isInspector && insp.inspectorData?.id === currentUser?.userId && insp.status === "InProgress") || isAdmin || isRegistrar || isSupervisor;
+                const canReview = (isRegistrar || isAdmin); // isRegistrar implicitly covers Admin for review
+
+                return (
                 <TableRow key={insp.inspectionId}>
-                  <TableCell>{insp.inspectionId}</TableCell>
-                  <TableCell>{insp.registrationRef.id}</TableCell>
+                  <TableCell className="font-medium">{insp.inspectionId}</TableCell>
+                  <TableCell>
+                    <div>{insp.registrationRef.id}</div>
+                    <div className="text-xs text-muted-foreground">{insp.registrationData?.craftMake} {insp.registrationData?.craftModel}</div>
+                  </TableCell>
                   <TableCell>{insp.inspectionType}</TableCell>
                   <TableCell>{formatFirebaseTimestamp(insp.scheduledDate, "PP")}</TableCell>
                   <TableCell>
                     <Badge variant={getStatusBadgeVariant(insp.status)}>{insp.status}</Badge>
                   </TableCell>
-                  <TableCell>{insp.inspectorRef?.id || "N/A"}</TableCell>
-                  <TableCell className="text-right">
+                  <TableCell>{insp.inspectorData?.displayName || insp.inspectorRef?.id || "N/A"}</TableCell>
+                  <TableCell className="text-right space-x-1">
                     <Button variant="ghost" size="icon" asChild title="View Details">
                       <Link href={`/inspections/${insp.inspectionId}`}><Eye className="h-4 w-4" /></Link>
                     </Button>
-                    {(isInspector || isAdmin || isSupervisor) && (insp.status === "Scheduled" || insp.status === "InProgress") && (
-                       <Button variant="ghost" size="icon" asChild title="Edit Inspection">
+                    
+                    {insp.status === "Scheduled" && canStart && (
+                       <Button variant="ghost" size="icon" asChild title="Start Inspection">
+                        <Link href={`/inspections/${insp.inspectionId}/edit`}><Play className="h-4 w-4 text-green-500" /></Link>
+                      </Button>
+                    )}
+
+                    {(insp.status === "Scheduled" || insp.status === "InProgress") && canEditScheduled && (
+                       <Button variant="ghost" size="icon" asChild title="Edit Schedule/Assignment">
                         <Link href={`/inspections/${insp.inspectionId}/edit`}><Edit className="h-4 w-4" /></Link>
+                      </Button>
+                    )}
+                    
+                    {insp.status === "InProgress" && canEditInProgress && (
+                       <Button variant="ghost" size="icon" asChild title="Continue/Edit Inspection">
+                        <Link href={`/inspections/${insp.inspectionId}/edit`}><Edit className="h-4 w-4" /></Link>
+                      </Button>
+                    )}
+
+                    {insp.status === "PendingReview" && canReview && (
+                       <Button variant="ghost" size="icon" asChild title="Review Inspection">
+                        <Link href={`/inspections/${insp.inspectionId}`}><CheckSquare className="h-4 w-4 text-blue-500" /></Link>
                       </Button>
                     )}
                   </TableCell>
                 </TableRow>
-              ))}
+              )})}
             </TableBody>
           </Table>
         </CardContent>

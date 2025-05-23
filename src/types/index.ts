@@ -88,23 +88,28 @@ export interface ChecklistItemResult {
   itemDescription: string;
   result: "Pass" | "Fail" | "N/A";
   comments?: string;
-  // evidenceUrls?: string[]; // Removed as per request
 }
 
 export interface Inspection {
   inspectionId: string;
   registrationRef: DocumentReference<Registration>;
+  // Simulate DocumentReference with id for placeholder data
+  registrationData?: { id: string, craftMake?: string, craftModel?: string }; // For easier display on list
   inspectorRef?: DocumentReference<User>;
+  // Simulate DocumentReference with id and displayName for placeholder data
+  inspectorData?: { id: string, displayName?: string }; // For easier display on list
   inspectionType: "Initial" | "Annual" | "Compliance" | "FollowUp";
   scheduledDate?: Timestamp;
   inspectionDate?: Timestamp;
-  status: "Scheduled" | "InProgress" | "Completed" | "Passed" | "Failed" | "PendingReview" | "Cancelled";
-  overallResult?: "Pass" | "Fail" | "N/A";
-  findings: string; // General comments/summary
+  status: "Scheduled" | "InProgress" | "PendingReview" | "Passed" | "Failed" | "Cancelled";
+  overallResult?: "Pass" | "Fail" | "N/A"; // Inspector's assessment
+  findings?: string; // General comments/summary - made optional for scheduling
   correctiveActions?: string;
   followUpRequired: boolean;
   checklistItems: ChecklistItemResult[];
-  completedAt?: Timestamp;
+  completedAt?: Timestamp; // Date inspector submitted for review
+  reviewedAt?: Timestamp; // Date registrar approved/rejected
+  reviewedByRef?: DocumentReference<User>;
   createdAt: Timestamp;
   createdByRef: DocumentReference<User>;
 }
