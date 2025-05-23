@@ -5,11 +5,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
-import { PlusCircle, Ship, Eye, Edit, Filter } from "lucide-react";
+import { PlusCircle, Ship, Eye, Edit, Filter, Search } from "lucide-react";
 import type { Registration, Owner } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
 import type { BadgeProps } from "@/components/ui/badge"; // For variant type
+import React, { useState, useMemo } from "react";
+import { Input } from "@/components/ui/input";
 
 // Placeholder data - replace with actual Firestore data fetching
 const placeholderRegistrations: Registration[] = [
@@ -25,7 +27,7 @@ const placeholderRegistrations: Registration[] = [
     expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) as any, // Expires in 1 year
     // --- Fill other required fields for Registration type ---
     hullIdNumber: "YAM12345X122", craftColor: "Blue", craftLength: 3.56, lengthUnits: "m",
-    propulsionType: "Inboard", hullMaterial: "Fiberglass", craftUse: "Pleasure", fuelType: "Gasoline", vesselType: "PWC",
+    propulsionType: "Inboard", hullMaterial: "Fiberglass", craftUse: "Pleasure", fuelType: "Petrol", vesselType: "PWC",
     proofOfOwnershipDocs: [], createdAt: new Date() as any, lastUpdatedAt: new Date() as any, createdByRef: {} as any,
   },
   {
@@ -39,7 +41,7 @@ const placeholderRegistrations: Registration[] = [
     craftYear: 2023,
     // --- Fill other required fields for Registration type ---
     hullIdNumber: "SEA78901Y223", craftColor: "Red", craftLength: 3.45, lengthUnits: "m",
-    propulsionType: "Inboard", hullMaterial: "Fiberglass", craftUse: "Pleasure", fuelType: "Gasoline", vesselType: "PWC",
+    propulsionType: "Inboard", hullMaterial: "Fiberglass", craftUse: "Pleasure", fuelType: "Petrol", vesselType: "PWC",
     proofOfOwnershipDocs: [], createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) as any, lastUpdatedAt: new Date() as any, createdByRef: {} as any,
   },
   {
@@ -54,7 +56,7 @@ const placeholderRegistrations: Registration[] = [
     expiryDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) as any, // Expired 1 month ago
     // --- Fill other required fields for Registration type ---
     hullIdNumber: "QTRXABCCZ118", craftColor: "Silver", craftLength: 4.2, lengthUnits: "m",
-    propulsionType: "Outboard", hullMaterial: "Metal", craftUse: "Fishing", fuelType: "Gasoline", vesselType: "OpenBoat",
+    propulsionType: "Outboard", hullMaterial: "Metal", craftUse: "Fishing", fuelType: "Petrol", vesselType: "OpenBoat",
     proofOfOwnershipDocs: [], createdAt: new Date() as any, lastUpdatedAt: new Date() as any, createdByRef: {} as any,
   },
    {
@@ -67,13 +69,14 @@ const placeholderRegistrations: Registration[] = [
     craftYear: 2024,
     // --- Fill other required fields for Registration type ---
     hullIdNumber: "BWUSSK001D424", craftColor: "White", craftLength: 4.14, lengthUnits: "m",
-    propulsionType: "Outboard", hullMaterial: "Fiberglass", craftUse: "Pleasure", fuelType: "Gasoline", vesselType: "OpenBoat",
+    propulsionType: "Outboard", hullMaterial: "Fiberglass", craftUse: "Pleasure", fuelType: "Petrol", vesselType: "OpenBoat",
     proofOfOwnershipDocs: [], createdAt: new Date() as any, lastUpdatedAt: new Date() as any, createdByRef: {} as any,
   }
 ];
 
 export default function RegistrationsPage() {
   const { currentUser, isAdmin, isRegistrar } = useAuth();
+  const [searchTerm, setSearchTerm] = useState("");
   // In a real app, registrations would be fetched from Firestore
   // const { data: registrations, isLoading, error } = useQuery(...)
   const registrations = placeholderRegistrations; // Using placeholder data
@@ -107,6 +110,22 @@ export default function RegistrationsPage() {
     return (isRegistrar || isAdmin) && editableStatuses.includes(regStatus);
   };
 
+  const filteredRegistrations = useMemo(() => {
+    if (!searchTerm) return registrations;
+    const lowercasedFilter = searchTerm.toLowerCase();
+    return registrations.filter((reg) => {
+      const regoNo = reg.scaRegoNo || reg.interimRegoNo || reg.registrationId;
+      const ownerName = getPrimaryOwnerName(reg.owners);
+      return (
+        regoNo.toLowerCase().includes(lowercasedFilter) ||
+        reg.craftMake.toLowerCase().includes(lowercasedFilter) ||
+        reg.craftModel.toLowerCase().includes(lowercasedFilter) ||
+        ownerName.toLowerCase().includes(lowercasedFilter) ||
+        reg.status.toLowerCase().includes(lowercasedFilter)
+      );
+    });
+  }, [searchTerm, registrations]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -114,7 +133,17 @@ export default function RegistrationsPage() {
           <Ship className="h-8 w-8 text-primary" />
           <h1 className="text-3xl font-bold">Craft Registrations</h1>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 w-full sm:w-auto">
+           <div className="relative w-full sm:max-w-xs">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Search registrations..."
+              className="pl-10 w-full"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
           <Button variant="outline" disabled>
             <Filter className="mr-2 h-4 w-4" /> Filter
           </Button>
@@ -146,7 +175,7 @@ export default function RegistrationsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {registrations.map((reg) => (
+              {filteredRegistrations.map((reg) => (
                 <TableRow key={reg.registrationId}>
                   <TableCell className="font-medium">
                     {reg.scaRegoNo || reg.interimRegoNo || reg.registrationId}
@@ -175,15 +204,14 @@ export default function RegistrationsPage() {
               ))}
             </TableBody>
           </Table>
+          {filteredRegistrations.length === 0 && (
+             <p className="pt-4 text-center text-muted-foreground">
+                {searchTerm ? "No registrations match your search." : "No registrations found."}
+            </p>
+          )}
         </CardContent>
       </Card>
-      {registrations.length === 0 && (
-        <Card>
-            <CardContent className="pt-6 text-center text-muted-foreground">
-                No registrations found.
-            </CardContent>
-        </Card>
-      )}
     </div>
   );
 }
+
