@@ -1,5 +1,6 @@
 
 "use client";
+import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import React, { useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { useForm } from "react-hook-form"; // Added import
@@ -26,7 +27,7 @@ import { Timestamp } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 // import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-// import { storage } from "@/lib/firebase"; // Assuming storage is exported from ts
+import { storage } from "@/lib/firebase"; // Assuming storage is exported from ts
 
 // Simplified Zod schema for the modal form
 const docModalSchema = z.object({
@@ -89,12 +90,12 @@ export function FileUploadManager({ title, docs, setDocs, storagePath, form: mai
     // For now, simulate upload and use a placeholder URL
     const simulateUpload = async (file: File): Promise<{fileName: string, fileUrl: string}> => {
         await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate delay
-        // const storageRef = ref(storage, `${storagePath}${Date.now()}_${file.name}`);
-        // const uploadTask = uploadBytesResumable(storageRef, file);
-        // await uploadTask;
-        // const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-        // return { fileName: file.name, fileUrl: downloadURL };
-        return { fileName: file.name, fileUrl: `https://placehold.co/100x100.png?text=${encodeURIComponent(file.name)}` };
+          const storageRef = ref(storage, `${storagePath}${Date.now()}_${file.name}`);
+          const uploadTask = uploadBytesResumable(storageRef, file);
+          await uploadTask;
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          return { fileName: file.name, fileUrl: downloadURL };
+        // return { fileName: file.name, fileUrl: `https://placehold.co/100x100.png?text=${encodeURIComponent(file.name)}` };
     };
 
     try {
