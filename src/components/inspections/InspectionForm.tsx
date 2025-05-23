@@ -57,13 +57,13 @@ const inspectionFormSchema = z.object({
 type InspectionFormValues = z.infer<typeof inspectionFormSchema>;
 
 
-const newNcdChecklistTemplate: ChecklistTemplate = {
+const ncdChecklistTemplate: ChecklistTemplate = {
   templateId: "NCD_SCA_INITIAL_V1",
   name: "NCD Small Craft Inspection Checklist (Initial)",
   inspectionType: "Initial",
   isActive: true,
-  createdAt: Timestamp.now(), // Or a fixed date
-  createdByRef: {} as any, // Placeholder
+  createdAt: Timestamp.now(),
+  createdByRef: {} as any, 
   items: [
     // A. Marking and Load Line Requirements (Schedule 1)
     { itemId: "A_1_a", itemDescription: "Registration Number Marking: Legibly & permanently printed on BOTH sides?", category: "A. Marking: Registration Number", order: 10 },
@@ -128,7 +128,7 @@ const newNcdChecklistTemplate: ChecklistTemplate = {
 
 
 const placeholderChecklistTemplates: ChecklistTemplate[] = [
-  newNcdChecklistTemplate, // Using the new detailed template
+  ncdChecklistTemplate,
    {
     templateId: "TPL002_Annual", name: "Annual Renewal Inspection (Simplified)", inspectionType: "Annual", isActive: true, createdAt: Timestamp.now(), createdByRef: {} as any,
     items: [
@@ -181,10 +181,10 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
       inspectorRefId: initialInspectorId,
       scheduledDate: existingInspectionData.scheduledDate
         ? (existingInspectionData.scheduledDate instanceof Timestamp ? existingInspectionData.scheduledDate.toDate() : new Date(existingInspectionData.scheduledDate))
-        : undefined,
+        : new Date(), 
       inspectionDate: existingInspectionData.inspectionDate
         ? (existingInspectionData.inspectionDate instanceof Timestamp ? existingInspectionData.inspectionDate.toDate() : new Date(existingInspectionData.inspectionDate))
-        : undefined,
+        : (usageContext === 'conduct' ? new Date() : undefined),
       checklistItems: (existingInspectionData.checklistItems || []).map(item => ({...item, result: item.result || "N/A" })),
       findings: existingInspectionData.findings || "",
       correctiveActions: existingInspectionData.correctiveActions || "",
@@ -200,7 +200,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
       correctiveActions: "",
       overallResult: undefined,
       scheduledDate: new Date(),
-      inspectionDate: usageContext === 'conduct' ? new Date() : undefined, // Pre-fill inspection date if conducting
+      inspectionDate: usageContext === 'conduct' ? new Date() : undefined,
     };
 
   const form = useForm<InspectionFormValues>({
@@ -219,19 +219,18 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
 
 
   useEffect(() => {
-    // Auto-populate checklist for "Initial" inspections when in "conduct" mode and no items exist
     if (usageContext === 'conduct' && (mode === 'create' || (mode === 'edit' && !existingInspectionData?.checklistItems?.length)) ) {
         const template = placeholderChecklistTemplates.find(t => t.inspectionType === watchInspectionType);
         if (template) {
             const newItems = template.items.map(item => ({
                 itemId: item.itemId,
                 itemDescription: item.itemDescription,
-                result: "N/A" as "N/A",
+                result: "N/A" as "N/A", 
                 comments: "",
             }));
             form.setValue("checklistItems", newItems);
         } else {
-            form.setValue("checklistItems", []); // Clear if no template found
+            form.setValue("checklistItems", []);
         }
     }
   }, [watchInspectionType, mode, form, existingInspectionData, usageContext]);
@@ -246,7 +245,6 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
         setIsAISuggesting(false);
         return;
       }
-      // Placeholder craft details for AI. In a real app, fetch from linked registration.
       let craftDetailsInput: SuggestChecklistItemsInput = {
         craftMake: existingInspectionData?.registrationData?.craftMake || "GenericCraft",
         craftModel: existingInspectionData?.registrationData?.craftModel || "ModelX",
@@ -256,10 +254,10 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
       };
 
       const suggestions = await suggestChecklistItems(craftDetailsInput);
-      const newChecklistItems: Omit<ChecklistItemResult, "evidenceUrls">[] = suggestions.map((desc, index) => ({
+      const newChecklistItems = suggestions.map((desc, index) => ({
         itemId: `ai_sugg_${Date.now()}_${index}`,
         itemDescription: desc,
-        result: "N/A",
+        result: "N/A" as "N/A", 
         comments: "",
       }));
 
@@ -301,7 +299,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
       } as any;
     } else if (action === "saveProgress") {
       finalStatus = "InProgress";
-       if (!data.inspectionDate) { // Ensure inspectionDate is set when saving progress
+       if (!data.inspectionDate) { 
         submissionPayload.inspectionDate = new Date();
       }
     } else if (action === "submitReview") {
@@ -321,8 +319,8 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
 
     const fullSubmissionData: Partial<Inspection> = {
       ...submissionPayload,
-      scheduledDate: submissionPayload.scheduledDate ? Timestamp.fromDate(submissionPayload.scheduledDate) : undefined,
-      inspectionDate: submissionPayload.inspectionDate ? Timestamp.fromDate(submissionPayload.inspectionDate) : undefined,
+      scheduledDate: submissionPayload.scheduledDate ? Timestamp.fromDate(new Date(submissionPayload.scheduledDate)) : undefined,
+      inspectionDate: submissionPayload.inspectionDate ? Timestamp.fromDate(new Date(submissionPayload.inspectionDate)) : undefined,
       status: finalStatus,
       ...(action !== "schedule" && {
         findings: submissionPayload.findings,
@@ -341,11 +339,9 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
 
     console.log("Submitting inspection data (placeholder):", { id: inspectionId || `new_insp_${Date.now()}`, ...fullSubmissionData });
     try {
-      // Placeholder for actual Firestore write operation
       if (mode === "create") {
-        // const newInspId = inspectionId || `new_insp_${Date.now()}`; // Simulate ID generation
         toast({ title: `Inspection ${action === "schedule" ? "Scheduled" : "Saved"} (Placeholder)`, description: `Status: ${finalStatus}` });
-        router.push(action === "schedule" ? "/inspections" : `/inspections`); // Redirect to list after creation for simplicity
+        router.push(action === "schedule" ? "/inspections" : `/inspections`); 
       } else if (inspectionId) {
         toast({ title: "Inspection Updated (Placeholder)", description: `Status: ${finalStatus}` });
         router.push(`/inspections/${inspectionId}`);
@@ -376,12 +372,12 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
             <CardHeader>
                 <CardTitle>Inspection Context</CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                <p><strong>Inspector:</strong> {currentInspectorName()}</p>
-                <p><strong>Date of Inspection:</strong> {watchInspectionDate ? formatFirebaseTimestamp(watchInspectionDate, "PP") : "Not set"}</p>
-                <p><strong>Craft Rego No.:</strong> {existingInspectionData?.registrationData?.scaRegoNo || watchRegistrationRefId || "N/A"}</p>
-                <p><strong>Hull ID No.:</strong> {existingInspectionData?.registrationData?.hullIdNumber || "N/A (Fetch from linked rego)"}</p>
-                <p><strong>Craft Type:</strong> {existingInspectionData?.registrationData?.craftType || "N/A (Fetch from linked rego)"}</p>
+            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div><strong>Inspector:</strong> {currentInspectorName()}</div>
+                <div><strong>Date of Inspection:</strong> {watchInspectionDate ? formatFirebaseTimestamp(watchInspectionDate, "PP") : "Not set"}</div>
+                <div><strong>Craft Rego No.:</strong> {existingInspectionData?.registrationData?.scaRegoNo || watchRegistrationRefId || "N/A"}</div>
+                <div><strong>Hull ID No.:</strong> {existingInspectionData?.registrationData?.hullIdNumber || "N/A"}</div>
+                <div><strong>Craft Type:</strong> {existingInspectionData?.registrationData?.craftType || "N/A"}</div>
             </CardContent>
           </Card>
         )}
@@ -526,7 +522,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
                             <FormControl>
                               <RadioGroup
                                 onValueChange={resultField.onChange}
-                                value={resultField.value}
+                                defaultValue={resultField.value} 
                                 className="flex space-x-4 items-center pt-1"
                               >
                                 <FormItem className="flex items-center space-x-2 space-y-0">
@@ -622,3 +618,4 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     </Form>
   );
 }
+
