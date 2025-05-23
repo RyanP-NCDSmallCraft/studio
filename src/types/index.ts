@@ -86,7 +86,7 @@ export interface Registration {
 export interface ChecklistItemResult {
   itemId: string;
   itemDescription: string;
-  result: "Pass" | "Fail" | "N/A";
+  result: "Yes" | "No" | "N/A";
   comments?: string;
 }
 
@@ -94,7 +94,7 @@ export interface Inspection {
   inspectionId: string;
   registrationRef: DocumentReference<Registration>;
   // Simulate DocumentReference with id for placeholder data
-  registrationData?: { id: string, craftMake?: string, craftModel?: string }; // For easier display on list
+  registrationData?: { id: string, scaRegoNo?: string, hullIdNumber?: string, craftType?: string, craftMake?: string, craftModel?: string }; // For easier display
   inspectorRef?: DocumentReference<User>;
   // Simulate DocumentReference with id and displayName for placeholder data
   inspectorData?: { id: string, displayName?: string }; // For easier display on list
@@ -102,7 +102,7 @@ export interface Inspection {
   scheduledDate?: Timestamp;
   inspectionDate?: Timestamp;
   status: "Scheduled" | "InProgress" | "PendingReview" | "Passed" | "Failed" | "Cancelled";
-  overallResult?: "Pass" | "Fail" | "N/A"; // Inspector's assessment
+  overallResult?: "Pass" | "PassWithRecommendations" | "Fail" | "N/A"; // Inspector's assessment
   findings?: string; // General comments/summary - made optional for scheduling
   correctiveActions?: string;
   followUpRequired: boolean;
