@@ -72,7 +72,6 @@ const placeholderRegistrations: Registration[] = [
   }
 ];
 
-
 export default function RegistrationsPage() {
   const { currentUser, isAdmin, isRegistrar } = useAuth();
   // In a real app, registrations would be fetched from Firestore
