@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
-import { PlusCircle, ClipboardList, Eye, Edit, Filter, Play, CheckSquare, ShieldAlert, CalendarDays } from "lucide-react"; // Added CalendarDays
+import { PlusCircle, ClipboardList, Eye, Edit, Filter, Play, CheckSquare, ShieldAlert, CalendarDays } from "lucide-react";
 import type { Inspection } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
@@ -26,11 +26,11 @@ const placeholderInspections: Inspection[] = [
     findings: "All safety equipment present and in good order.",
     followUpRequired: false,
     checklistItems: [
-        { itemId: "chk01", itemDescription: "Hull integrity", result: "Pass" },
-        { itemId: "chk02", itemDescription: "Life jackets", result: "Pass" },
+        { itemId: "chk01", itemDescription: "Hull integrity", result: "Yes" },
+        { itemId: "chk02", itemDescription: "Life jackets", result: "Yes" },
     ],
-    completedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000) as any, // Inspector submitted
-    reviewedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) as any, // Registrar reviewed
+    completedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000) as any, 
+    reviewedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) as any, 
     createdAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000) as any,
     createdByRef: { id: "USER001" } as any,
   },
@@ -59,10 +59,10 @@ const placeholderInspections: Inspection[] = [
     scheduledDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) as any,
     inspectionDate: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000) as any,
     status: "PendingReview",
-    overallResult: "Pass", // Inspector's assessment
+    overallResult: "Pass", 
     findings: "All checks passed, minor scuff marks.",
     followUpRequired: false,
-    checklistItems: [{itemId: "chk01", itemDescription: "Hull", result: "Pass"}],
+    checklistItems: [{itemId: "chk01", itemDescription: "Hull", result: "Yes"}],
     completedAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000) as any,
     createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) as any,
     createdByRef: { id: "USER001" } as any,
