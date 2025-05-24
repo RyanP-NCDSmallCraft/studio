@@ -263,7 +263,7 @@ export default function OperatorLicenseDetailPage() {
               <p><strong>Application ID:</strong> {application.licenseApplicationId}</p>
               <p><strong>Type:</strong> {application.applicationType}</p>
               {application.applicationType === "Renewal" && <p><strong>Previous License:</strong> {application.previousLicenseNumber}</p>}
-              <p><strong>Status:</strong> <Badge variant={getStatusBadgeVariant(application.status)}>{application.status}</Badge></p>
+              <div><strong>Status:</strong> <Badge variant={getStatusBadgeVariant(application.status)}>{application.status}</Badge></div>
               <p><strong>Submitted:</strong> {formatFirebaseTimestamp(application.submittedAt, "PPpp")}</p>
             </CardContent>
           </Card>
@@ -303,3 +303,5 @@ export default function OperatorLicenseDetailPage() {
     </div>
   );
 }
+
+
