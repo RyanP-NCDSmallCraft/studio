@@ -17,7 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import type { Inspection, ChecklistItemResult, ChecklistTemplate, SuggestChecklistItemsInput, User } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
@@ -37,6 +37,7 @@ import { formatFirebaseTimestamp } from "@/lib/utils";
 const checklistItemSchema = z.object({
   itemId: z.string(),
   itemDescription: z.string().min(1, "Description is required"),
+  category: z.string().optional(), // Added category to schema
   result: z.enum(["Yes", "No", "N/A"]),
   comments: z.string().optional(),
 });
@@ -60,7 +61,7 @@ type InspectionFormValues = z.infer<typeof inspectionFormSchema>;
 const ncdChecklistTemplate: ChecklistTemplate = {
   templateId: "NCD_SCA_COMPREHENSIVE_V1",
   name: "NCD Small Craft Inspection Checklist (Comprehensive)",
-  inspectionType: "Initial",
+  inspectionType: "Initial", // This template is for "Initial" type
   isActive: true,
   createdAt: Timestamp.now(),
   createdByRef: {} as any, // Placeholder
@@ -99,7 +100,7 @@ const ncdChecklistTemplate: ChecklistTemplate = {
     { itemId: "B_3_a", itemDescription: "For Craft Traveling AT NIGHT: Bright light(s) visible from all directions?", category: "B. Safety: Night Travel", order: 360 },
     { itemId: "B_3_b", itemDescription: "For Craft Traveling AT NIGHT: Other navigation lights (as required/approved)?", category: "B. Safety: Night Travel", order: 370 },
     { itemId: "B_4_a", itemDescription: "For COMMERCIAL Small Craft (Licensed): Reliable compass OR GPS (device or phone)?", category: "B. Safety: Commercial Craft", order: 380 },
-    { itemId: "B_4_b", itemDescription: "For COMMERCIAL Small Craft (Licensed): Emergency food and water (sufficient for persons/24hrs)?", category: "B. Safety: Commercial Craft", order: 390 },
+    { itemId: "B_4_b", itemDescription: "For COMMERCIAL Small Craft (Licensed): Emergency food and water (sufficient for persons/24hrs)? (Covered above but confirm)", category: "B. Safety: Commercial Craft", order: 390 },
     { itemId: "B_4_c", itemDescription: "For COMMERCIAL Small Craft (Licensed): Whistle or horn?", category: "B. Safety: Commercial Craft", order: 400 },
     { itemId: "B_5", itemDescription: "Safety Standards: Exemption Notice Presented (if applicable)?", category: "B. Safety: Exemptions", order: 410 },
 
@@ -128,7 +129,7 @@ const ncdChecklistTemplate: ChecklistTemplate = {
 
 
 const placeholderChecklistTemplates: ChecklistTemplate[] = [
-  ncdChecklistTemplate,
+  ncdChecklistTemplate, // Using the new detailed template
    {
     templateId: "TPL002_Annual", name: "Annual Renewal Inspection (Simplified)", inspectionType: "Annual", isActive: true, createdAt: Timestamp.now(), createdByRef: {} as any,
     items: [
@@ -185,7 +186,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
       inspectionDate: existingInspectionData.inspectionDate
         ? (existingInspectionData.inspectionDate instanceof Timestamp ? existingInspectionData.inspectionDate.toDate() : new Date(existingInspectionData.inspectionDate))
         : (usageContext === 'conduct' ? new Date() : undefined),
-      checklistItems: (existingInspectionData.checklistItems || []).map(item => ({...item, result: item.result || "N/A" })),
+      checklistItems: (existingInspectionData.checklistItems || []).map(item => ({...item, category: item.category || ncdChecklistTemplate.items.find(t => t.itemId === item.itemId)?.category, result: item.result || "N/A" })),
       findings: existingInspectionData.findings || "",
       correctiveActions: existingInspectionData.correctiveActions || "",
       overallResult: existingInspectionData.overallResult || undefined,
@@ -222,10 +223,11 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     console.log("InspectionForm Effect: usageContext:", usageContext, "mode:", mode, "existing items count:", existingInspectionData?.checklistItems?.length);
     if (usageContext === 'conduct' && (mode === 'create' || (mode === 'edit' && !existingInspectionData?.checklistItems?.length)) ) {
         console.log("InspectionForm: Attempting to load NCD default checklist. Mode:", mode, "UsageContext:", usageContext);
-        const ncdItems = ncdChecklistTemplate.items.map(item => ({
-            itemId: item.itemId,
-            itemDescription: item.itemDescription,
-            result: "N/A" as "N/A", 
+        const ncdItems = ncdChecklistTemplate.items.map(templateItem => ({
+            itemId: templateItem.itemId,
+            itemDescription: templateItem.itemDescription,
+            category: templateItem.category, // Make sure category is copied
+            result: "N/A" as "Yes" | "No" | "N/A", 
             comments: "",
         }));
         form.setValue("checklistItems", ncdItems);
@@ -256,14 +258,15 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
       const newChecklistItems = suggestions.map((desc, index) => ({
         itemId: `ai_sugg_${Date.now()}_${index}`,
         itemDescription: desc,
-        result: "N/A" as "N/A", 
+        category: "AI Suggested", // Assign a category for AI items
+        result: "N/A" as "Yes" | "No" | "N/A", 
         comments: "",
       }));
 
       const existingDescriptions = new Set(fields.map(f => f.itemDescription));
       newChecklistItems.forEach(newItem => {
         if (!existingDescriptions.has(newItem.itemDescription)) {
-          append(newItem as ChecklistItemResult);
+          append(newItem as ChecklistItemResult & { category?: string });
         }
       });
 
@@ -372,6 +375,39 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
   const currentRegistrationScaRegoNo = existingInspectionData?.registrationData?.scaRegoNo || watchRegistrationRefId || "N/A";
   const currentRegistrationHullId = existingInspectionData?.registrationData?.hullIdNumber || "N/A (Link craft)";
   const currentCraftType = existingInspectionData?.registrationData?.craftType || "N/A (Link craft)";
+
+  // Grouping logic for checklist items
+  const categoryTitles: Record<string, string> = {
+    A: "A. Marking and Load Line Requirements (Schedule 1)",
+    B: "B. Safety Standards (Schedule 3)",
+    C: "C. Construction Standards (Schedule 2 - Simplified Visual Checks)",
+    "AI Suggested": "AI Suggested Items",
+    "Custom": "Custom Items",
+  };
+  const mainCategoriesOrder = ['A', 'B', 'C'];
+
+  const groupedChecklistItems: Record<string, Array<typeof fields[number] & { originalIndex: number }>> = {};
+  const customAndAISuggestedItems: Array<typeof fields[number] & { originalIndex: number }> = [];
+  
+  fields.forEach((fieldItem, index) => {
+    const itemCategory = (fieldItem as any).category as string | undefined;
+    const mainCategoryKey = itemCategory ? itemCategory.charAt(0) : null;
+  
+    if (mainCategoryKey && mainCategoriesOrder.includes(mainCategoryKey)) {
+      if (!groupedChecklistItems[mainCategoryKey]) {
+        groupedChecklistItems[mainCategoryKey] = [];
+      }
+      groupedChecklistItems[mainCategoryKey].push({ ...fieldItem, originalIndex: index });
+    } else if (itemCategory === "AI Suggested") {
+        if (!groupedChecklistItems["AI Suggested"]) {
+            groupedChecklistItems["AI Suggested"] = [];
+        }
+        groupedChecklistItems["AI Suggested"].push({ ...fieldItem, originalIndex: index });
+    }
+    else {
+      customAndAISuggestedItems.push({ ...fieldItem, originalIndex: index });
+    }
+  });
 
 
   return (
@@ -504,75 +540,221 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
                         {isAISuggesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Lightbulb className="mr-2 h-4 w-4" />}
                         Suggest Items (AI)
                     </Button>
-                    <Button type="button" variant="outline" size="sm" onClick={() => append({ itemId: `custom_${Date.now()}`, itemDescription: "New Custom Item", result: "N/A", comments: "" })}>
+                    <Button type="button" variant="outline" size="sm" onClick={() => append({ itemId: `custom_${Date.now()}`, itemDescription: "New Custom Item", category: "Custom", result: "N/A", comments: "" })}>
                         <PlusCircle className="mr-2 h-4 w-4" /> Add Custom Item
                     </Button>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-3">
-                {fields.map((item, index) => (
-                  <Card key={item.id} className="p-3 bg-muted/20">
-                     <p className="font-medium mb-2 text-sm">{item.itemDescription}</p>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 items-start">
-                       <FormField
-                        control={form.control}
-                        name={`checklistItems.${index}.result`}
-                        render={({ field: resultField }) => (
-                          <FormItem className="space-y-1">
-                            <FormLabel className="text-xs">Result *</FormLabel>
-                            <FormControl>
-                                <RadioGroup
-                                    onValueChange={resultField.onChange}
-                                    defaultValue={resultField.value}
-                                    className="flex space-x-3 items-center pt-1"
-                                >
-                                    <FormItem className="flex items-center space-x-1.5 space-y-0">
-                                        <FormControl>
-                                            <RadioGroupItem value="Yes" id={`${item.itemId}-${index}-yes`} />
-                                        </FormControl>
-                                        <Label htmlFor={`${item.itemId}-${index}-yes`} className="font-normal text-xs text-green-600">Yes</Label>
+              <CardContent>
+                {mainCategoriesOrder.map(mainCatKey => {
+                  const itemsInCategory = groupedChecklistItems[mainCatKey];
+                  if (!itemsInCategory || itemsInCategory.length === 0) return null;
+                  
+                  return (
+                    <Card key={mainCatKey} className="mt-4 mb-2 shadow-md">
+                      <CardHeader className="py-3 px-4 bg-muted/30 rounded-t-md border-b">
+                        <CardTitle className="text-base font-semibold">{categoryTitles[mainCatKey as keyof typeof categoryTitles]}</CardTitle>
+                        {mainCatKey === 'B' && <CardDescription className="text-xs">Note: Some items depend on craft type/operation.</CardDescription>}
+                        {mainCatKey === 'C' && <CardDescription className="text-xs">Note: Many construction standards require detailed assessment or certification. This focuses on observable aspects.</CardDescription>}
+                      </CardHeader>
+                      <CardContent className="space-y-3 p-3">
+                        {itemsInCategory.map((fieldItem) => {
+                          const originalIndex = fieldItem.originalIndex;
+                          return (
+                            <Card key={fieldItem.id} className="p-3 bg-background shadow-sm">
+                              <p className="font-medium mb-2 text-sm">{(fieldItem as any).itemDescription}</p>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 items-start">
+                                <FormField
+                                  control={form.control}
+                                  name={`checklistItems.${originalIndex}.result`}
+                                  render={({ field: resultField }) => (
+                                    <FormItem className="space-y-1">
+                                      <FormLabel className="text-xs">Result *</FormLabel>
+                                      <FormControl>
+                                        <RadioGroup
+                                          onValueChange={resultField.onChange}
+                                          defaultValue={resultField.value}
+                                          className="flex space-x-3 items-center pt-1"
+                                        >
+                                          {(["Yes", "No", "N/A"] as const).map((val) => (
+                                            <FormItem key={val} className="flex items-center space-x-1.5 space-y-0">
+                                              <FormControl>
+                                                <RadioGroupItem value={val} id={`${fieldItem.itemId}-${originalIndex}-${val.toLowerCase()}`} />
+                                              </FormControl>
+                                              <Label htmlFor={`${fieldItem.itemId}-${originalIndex}-${val.toLowerCase()}`} className={`font-normal text-xs ${val === "Yes" ? "text-green-600" : val === "No" ? "text-red-600" : "text-muted-foreground"}`}>
+                                                {val}
+                                              </Label>
+                                            </FormItem>
+                                          ))}
+                                        </RadioGroup>
+                                      </FormControl>
+                                      <FormMessage />
                                     </FormItem>
-                                    <FormItem className="flex items-center space-x-1.5 space-y-0">
-                                        <FormControl>
-                                            <RadioGroupItem value="No" id={`${item.itemId}-${index}-no`} />
-                                        </FormControl>
-                                        <Label htmlFor={`${item.itemId}-${index}-no`} className="font-normal text-xs text-red-600">No</Label>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name={`checklistItems.${originalIndex}.comments`}
+                                  render={({ field: commentsField }) => (
+                                    <FormItem>
+                                      <FormLabel className="text-xs">Notes / Photo Ref.</FormLabel>
+                                      <FormControl><Textarea placeholder="Optional comments" {...commentsField} rows={1} className="text-sm" /></FormControl>
+                                      <FormMessage />
                                     </FormItem>
-                                    <FormItem className="flex items-center space-x-1.5 space-y-0">
-                                         <FormControl>
-                                            <RadioGroupItem value="N/A" id={`${item.itemId}-${index}-na`} />
-                                         </FormControl>
-                                        <Label htmlFor={`${item.itemId}-${index}-na`} className="font-normal text-xs text-muted-foreground">N/A</Label>
+                                  )}
+                                />
+                              </div>
+                              <div className="mt-2 flex justify-between items-center">
+                                  <Button type="button" size="xs" variant="outline" className="text-xs py-1 px-2 h-auto" disabled><ImageUp className="mr-1 h-3 w-3" /> Upload Photo</Button>
+                                  {(fieldItem as any).itemId?.startsWith("custom_") && (
+                                      <Button type="button" variant="ghost" size="xs" onClick={() => remove(originalIndex)} className="text-destructive hover:text-destructive-foreground hover:bg-destructive text-xs py-1 px-2 h-auto">
+                                          <Trash2 className="mr-1 h-3 w-3" /> Remove
+                                      </Button>
+                                  )}
+                              </div>
+                            </Card>
+                          );
+                        })}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+
+                {(groupedChecklistItems["AI Suggested"] && groupedChecklistItems["AI Suggested"].length > 0) && (
+                     <Card className="mt-4 mb-2 shadow-md">
+                        <CardHeader className="py-3 px-4 bg-muted/30 rounded-t-md border-b">
+                            <CardTitle className="text-base font-semibold">{categoryTitles["AI Suggested"]}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3 p-3">
+                        {groupedChecklistItems["AI Suggested"].map((fieldItem) => {
+                            const originalIndex = fieldItem.originalIndex;
+                            return ( <Card key={fieldItem.id} className="p-3 bg-background shadow-sm">
+                                <p className="font-medium mb-2 text-sm">{(fieldItem as any).itemDescription}</p>
+                                {/* ... (Rest of item rendering, same as above) ... */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 items-start">
+                                <FormField
+                                  control={form.control}
+                                  name={`checklistItems.${originalIndex}.result`}
+                                  render={({ field: resultField }) => (
+                                    <FormItem className="space-y-1">
+                                      <FormLabel className="text-xs">Result *</FormLabel>
+                                      <FormControl>
+                                        <RadioGroup
+                                          onValueChange={resultField.onChange}
+                                          defaultValue={resultField.value}
+                                          className="flex space-x-3 items-center pt-1"
+                                        >
+                                          {(["Yes", "No", "N/A"] as const).map((val) => (
+                                            <FormItem key={val} className="flex items-center space-x-1.5 space-y-0">
+                                              <FormControl>
+                                                <RadioGroupItem value={val} id={`${fieldItem.itemId}-${originalIndex}-${val.toLowerCase()}`} />
+                                              </FormControl>
+                                              <Label htmlFor={`${fieldItem.itemId}-${originalIndex}-${val.toLowerCase()}`} className={`font-normal text-xs ${val === "Yes" ? "text-green-600" : val === "No" ? "text-red-600" : "text-muted-foreground"}`}>
+                                                {val}
+                                              </Label>
+                                            </FormItem>
+                                          ))}
+                                        </RadioGroup>
+                                      </FormControl>
+                                      <FormMessage />
                                     </FormItem>
-                                </RadioGroup>
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name={`checklistItems.${index}.comments`}
-                        render={({ field: commentsField }) => (
-                          <FormItem>
-                            <FormLabel className="text-xs">Notes / Photo Ref.</FormLabel>
-                            <FormControl><Textarea placeholder="Optional comments" {...commentsField} rows={1} className="text-sm" /></FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                    <div className="mt-2 flex justify-between items-center">
-                        <Button type="button" size="xs" variant="outline" className="text-xs py-1 px-2 h-auto" disabled><ImageUp className="mr-1 h-3 w-3" /> Upload Photo</Button>
-                        { item.itemId.startsWith("custom_") && (
-                            <Button type="button" variant="ghost" size="xs" onClick={() => remove(index)} className="text-destructive hover:text-destructive-foreground hover:bg-destructive text-xs py-1 px-2 h-auto">
-                                <Trash2 className="mr-1 h-3 w-3" /> Remove
-                            </Button>
-                        )}
-                    </div>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name={`checklistItems.${originalIndex}.comments`}
+                                  render={({ field: commentsField }) => (
+                                    <FormItem>
+                                      <FormLabel className="text-xs">Notes / Photo Ref.</FormLabel>
+                                      <FormControl><Textarea placeholder="Optional comments" {...commentsField} rows={1} className="text-sm" /></FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                              </div>
+                              <div className="mt-2 flex justify-between items-center">
+                                  <Button type="button" size="xs" variant="outline" className="text-xs py-1 px-2 h-auto" disabled><ImageUp className="mr-1 h-3 w-3" /> Upload Photo</Button>
+                                  {(fieldItem as any).itemId?.startsWith("custom_") && (
+                                      <Button type="button" variant="ghost" size="xs" onClick={() => remove(originalIndex)} className="text-destructive hover:text-destructive-foreground hover:bg-destructive text-xs py-1 px-2 h-auto">
+                                          <Trash2 className="mr-1 h-3 w-3" /> Remove
+                                      </Button>
+                                  )}
+                              </div>
+
+                            </Card>);
+                        })}
+                        </CardContent>
+                     </Card>
+                )}
+                
+                {customAndAISuggestedItems.length > 0 && (
+                  <Card className="mt-4 mb-2 shadow-md">
+                    <CardHeader className="py-3 px-4 bg-muted/30 rounded-t-md border-b">
+                      <CardTitle className="text-base font-semibold">{categoryTitles["Custom"]}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3 p-3">
+                      {customAndAISuggestedItems.map((fieldItem) => {
+                        const originalIndex = fieldItem.originalIndex;
+                        return (
+                          <Card key={fieldItem.id} className="p-3 bg-background shadow-sm">
+                            <p className="font-medium mb-2 text-sm">{(fieldItem as any).itemDescription}</p>
+                            {/* ... (Rest of item rendering, same as above) ... */}
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 items-start">
+                                <FormField
+                                  control={form.control}
+                                  name={`checklistItems.${originalIndex}.result`}
+                                  render={({ field: resultField }) => (
+                                    <FormItem className="space-y-1">
+                                      <FormLabel className="text-xs">Result *</FormLabel>
+                                      <FormControl>
+                                        <RadioGroup
+                                          onValueChange={resultField.onChange}
+                                          defaultValue={resultField.value}
+                                          className="flex space-x-3 items-center pt-1"
+                                        >
+                                          {(["Yes", "No", "N/A"] as const).map((val) => (
+                                            <FormItem key={val} className="flex items-center space-x-1.5 space-y-0">
+                                              <FormControl>
+                                                <RadioGroupItem value={val} id={`${fieldItem.itemId}-${originalIndex}-${val.toLowerCase()}`} />
+                                              </FormControl>
+                                              <Label htmlFor={`${fieldItem.itemId}-${originalIndex}-${val.toLowerCase()}`} className={`font-normal text-xs ${val === "Yes" ? "text-green-600" : val === "No" ? "text-red-600" : "text-muted-foreground"}`}>
+                                                {val}
+                                              </Label>
+                                            </FormItem>
+                                          ))}
+                                        </RadioGroup>
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name={`checklistItems.${originalIndex}.comments`}
+                                  render={({ field: commentsField }) => (
+                                    <FormItem>
+                                      <FormLabel className="text-xs">Notes / Photo Ref.</FormLabel>
+                                      <FormControl><Textarea placeholder="Optional comments" {...commentsField} rows={1} className="text-sm" /></FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                              </div>
+                              <div className="mt-2 flex justify-between items-center">
+                                  <Button type="button" size="xs" variant="outline" className="text-xs py-1 px-2 h-auto" disabled><ImageUp className="mr-1 h-3 w-3" /> Upload Photo</Button>
+                                  {(fieldItem as any).itemId?.startsWith("custom_") && (
+                                      <Button type="button" variant="ghost" size="xs" onClick={() => remove(originalIndex)} className="text-destructive hover:text-destructive-foreground hover:bg-destructive text-xs py-1 px-2 h-auto">
+                                          <Trash2 className="mr-1 h-3 w-3" /> Remove
+                                      </Button>
+                                  )}
+                              </div>
+                          </Card>
+                        );
+                      })}
+                    </CardContent>
                   </Card>
-                ))}
+                )}
+                
                 {fields.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No checklist items. Add items manually, use AI suggestions, or select an inspection type that populates a template.</p>}
               </CardContent>
             </Card>
@@ -627,3 +809,4 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
   );
 }
 
+    
