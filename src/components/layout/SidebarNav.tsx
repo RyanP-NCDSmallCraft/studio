@@ -9,11 +9,8 @@ import {
   ClipboardList,
   Users,
   Settings,
-  FileSpreadsheet, // Changed from FileText for reports
-  TooltipProvider,
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
+  FileSpreadsheet, 
+  Contact // Using Contact as a placeholder for Operator Licenses
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
@@ -35,10 +32,10 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["Admin", "Registrar", "Inspector", "Supervisor", "ReadOnly"] },
   { href: "/registrations", label: "Registrations", icon: Ship, roles: ["Admin", "Registrar", "Inspector", "Supervisor", "ReadOnly"] },
+  { href: "/operator-licenses", label: "Operator Licenses", icon: Contact, roles: ["Admin", "Registrar", "Supervisor"] },
   { href: "/inspections", label: "Inspections", icon: ClipboardList, roles: ["Admin", "Registrar", "Inspector", "Supervisor", "ReadOnly"] },
   { href: "/inspections/reports", label: "Reports", icon: FileSpreadsheet, roles: ["Admin", "Registrar"] },
   { href: "/admin/users", label: "User Management", icon: Users, roles: ["Admin", "Supervisor"] },
-  // { href: "/reports", label: "Reports", icon: FileText, roles: ["Admin", "Supervisor"] }, // Example if it were top-level
   // { href: "/settings", label: "Settings", icon: Settings, roles: ["Admin"] },
 ];
 
@@ -47,30 +44,19 @@ export function SidebarNav() {
   const { currentUser } = useAuth(); 
 
   console.log("SidebarNav: Rendering. currentUser from useAuth():", currentUser ? `UID: ${currentUser.userId}, Role: ${currentUser.role}` : currentUser);
-  // if (currentUser) {
-  //   console.log("SidebarNav: currentUser.role:", currentUser.role);
-  // } else {
-  //   console.log("SidebarNav: currentUser is null or undefined.");
-  // }
 
   const userHasRole = (itemRoles?: Array<string>) => {
-    if (!itemRoles || itemRoles.length === 0) return true; // No specific roles means accessible to all authenticated
-    if (!currentUser || !currentUser.role) return false; // No current user or role means no access to role-restricted items
+    if (!itemRoles || itemRoles.length === 0) return true; 
+    if (!currentUser || !currentUser.role) return false; 
     
-    // Check if the user's role is included in the item's allowed roles
-    // Note: useAuth provides boolean flags like isAdmin, isRegistrar, etc.
-    // We can use those, or directly check currentUser.role against item.roles.
-    // For simplicity and directness here, using currentUser.role.
     return itemRoles.includes(currentUser.role);
   };  
   
   const filteredNavItems = navItems.filter(item => userHasRole(item.roles));
 
-  // console.log("SidebarNav: Original navItems count:", navItems.length);
-  // console.log("SidebarNav: Filtered navItems count:", filteredNavItems.length);
-  // if (filteredNavItems.length === 0 && navItems.length > 0 && currentUser) {
-  //   console.warn("SidebarNav: No nav items are being rendered for the current user. Check role and item.roles definitions. User role:", currentUser.role);
-  // }
+  if (currentUser && filteredNavItems.length === 0 && navItems.length > 0) {
+    console.warn("SidebarNav: No nav items are being rendered for the current user. User role:", currentUser.role, "Original items:", navItems.map(i => ({label: i.label, roles: i.roles})));
+  }
 
 
   return (
@@ -99,3 +85,5 @@ export function SidebarNav() {
     </nav>
   );
 }
+
+    

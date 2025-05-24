@@ -88,30 +88,31 @@ export interface ChecklistItemResult {
   itemDescription: string;
   result: "Yes" | "No" | "N/A";
   comments?: string;
+  category?: string; // Added category for grouping
 }
 
 export interface Inspection {
   inspectionId: string;
   registrationRef: DocumentReference<Registration>;
-  // Simulate DocumentReference with id for placeholder data
-  registrationData?: { id: string, scaRegoNo?: string, hullIdNumber?: string, craftType?: string, craftMake?: string, craftModel?: string }; // For easier display
+  registrationData?: { id: string, scaRegoNo?: string, hullIdNumber?: string, craftType?: string, craftMake?: string, craftModel?: string };
   inspectorRef?: DocumentReference<User>;
-  // Simulate DocumentReference with id and displayName for placeholder data
-  inspectorData?: { id: string, displayName?: string }; // For easier display on list
+  inspectorData?: { id: string, displayName?: string };
   inspectionType: "Initial" | "Annual" | "Compliance" | "FollowUp";
-  scheduledDate?: Timestamp;
+  scheduledDate: Timestamp; // Made required for initial scheduling
   inspectionDate?: Timestamp;
   status: "Scheduled" | "InProgress" | "PendingReview" | "Passed" | "Failed" | "Cancelled";
-  overallResult?: "Pass" | "PassWithRecommendations" | "Fail" | "N/A"; // Inspector's assessment
-  findings?: string; // General comments/summary - made optional for scheduling
+  overallResult?: "Pass" | "PassWithRecommendations" | "Fail" | "N/A";
+  findings?: string;
   correctiveActions?: string;
   followUpRequired: boolean;
   checklistItems: ChecklistItemResult[];
-  completedAt?: Timestamp; // Date inspector submitted for review
-  reviewedAt?: Timestamp; // Date registrar approved/rejected
+  completedAt?: Timestamp;
+  reviewedAt?: Timestamp;
   reviewedByRef?: DocumentReference<User>;
   createdAt: Timestamp;
   createdByRef: DocumentReference<User>;
+  lastUpdatedAt?: Timestamp;
+  lastUpdatedByRef?: DocumentReference<User>;
 }
 
 export interface ChecklistTemplateItem {
@@ -133,3 +134,120 @@ export interface ChecklistTemplate {
 
 // For GenAI flow
 export type { SuggestChecklistItemsInput, SuggestChecklistItemsOutput } from '@/ai/flows/suggest-checklist-items';
+
+
+// --- Operator Licensing Module Types ---
+
+export interface Operator {
+  operatorId: string; // Auto-generated Unique ID
+  surname: string;
+  firstName: string;
+  dob: Timestamp; // Date of Birth
+  age?: number; // Can be derived or manually entered
+  sex: "Male" | "Female" | "Other";
+  placeOfOriginTown: string;
+  placeOfOriginDistrict: string;
+  placeOfOriginLLG: string;
+  placeOfOriginVillage: string;
+  phoneMobile: string;
+  email?: string;
+  postalAddress: string;
+  heightCm?: number;
+  eyeColor?: string;
+  skinColor?: string;
+  hairColor?: string;
+  weightKg?: number;
+  bodyMarks?: string; // e.g., tattoo; scar etc.
+  idSizePhotoUrl?: string; // Link to uploaded ID photo in Firebase Storage
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  createdByRef?: DocumentReference<User>; // User who created this operator record
+}
+
+export interface OperatorLicenseAttachedDoc {
+  docId: string; // Auto-generated or a unique ID for the attachment
+  docType: "PoliceClearance" | "PreviousLicenseCopy" | "BirthCertificateCopy" | "NIDCardCopy" | "IDPhoto" | "Other";
+  docOtherDescription?: string; // If docType is "Other"
+  fileName: string;
+  fileUrl: string; // Link to Firebase Storage
+  uploadedAt: Timestamp;
+  verifiedStatus: "Pending" | "Verified" | "Rejected" | "NotRequired";
+  verifiedAt?: Timestamp;
+  verifiedByRef?: DocumentReference<User>;
+  notes?: string;
+}
+
+export interface OperatorLicense {
+  licenseApplicationId: string; // Auto-generated Unique ID
+  operatorRef: DocumentReference<Operator>;
+  operatorData?: Partial<Operator>; // Denormalized for quick display
+  applicationType: "New" | "Renewal";
+  previousLicenseNumber?: string; // If applicationType is "Renewal"
+  status: "Draft" | "Submitted" | "PendingReview" | "RequiresInfo" | "AwaitingTest" | "TestScheduled" | "TestPassed" | "TestFailed" | "Approved" | "Rejected" | "Expired" | "Revoked";
+  submittedAt?: Timestamp;
+  approvedAt?: Timestamp;
+  issuedAt?: Timestamp;
+  expiryDate?: Timestamp;
+  // Office Use Only Fields
+  assignedLicenseNumber?: string; // The official license number once issued
+  receiptNo?: string;
+  placeIssued?: string;
+  methodOfPayment?: "Cash" | "Card" | "BankDeposit" | "Other";
+  paymentBy?: string;
+  paymentDate?: Timestamp;
+  paymentAmount?: number;
+  attachedDocuments: OperatorLicenseAttachedDoc[];
+  competencyTestRef?: DocumentReference<CompetencyTest>;
+  notes?: string; // General notes for the application
+  createdByUserRef: DocumentReference<User>;
+  lastUpdatedByRef?: DocumentReference<User>;
+  createdAt: Timestamp;
+  lastUpdatedAt: Timestamp;
+}
+
+export interface CompetencyTestTemplateQuestion {
+  questionId: string;
+  questionText: string;
+  questionType: "MultipleChoice" | "TrueFalse" | "ShortAnswer";
+  options?: string[]; // For MultipleChoice
+  correctAnswer?: string | boolean; // For MultipleChoice/TrueFalse
+  points?: number;
+}
+
+export interface CompetencyTestTemplate {
+  templateId: string; // Auto-generated or predefined
+  templateName: string;
+  description?: string;
+  applicableLicenseType: string; // e.g., "CaptainClass1", "CrewGeneral", "SkipperCoastal"
+  questions: CompetencyTestTemplateQuestion[];
+  passingScorePercentage: number;
+  isActive: boolean;
+  createdAt: Timestamp;
+  createdByRef: DocumentReference<User>;
+  version?: number;
+}
+
+export interface CompetencyTestAnswer {
+  questionId: string;
+  answerGiven: string | boolean;
+  isCorrect?: boolean; // For auto-gradable questions
+  scoreAwarded?: number;
+}
+
+export interface CompetencyTest {
+  testId: string; // Auto-generated
+  licenseApplicationRef: DocumentReference<OperatorLicense>;
+  operatorRef: DocumentReference<Operator>;
+  testTemplateRef: DocumentReference<CompetencyTestTemplate>;
+  testTemplateVersion?: number; // To capture which version of template was used
+  testDate: Timestamp;
+  examinerRef: DocumentReference<User>; // User who administered/graded
+  scoreAchieved?: number;
+  percentageAchieved?: number;
+  result: "Pass" | "Fail" | "PendingGrading";
+  answers?: CompetencyTestAnswer[]; // Optional: for detailed review
+  notes?: string; // Examiner's comments
+  createdAt: Timestamp;
+}
+
+    
