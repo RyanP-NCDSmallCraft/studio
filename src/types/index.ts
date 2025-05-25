@@ -45,7 +45,6 @@ export interface Registration {
   approvedAt?: Timestamp;
   effectiveDate?: Timestamp;
   expiryDate?: Timestamp;
-  // provinceOfRegistration?: string; // Removed as per request
   paymentMethod?: "Cash" | "Card" | "BankDeposit";
   paymentReceiptNumber?: string;
   bankStampRef?: string;
@@ -74,6 +73,12 @@ export interface Registration {
   fuelTypeOtherDesc?: string;
   vesselType: "OpenBoat" | "CabinCruiser" | "Sailboat" | "PWC" | "Other"; // Personal Water Craft
   vesselTypeOtherDesc?: string;
+
+  // Engine Details
+  engineHorsepower?: number;
+  engineMake?: string;
+  engineSerialNumbers?: string; // Could be one or more, comma-separated
+
   certificateGeneratedAt?: Timestamp;
   certificateFileName?: string;
   certificateFileUrl?: string;
@@ -88,7 +93,7 @@ export interface ChecklistItemResult {
   itemDescription: string;
   result: "Yes" | "No" | "N/A";
   comments?: string;
-  category?: string; // Added category for grouping
+  category?: string;
 }
 
 export interface Inspection {
@@ -98,7 +103,7 @@ export interface Inspection {
   inspectorRef?: DocumentReference<User>;
   inspectorData?: { id: string, displayName?: string };
   inspectionType: "Initial" | "Annual" | "Compliance" | "FollowUp";
-  scheduledDate: Timestamp; // Made required for initial scheduling
+  scheduledDate: Timestamp;
   inspectionDate?: Timestamp;
   status: "Scheduled" | "InProgress" | "PendingReview" | "Passed" | "Failed" | "Cancelled";
   overallResult?: "Pass" | "PassWithRecommendations" | "Fail" | "N/A";
@@ -249,5 +254,3 @@ export interface CompetencyTest {
   notes?: string; // Examiner's comments
   createdAt: Timestamp;
 }
-
-    

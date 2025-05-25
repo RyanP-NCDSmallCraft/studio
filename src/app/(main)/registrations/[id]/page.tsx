@@ -39,7 +39,6 @@ const placeholderRegistration: Registration = {
   approvedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) as any,
   effectiveDate: new Date() as any,
   expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) as any,
-  // provinceOfRegistration: "Central Province", // Removed
   paymentMethod: "Card",
   paymentReceiptNumber: "RCPT001",
   paymentAmount: 150,
@@ -68,6 +67,9 @@ const placeholderRegistration: Registration = {
   craftUse: "Pleasure",
   fuelType: "Petrol",
   vesselType: "PWC",
+  engineHorsepower: 180,
+  engineMake: "Yamaha",
+  engineSerialNumbers: "ENGYMH12345",
   certificateGeneratedAt: new Date() as any,
   certificateFileName: "SCA123_Certificate.pdf",
   certificateFileUrl: "https://placehold.co/800x1100.png?text=Certificate+SCA123",
@@ -274,6 +276,9 @@ export default function RegistrationDetailPage() {
               <div><strong>Color:</strong> {registration.craftColor}</div>
               <div><strong>Hull ID:</strong> {registration.hullIdNumber}</div>
               <div><strong>Length:</strong> {registration.craftLength} {registration.lengthUnits}</div>
+              {registration.engineMake && <div><strong>Engine Make:</strong> {registration.engineMake}</div>}
+              {registration.engineHorsepower && <div><strong>Engine HP:</strong> {registration.engineHorsepower}</div>}
+              {registration.engineSerialNumbers && <div className="md:col-span-2"><strong>Engine S/N:</strong> {registration.engineSerialNumbers}</div>}
               <div><strong>Propulsion:</strong> {registration.propulsionType} {registration.propulsionOtherDesc && `(${registration.propulsionOtherDesc})`}</div>
               <div><strong>Hull Material:</strong> {registration.hullMaterial} {registration.hullMaterialOtherDesc && `(${registration.hullMaterialOtherDesc})`}</div>
               <div><strong>Craft Use:</strong> {registration.craftUse} {registration.craftUseOtherDesc && `(${registration.craftUseOtherDesc})`}</div>
@@ -310,7 +315,6 @@ export default function RegistrationDetailPage() {
             <CardContent className="space-y-1 text-sm">
               <p><strong>Type:</strong> {registration.registrationType}</p>
               {registration.previousScaRegoNo && <p><strong>Previous Rego:</strong> {registration.previousScaRegoNo}</p>}
-              {/* <p><strong>Province:</strong> {registration.provinceOfRegistration}</p> Removed */}
               <p><strong>Submitted:</strong> {formatFirebaseTimestamp(registration.submittedAt, "PPpp")}</p>
               <p><strong>Approved:</strong> {formatFirebaseTimestamp(registration.approvedAt, "PPpp")}</p>
               <p><strong>Effective:</strong> {formatFirebaseTimestamp(registration.effectiveDate, "PP")}</p>
@@ -399,4 +403,3 @@ export default function RegistrationDetailPage() {
     </div>
   );
 }
-

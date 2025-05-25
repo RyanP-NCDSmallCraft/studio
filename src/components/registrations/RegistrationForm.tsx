@@ -23,7 +23,7 @@ import type { Registration, Owner, ProofOfOwnershipDoc } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
-import { Save, Send, Users, FileUp, Trash2, PlusCircle } from "lucide-react";
+import { Save, Send } from "lucide-react"; // Removed unused icons
 import React, { useState } from "react";
 import { Timestamp, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -59,7 +59,6 @@ const proofOfOwnershipDocSchema = z.object({
 const registrationFormSchema = z.object({
   registrationType: z.enum(["New", "Renewal"]),
   previousScaRegoNo: z.string().optional().default(""),
-  // provinceOfRegistration: z.string().min(1, "Province is required"), // Removed
   
   owners: z.array(ownerSchema).min(1, "At least one owner is required").max(5, "Maximum of 5 owners"),
   proofOfOwnershipDocs: z.array(proofOfOwnershipDocSchema).min(1, "At least one proof of ownership document is required"),
@@ -83,6 +82,10 @@ const registrationFormSchema = z.object({
   fuelTypeOtherDesc: z.string().optional().default(""),
   vesselType: z.enum(["OpenBoat", "CabinCruiser", "Sailboat", "PWC", "Other"]),
   vesselTypeOtherDesc: z.string().optional().default(""),
+
+  engineHorsepower: z.number({invalid_type_error: "Horsepower must be a number"}).positive("Horsepower must be positive").optional(),
+  engineMake: z.string().optional().default(""),
+  engineSerialNumbers: z.string().optional().default(""),
 
   paymentMethod: z.enum(["Cash", "Card", "BankDeposit"]).optional(),
   paymentReceiptNumber: z.string().optional().default(""),
@@ -135,7 +138,6 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
   ? { 
       registrationType: existingRegistrationData.registrationType || "New",
       previousScaRegoNo: existingRegistrationData.previousScaRegoNo || "",
-      // provinceOfRegistration: existingRegistrationData.provinceOfRegistration || "", // Removed
       owners: (existingRegistrationData.owners || []).map(o => ({
         ...o,
         ownerId: o.ownerId || crypto.randomUUID(),
@@ -178,10 +180,13 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       fuelTypeOtherDesc: existingRegistrationData.fuelTypeOtherDesc || "",
       vesselType: existingRegistrationData.vesselType || "OpenBoat",
       vesselTypeOtherDesc: existingRegistrationData.vesselTypeOtherDesc || "",
+      engineHorsepower: existingRegistrationData.engineHorsepower === undefined ? undefined : (existingRegistrationData.engineHorsepower || undefined),
+      engineMake: existingRegistrationData.engineMake || "",
+      engineSerialNumbers: existingRegistrationData.engineSerialNumbers || "",
       paymentMethod: existingRegistrationData.paymentMethod || undefined,
       paymentReceiptNumber: existingRegistrationData.paymentReceiptNumber || "",
       bankStampRef: existingRegistrationData.bankStampRef || "",
-      paymentAmount: existingRegistrationData.paymentAmount === undefined ? undefined : (existingRegistrationData.paymentAmount || 0),
+      paymentAmount: existingRegistrationData.paymentAmount === undefined ? undefined : (existingRegistrationData.paymentAmount || undefined),
       paymentDate: existingRegistrationData.paymentDate instanceof Timestamp ? existingRegistrationData.paymentDate.toDate() : (existingRegistrationData.paymentDate ? new Date(existingRegistrationData.paymentDate as any) : undefined),
       safetyCertNumber: existingRegistrationData.safetyCertNumber || "",
       safetyEquipIssued: existingRegistrationData.safetyEquipIssued === undefined ? false : existingRegistrationData.safetyEquipIssued,
@@ -190,7 +195,6 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
   : { 
       registrationType: "New",
       previousScaRegoNo: "",
-      // provinceOfRegistration: "", // Removed
       owners: [],
       proofOfOwnershipDocs: [],
       craftMake: "",
@@ -211,6 +215,9 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       fuelTypeOtherDesc: "",
       vesselType: "OpenBoat",
       vesselTypeOtherDesc: "",
+      engineHorsepower: undefined,
+      engineMake: "",
+      engineSerialNumbers: "",
       paymentMethod: undefined, 
       paymentReceiptNumber: "",
       bankStampRef: "",
@@ -250,6 +257,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       owners: data.owners.map(o => ({...o, dob: Timestamp.fromDate(o.dob)})),
       paymentDate: data.paymentDate ? Timestamp.fromDate(data.paymentDate) : undefined,
       paymentAmount: data.paymentAmount === undefined || data.paymentAmount === null || isNaN(Number(data.paymentAmount)) ? undefined : Number(data.paymentAmount),
+      engineHorsepower: data.engineHorsepower === undefined || data.engineHorsepower === null || isNaN(Number(data.engineHorsepower)) ? undefined : Number(data.engineHorsepower),
       craftLength: Number(data.craftLength), 
       craftYear: Number(data.craftYear), 
       status,
@@ -323,7 +331,6 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                 )}
               />
             )}
-            {/* Province of Registration field removed here */}
           </CardContent>
         </Card>
         
@@ -349,8 +356,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                       value={field.value === undefined || isNaN(Number(field.value)) ? '' : Number(field.value)}
                       onChange={e => {
                         const val = e.target.value;
-                        const parsed = parseInt(val, 10);
-                        field.onChange(isNaN(parsed) ? undefined : parsed);
+                        field.onChange(val === '' || isNaN(parseInt(val, 10)) ? undefined : parseInt(val, 10));
                       }} 
                     />
                   </FormControl>
@@ -373,8 +379,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                        value={field.value === undefined || isNaN(Number(field.value)) ? '' : Number(field.value)}
                       onChange={e => {
                         const val = e.target.value;
-                         const parsed = parseFloat(val);
-                        field.onChange(isNaN(parsed) ? undefined : parsed);
+                        field.onChange(val === '' || isNaN(parseFloat(val)) ? undefined : parseFloat(val));
                       }}
                     />
                   </FormControl>
@@ -384,6 +389,27 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
             />
               <FormField control={form.control} name="lengthUnits" render={({ field }) => (<FormItem><FormLabel>Units *</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="m">Meters (m)</SelectItem><SelectItem value="ft">Feet (ft)</SelectItem></SelectContent></Select><FormMessage /></FormItem>)} />
             </div>
+            <FormField control={form.control} name="engineHorsepower" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Engine Horsepower</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="number" 
+                      placeholder="e.g., 150" 
+                      {...field} 
+                      value={field.value === undefined || isNaN(Number(field.value)) ? '' : Number(field.value)}
+                      onChange={e => {
+                        const val = e.target.value;
+                        field.onChange(val === '' || isNaN(parseInt(val, 10)) ? undefined : parseInt(val, 10));
+                      }} 
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} 
+            />
+            <FormField control={form.control} name="engineMake" render={({ field }) => (<FormItem><FormLabel>Engine Make</FormLabel><FormControl><Input placeholder="e.g., Yamaha, Mercury" {...field} /></FormControl><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="engineSerialNumbers" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Engine Serial Number(s)</FormLabel><FormControl><Input placeholder="Enter serial number(s)" {...field} /></FormControl><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="distinguishingFeatures" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Distinguishing Features</FormLabel><FormControl><Textarea placeholder="e.g., Custom decals, Bimini top" {...field} /></FormControl><FormMessage /></FormItem>)} />
           </CardContent>
         </Card>
@@ -425,8 +451,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                       value={field.value === undefined || isNaN(Number(field.value)) ? '' : Number(field.value)}
                       onChange={e => {
                         const val = e.target.value;
-                         const parsed = parseFloat(val);
-                        field.onChange(val === '' || isNaN(parsed) ? undefined : parsed);
+                         field.onChange(val === '' || isNaN(parseFloat(val)) ? undefined : parseFloat(val));
                       }} 
                     />
                   </FormControl>
@@ -462,4 +487,3 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
     </Form>
   );
 }
-
