@@ -5,12 +5,13 @@ import { SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarFooter,
 import { SidebarNav } from './SidebarNav';
 import { UserNav } from './UserNav';
 import { Button } from '@/components/ui/button';
-import { LogOut, Sailboat } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
+import Image from 'next/image';
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { currentUser } = useAuth();
@@ -25,7 +26,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
       router.push('/login');
       router.refresh();
-    } catch (error) { // Added curly braces here
+    } catch (error) {
       console.error("Logout error:", error);
       toast({ title: "Logout Failed", description: "Could not log you out. Please try again.", variant: "destructive" });
     }
@@ -36,7 +37,13 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Sidebar variant="sidebar" collapsible="icon" className="border-r">
         <SidebarHeader className="p-4">
           <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
-            <Sailboat className="h-8 w-8 text-primary" />
+            <Image 
+              src="https://ncdsmallcraft.com/images/114/11667247/LOGO-NCDCRB-small.png" 
+              alt="NCDCRB Logo" 
+              width={32} 
+              height={32}
+              className="h-8 w-8"
+            />
             <h1 className="text-2xl font-semibold group-data-[collapsible=icon]:hidden">RegoCraft</h1>
           </div>
         </SidebarHeader>

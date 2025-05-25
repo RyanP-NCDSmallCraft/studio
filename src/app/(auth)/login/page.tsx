@@ -1,7 +1,7 @@
 
 import { LoginForm } from "@/components/auth/LoginForm";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Sailboat } from "lucide-react"; // Using Sailboat as a thematic icon
+import Image from "next/image";
 
 export default function LoginPage() {
   return (
@@ -9,7 +9,13 @@ export default function LoginPage() {
       <Card className="w-full max-w-md shadow-2xl">
         <CardHeader className="text-center">
           <div className="mb-4 flex justify-center">
-            <Sailboat className="h-16 w-16 text-primary" />
+            <Image 
+              src="https://ncdsmallcraft.com/images/114/11667247/LOGO-NCDCRB-small.png" 
+              alt="NCDCRB Logo" 
+              width={64} 
+              height={64} 
+              className="h-16 w-16"
+            />
           </div>
           <CardTitle className="text-3xl font-bold">RegoCraft</CardTitle>
           <CardDescription>Sign in to manage craft registrations and inspections.</CardDescription>
