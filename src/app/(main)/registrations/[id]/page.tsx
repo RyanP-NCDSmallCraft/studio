@@ -39,7 +39,7 @@ const placeholderRegistration: Registration = {
   approvedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) as any,
   effectiveDate: new Date() as any,
   expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) as any,
-  provinceOfRegistration: "Central Province",
+  // provinceOfRegistration: "Central Province", // Removed
   paymentMethod: "Card",
   paymentReceiptNumber: "RCPT001",
   paymentAmount: 150,
@@ -66,7 +66,7 @@ const placeholderRegistration: Registration = {
   propulsionType: "Inboard",
   hullMaterial: "Fiberglass",
   craftUse: "Pleasure",
-  fuelType: "Gasoline",
+  fuelType: "Petrol",
   vesselType: "PWC",
   certificateGeneratedAt: new Date() as any,
   certificateFileName: "SCA123_Certificate.pdf",
@@ -295,7 +295,7 @@ export default function RegistrationDetailPage() {
                     <p><strong>Sex:</strong> {owner.sex}</p>
                     <p><strong>Phone:</strong> {owner.phone}</p>
                     {owner.email && <p><strong>Email:</strong> {owner.email}</p>}
-                    <p className="sm:col-span-2"><strong>Address:</strong> {owner.postalAddress}, {owner.wardVillage}, {owner.llg}, {owner.townDistrict}</p>
+                    <div className="sm:col-span-2"><strong>Address:</strong> {owner.postalAddress}, {owner.wardVillage}, {owner.llg}, {owner.townDistrict}</div>
                   </div>
                 </div>
               ))}
@@ -310,7 +310,7 @@ export default function RegistrationDetailPage() {
             <CardContent className="space-y-1 text-sm">
               <p><strong>Type:</strong> {registration.registrationType}</p>
               {registration.previousScaRegoNo && <p><strong>Previous Rego:</strong> {registration.previousScaRegoNo}</p>}
-              <p><strong>Province:</strong> {registration.provinceOfRegistration}</p>
+              {/* <p><strong>Province:</strong> {registration.provinceOfRegistration}</p> Removed */}
               <p><strong>Submitted:</strong> {formatFirebaseTimestamp(registration.submittedAt, "PPpp")}</p>
               <p><strong>Approved:</strong> {formatFirebaseTimestamp(registration.approvedAt, "PPpp")}</p>
               <p><strong>Effective:</strong> {formatFirebaseTimestamp(registration.effectiveDate, "PP")}</p>
@@ -399,3 +399,4 @@ export default function RegistrationDetailPage() {
     </div>
   );
 }
+

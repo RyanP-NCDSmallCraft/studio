@@ -45,7 +45,7 @@ export interface Registration {
   approvedAt?: Timestamp;
   effectiveDate?: Timestamp;
   expiryDate?: Timestamp;
-  provinceOfRegistration?: string;
+  // provinceOfRegistration?: string; // Removed as per request
   paymentMethod?: "Cash" | "Card" | "BankDeposit";
   paymentReceiptNumber?: string;
   bankStampRef?: string;

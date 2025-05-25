@@ -59,7 +59,7 @@ const proofOfOwnershipDocSchema = z.object({
 const registrationFormSchema = z.object({
   registrationType: z.enum(["New", "Renewal"]),
   previousScaRegoNo: z.string().optional().default(""),
-  provinceOfRegistration: z.string().min(1, "Province is required"),
+  // provinceOfRegistration: z.string().min(1, "Province is required"), // Removed
   
   owners: z.array(ownerSchema).min(1, "At least one owner is required").max(5, "Maximum of 5 owners"),
   proofOfOwnershipDocs: z.array(proofOfOwnershipDocSchema).min(1, "At least one proof of ownership document is required"),
@@ -135,7 +135,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
   ? { 
       registrationType: existingRegistrationData.registrationType || "New",
       previousScaRegoNo: existingRegistrationData.previousScaRegoNo || "",
-      provinceOfRegistration: existingRegistrationData.provinceOfRegistration || "",
+      // provinceOfRegistration: existingRegistrationData.provinceOfRegistration || "", // Removed
       owners: (existingRegistrationData.owners || []).map(o => ({
         ...o,
         ownerId: o.ownerId || crypto.randomUUID(),
@@ -190,7 +190,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
   : { 
       registrationType: "New",
       previousScaRegoNo: "",
-      provinceOfRegistration: "",
+      // provinceOfRegistration: "", // Removed
       owners: [],
       proofOfOwnershipDocs: [],
       craftMake: "",
@@ -323,17 +323,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                 )}
               />
             )}
-            <FormField
-              control={form.control}
-              name="provinceOfRegistration"
-              render={({ field }) => (
-                <FormItem className={watchRegistrationType === "New" && !form.getValues("previousScaRegoNo") ? "md:col-span-2" : ""}>
-                  <FormLabel>Province of Registration *</FormLabel>
-                  <FormControl><Input placeholder="e.g., National Capital District" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Province of Registration field removed here */}
           </CardContent>
         </Card>
         
@@ -472,3 +462,4 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
     </Form>
   );
 }
+
