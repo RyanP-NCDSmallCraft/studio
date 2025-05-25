@@ -5,86 +5,50 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
-import { PlusCircle, Ship, Eye, Edit, Filter, Search } from "lucide-react";
+import { PlusCircle, Ship, Eye, Edit, Filter, Search, Loader2 } from "lucide-react";
 import type { Registration, Owner } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
-import type { BadgeProps } from "@/components/ui/badge"; // For variant type
-import React, { useState, useMemo } from "react";
+import type { BadgeProps } from "@/components/ui/badge"; 
+import React, { useState, useMemo, useEffect } from "react";
 import { Input } from "@/components/ui/input";
-
-// Placeholder data - replace with actual Firestore data fetching
-const placeholderRegistrations: Registration[] = [
-  {
-    registrationId: "REG001",
-    scaRegoNo: "SCA123",
-    registrationType: "New",
-    status: "Approved",
-    owners: [{ ownerId: "owner1", role: "Primary", surname: "Smith", firstName: "John" } as Owner],
-    craftMake: "Yamaha",
-    craftModel: "FX Cruiser HO",
-    craftYear: 2022,
-    expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) as any, // Expires in 1 year
-    // --- Fill other required fields for Registration type ---
-    hullIdNumber: "YAM12345X122", craftColor: "Blue", craftLength: 3.56, lengthUnits: "m",
-    propulsionType: "Inboard", hullMaterial: "Fiberglass", craftUse: "Pleasure", fuelType: "Petrol", vesselType: "PWC",
-    proofOfOwnershipDocs: [], createdAt: new Date() as any, lastUpdatedAt: new Date() as any, createdByRef: {} as any,
-  },
-  {
-    registrationId: "REG002",
-    interimRegoNo: "INT456",
-    registrationType: "New",
-    status: "Submitted",
-    owners: [{ ownerId: "owner2", role: "Primary", surname: "Doe", firstName: "Jane" } as Owner],
-    craftMake: "Sea-Doo",
-    craftModel: "RXT-X 300",
-    craftYear: 2023,
-    // --- Fill other required fields for Registration type ---
-    hullIdNumber: "SEA78901Y223", craftColor: "Red", craftLength: 3.45, lengthUnits: "m",
-    propulsionType: "Inboard", hullMaterial: "Fiberglass", craftUse: "Pleasure", fuelType: "Petrol", vesselType: "PWC",
-    proofOfOwnershipDocs: [], createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) as any, lastUpdatedAt: new Date() as any, createdByRef: {} as any,
-  },
-  {
-    registrationId: "REG003",
-    scaRegoNo: "SCA789",
-    registrationType: "Renewal",
-    status: "Expired",
-    owners: [{ ownerId: "owner3", role: "Primary", surname: "Brown", firstName: "Jim" } as Owner],
-    craftMake: "Quintrex",
-    craftModel: "420 Renegade",
-    craftYear: 2018,
-    expiryDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) as any, // Expired 1 month ago
-    // --- Fill other required fields for Registration type ---
-    hullIdNumber: "QTRXABCCZ118", craftColor: "Silver", craftLength: 4.2, lengthUnits: "m",
-    propulsionType: "Outboard", hullMaterial: "Metal", craftUse: "Fishing", fuelType: "Petrol", vesselType: "OpenBoat",
-    proofOfOwnershipDocs: [], createdAt: new Date() as any, lastUpdatedAt: new Date() as any, createdByRef: {} as any,
-  },
-   {
-    registrationId: "REG004",
-    registrationType: "New",
-    status: "Draft",
-    owners: [{ ownerId: "owner4", role: "Primary", surname: "Wilson", firstName: "Pat" } as Owner],
-    craftMake: "Boston Whaler",
-    craftModel: "130 Super Sport",
-    craftYear: 2024,
-    // --- Fill other required fields for Registration type ---
-    hullIdNumber: "BWUSSK001D424", craftColor: "White", craftLength: 4.14, lengthUnits: "m",
-    propulsionType: "Outboard", hullMaterial: "Fiberglass", craftUse: "Pleasure", fuelType: "Petrol", vesselType: "OpenBoat",
-    proofOfOwnershipDocs: [], createdAt: new Date() as any, lastUpdatedAt: new Date() as any, createdByRef: {} as any,
-  }
-];
+import { getRegistrations } from "@/actions/registrations"; // Import Server Action
+import { useToast } from "@/hooks/use-toast";
 
 export default function RegistrationsPage() {
   const { currentUser, isAdmin, isRegistrar } = useAuth();
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
-  // In a real app, registrations would be fetched from Firestore
-  // const { data: registrations, isLoading, error } = useQuery(...)
-  const registrations = placeholderRegistrations; // Using placeholder data
+  const [registrations, setRegistrations] = useState<Registration[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
-  const getStatusBadgeVariant = (status: Registration["status"]): BadgeProps["variant"] => {
+  useEffect(() => {
+    async function loadRegistrations() {
+      setIsLoading(true);
+      setFetchError(null);
+      try {
+        const fetchedRegistrations = await getRegistrations();
+        setRegistrations(fetchedRegistrations);
+      } catch (error) {
+        console.error("Failed to load registrations:", error);
+        setFetchError("Could not load registrations. Please try again.");
+        toast({
+          title: "Error Loading Registrations",
+          description: (error as Error).message || "An unexpected error occurred.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadRegistrations();
+  }, [toast]);
+
+  const getStatusBadgeVariant = (status?: Registration["status"]): BadgeProps["variant"] => {
     switch (status) {
       case "Approved":
-        return "default"; // Typically success, primary color
+        return "default"; 
       case "Submitted":
       case "PendingReview":
         return "secondary";
@@ -99,15 +63,16 @@ export default function RegistrationsPage() {
     }
   };
 
-  const getPrimaryOwnerName = (owners: Owner[]): string => {
+  const getPrimaryOwnerName = (owners: Owner[] | undefined): string => {
+    if (!owners || owners.length === 0) return "N/A";
     const primaryOwner = owners.find(o => o.role === "Primary");
-    return primaryOwner ? `${primaryOwner.firstName} ${primaryOwner.surname}` : "N/A";
+    return primaryOwner ? `${primaryOwner.firstName} ${primaryOwner.surname}` : `${owners[0].firstName} ${owners[0].surname}` ; // Fallback to first owner
   };
 
-  const canEditRegistration = (regStatus: Registration["status"]): boolean => {
+  const canEditRegistration = (regStatus?: Registration["status"]): boolean => {
     if (!currentUser) return false;
-    const editableStatuses: Registration["status"][] = ["Draft", "Submitted", "RequiresInfo"];
-    return (isRegistrar || isAdmin) && editableStatuses.includes(regStatus);
+    const editableStatuses: Array<Registration["status"]> = ["Draft", "Submitted", "RequiresInfo"];
+    return (isRegistrar || isAdmin) && !!regStatus && editableStatuses.includes(regStatus);
   };
 
   const filteredRegistrations = useMemo(() => {
@@ -118,10 +83,10 @@ export default function RegistrationsPage() {
       const ownerName = getPrimaryOwnerName(reg.owners);
       return (
         regoNo.toLowerCase().includes(lowercasedFilter) ||
-        reg.craftMake.toLowerCase().includes(lowercasedFilter) ||
-        reg.craftModel.toLowerCase().includes(lowercasedFilter) ||
+        (reg.craftMake && reg.craftMake.toLowerCase().includes(lowercasedFilter)) ||
+        (reg.craftModel && reg.craftModel.toLowerCase().includes(lowercasedFilter)) ||
         ownerName.toLowerCase().includes(lowercasedFilter) ||
-        reg.status.toLowerCase().includes(lowercasedFilter)
+        (reg.status && reg.status.toLowerCase().includes(lowercasedFilter))
       );
     });
   }, [searchTerm, registrations]);
@@ -163,51 +128,84 @@ export default function RegistrationsPage() {
           <CardDescription>Manage and track all craft registrations.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Rego No.</TableHead>
-                <TableHead>Craft Make/Model</TableHead>
-                <TableHead>Primary Owner</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Expiry Date</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredRegistrations.map((reg) => (
-                <TableRow key={reg.registrationId}>
-                  <TableCell className="font-medium">
-                    {reg.scaRegoNo || reg.interimRegoNo || reg.registrationId}
-                  </TableCell>
-                  <TableCell>{reg.craftMake} {reg.craftModel}</TableCell>
-                  <TableCell>{getPrimaryOwnerName(reg.owners)}</TableCell>
-                  <TableCell>
-                    <Badge variant={getStatusBadgeVariant(reg.status)}>{reg.status}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    {reg.status === "Approved" && reg.expiryDate 
-                      ? formatFirebaseTimestamp(reg.expiryDate, "PP") 
-                      : "N/A"}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" asChild title="View Details">
-                      <Link href={`/registrations/${reg.registrationId}`}><Eye className="h-4 w-4" /></Link>
-                    </Button>
-                    {canEditRegistration(reg.status) && (
-                      <Button variant="ghost" size="icon" asChild title="Edit Registration">
-                        <Link href={`/registrations/${reg.registrationId}/edit`}><Edit className="h-4 w-4" /></Link>
-                      </Button>
-                    )}
-                  </TableCell>
+          {isLoading ? (
+            <div className="flex justify-center items-center py-10">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="ml-2">Loading registrations...</p>
+            </div>
+          ) : fetchError ? (
+            <div className="text-center py-10 text-destructive">
+              <p>{fetchError}</p>
+              <Button onClick={() => {
+                async function loadRegistrations() {
+                    setIsLoading(true);
+                    setFetchError(null);
+                    try {
+                        const fetchedRegistrations = await getRegistrations();
+                        setRegistrations(fetchedRegistrations);
+                    } catch (error) {
+                        console.error("Failed to load registrations:", error);
+                        setFetchError("Could not load registrations. Please try again.");
+                        toast({
+                        title: "Error Loading Registrations",
+                        description: (error as Error).message || "An unexpected error occurred.",
+                        variant: "destructive",
+                        });
+                    } finally {
+                        setIsLoading(false);
+                    }
+                }
+                loadRegistrations();
+              }} className="mt-4">Retry</Button>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Rego No.</TableHead>
+                  <TableHead>Craft Make/Model</TableHead>
+                  <TableHead>Primary Owner</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Expiry Date</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          {filteredRegistrations.length === 0 && (
-             <p className="pt-4 text-center text-muted-foreground">
-                {searchTerm ? "No registrations match your search." : "No registrations found."}
-            </p>
+              </TableHeader>
+              <TableBody>
+                {filteredRegistrations.length > 0 ? filteredRegistrations.map((reg) => (
+                  <TableRow key={reg.registrationId}>
+                    <TableCell className="font-medium">
+                      {reg.scaRegoNo || reg.interimRegoNo || reg.registrationId}
+                    </TableCell>
+                    <TableCell>{reg.craftMake} {reg.craftModel}</TableCell>
+                    <TableCell>{getPrimaryOwnerName(reg.owners)}</TableCell>
+                    <TableCell>
+                      <Badge variant={getStatusBadgeVariant(reg.status)}>{reg.status || "N/A"}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      {reg.status === "Approved" && reg.expiryDate 
+                        ? formatFirebaseTimestamp(reg.expiryDate, "PP") 
+                        : "N/A"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" asChild title="View Details">
+                        <Link href={`/registrations/${reg.registrationId}`}><Eye className="h-4 w-4" /></Link>
+                      </Button>
+                      {canEditRegistration(reg.status) && (
+                        <Button variant="ghost" size="icon" asChild title="Edit Registration">
+                          <Link href={`/registrations/${reg.registrationId}/edit`}><Edit className="h-4 w-4" /></Link>
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                )) : (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-muted-foreground">
+                      {searchTerm ? "No registrations match your search." : "No registrations found."}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>
