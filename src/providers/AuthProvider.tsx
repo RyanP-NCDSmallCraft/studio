@@ -2,17 +2,17 @@
 "use client";
 
 import type { User as FirebaseUser } from "firebase/auth";
-import { onAuthStateChanged, signOut } from "firebase/auth"; // Added signOut
+import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc, Timestamp, onSnapshot, FirestoreError } from "firebase/firestore";
 import type { ReactNode } from "react";
-import React, { createContext, useEffect, useState, useContext, useRef, useCallback } from "react"; // Added useRef, useCallback, useContext
+import React, { createContext, useEffect, useState, useContext, useRef, useCallback } from "react";
 import { auth, db } from "@/lib/firebase";
 import type { User as AppUser } from "@/types";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface AuthContextType {
-  currentUser: AppUser | null | undefined; // undefined means loading, null means no user
+  currentUser: AppUser | null | undefined;
   firebaseUser: FirebaseUser | null | undefined;
   loading: boolean;
   isAdmin: boolean;
@@ -24,6 +24,7 @@ interface AuthContextType {
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const INACTIVITY_TIMEOUT_DURATION = 60 * 60 * 1000; // 1 hour in milliseconds
+// const INACTIVITY_TIMEOUT_DURATION = 20 * 1000; // For testing: 20 seconds
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<AppUser | null | undefined>(undefined);
@@ -34,18 +35,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const inactivityTimerIdRef = useRef<NodeJS.Timeout | null>(null);
 
   const logoutUserAndNotify = useCallback(async () => {
-    // console.log('AuthProvider: Inactivity timeout. Logging out...');
+    console.log('AuthProvider: Inactivity timer FIRED. Attempting to log out...');
+    // Clear the ref immediately, as the timer has fired.
     if (inactivityTimerIdRef.current) {
-      clearTimeout(inactivityTimerIdRef.current);
-      inactivityTimerIdRef.current = null;
+        clearTimeout(inactivityTimerIdRef.current); // Should be redundant but safe
+        inactivityTimerIdRef.current = null;
     }
     try {
       await signOut(auth);
+      // onAuthStateChanged will handle setting firebaseUser and currentUser to null.
       toast({
         title: "Session Expired",
         description: "You have been logged out due to inactivity.",
       });
-      // MainLayout will handle redirect to /login when currentUser becomes null via onAuthStateChanged
+      console.log('AuthProvider: signOut successful after inactivity.');
     } catch (error) {
       console.error("AuthProvider: Error during inactivity logout:", error);
       toast({
@@ -58,71 +61,79 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const resetInactivityTimer = useCallback(() => {
     if (inactivityTimerIdRef.current) {
+    //   console.log(`AuthProvider: Clearing previous inactivity timer ID: ${inactivityTimerIdRef.current}`);
       clearTimeout(inactivityTimerIdRef.current);
     }
-    // console.log(`AuthProvider: Resetting inactivity timer for ${INACTIVITY_TIMEOUT_DURATION / 60000} minutes.`);
-    inactivityTimerIdRef.current = setTimeout(logoutUserAndNotify, INACTIVITY_TIMEOUT_DURATION);
+    const newTimerId = setTimeout(logoutUserAndNotify, INACTIVITY_TIMEOUT_DURATION);
+    inactivityTimerIdRef.current = newTimerId;
+    // console.log(`AuthProvider: Set new inactivity timer ID: ${newTimerId} for ${INACTIVITY_TIMEOUT_DURATION / 1000}s`);
   }, [logoutUserAndNotify]);
 
   useEffect(() => {
+    // console.log("AuthProvider: Inactivity useEffect running. firebaseUser UID:", firebaseUser?.uid || "null");
     if (firebaseUser) {
-      // console.log('AuthProvider: User is authenticated. Setting up inactivity listeners.');
-      const activityEvents: (keyof WindowEventMap)[] = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'];
+    //   console.log(`AuthProvider: User ${firebaseUser.uid} authenticated. Setting up inactivity listeners and timer.`);
+      const activityEvents: (keyof WindowEventMap)[] = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart', 'visibilitychange'];
       
-      const handleActivity = () => {
-        // console.log('AuthProvider: User activity detected.');
+      const handleActivity = (event: Event) => {
+        if (event.type === 'visibilitychange' && document.hidden) {
+        //   console.log('AuthProvider: Tab became hidden. Timer continues, not resetting on this event.');
+          return; 
+        }
+        // console.log(`AuthProvider: User activity detected (${event.type}) for user ${firebaseUser.uid}. Resetting timer.`);
         resetInactivityTimer();
       };
 
-      activityEvents.forEach(event => window.addEventListener(event, handleActivity));
+      activityEvents.forEach(event => window.addEventListener(event, handleActivity, { capture: true, passive: true }));
       resetInactivityTimer(); // Start the timer initially
 
       return () => {
-        // console.log('AuthProvider: Cleaning up inactivity listeners and timer for user:', firebaseUser.uid);
-        activityEvents.forEach(event => window.removeEventListener(event, handleActivity));
+        // console.log(`AuthProvider: Cleanup for inactivity listeners and timer for user ${firebaseUser?.uid || 'previous user'}. Current timer ID: ${inactivityTimerIdRef.current}`);
+        activityEvents.forEach(event => window.removeEventListener(event, handleActivity, { capture: true }));
         if (inactivityTimerIdRef.current) {
+        //   console.log(`AuthProvider: Clearing timer ID ${inactivityTimerIdRef.current} during effect cleanup for user ${firebaseUser?.uid}.`);
           clearTimeout(inactivityTimerIdRef.current);
           inactivityTimerIdRef.current = null;
         }
       };
     } else {
-      // No user, clear any existing timer
-      // console.log('AuthProvider: No user. Clearing inactivity timer.');
+    //   console.log('AuthProvider: No authenticated user. Ensuring inactivity timer (if any) is cleared. Current ID:', inactivityTimerIdRef.current);
       if (inactivityTimerIdRef.current) {
+        // console.log(`AuthProvider: Clearing timer ID ${inactivityTimerIdRef.current} because no user is authenticated.`);
         clearTimeout(inactivityTimerIdRef.current);
         inactivityTimerIdRef.current = null;
       }
     }
-  }, [firebaseUser, resetInactivityTimer]);
+  }, [firebaseUser, resetInactivityTimer]); // resetInactivityTimer is stable if its deps are stable
 
 
   useEffect(() => {
-    // console.log("AuthProvider: Mounting and setting up onAuthStateChanged listener.");
+    // console.log("AuthProvider: Setting up onAuthStateChanged listener.");
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
-      setLoading(true);
-      // console.log(`AuthProvider onAuthStateChanged: Triggered. User UID: ${user?.uid || 'null'}. Set loading to true.`);
-
-      setFirebaseUser(user); // This will trigger the inactivity timer useEffect if user state changes
+      // console.log(`AuthProvider onAuthStateChanged: User state changed. New user UID: ${user?.uid || 'null'}. Setting loading to true.`);
+      setLoading(true); 
+      setFirebaseUser(user); // This is important to trigger the inactivity timer useEffect
 
       if (user) {
         // console.log(`AuthProvider onAuthStateChanged: User authenticated (UID: ${user.uid}). Fetching Firestore document...`);
         const userDocRef = doc(db, "users", user.uid);
-        let loadedUserProfile: AppUser | null = null;
         try {
           const userDocSnap = await getDoc(userDocRef);
           if (userDocSnap.exists()) {
-            loadedUserProfile = { userId: user.uid, ...userDocSnap.data() } as AppUser;
-            // console.log(`AuthProvider onAuthStateChanged: User document for ${user.uid} exists. Profile loaded (Role: ${loadedUserProfile?.role}).`);
+            const userProfile = { userId: user.uid, ...userDocSnap.data() } as AppUser;
+            setCurrentUser(userProfile);
+            // console.log(`AuthProvider onAuthStateChanged: User document for ${user.uid} exists. Profile loaded (Role: ${userProfile?.role}).`);
           } else {
             console.warn(`AuthProvider onAuthStateChanged: User document for ${user.uid} NOT found. Creating default ReadOnly profile.`);
-            loadedUserProfile = {
+            setCurrentUser({
               userId: user.uid,
               email: user.email || "",
               displayName: user.displayName || user.email?.split('@')[0] || "User",
               role: "ReadOnly",
               createdAt: Timestamp.now(),
               isActive: true,
-            };
+            });
+            // Potentially try to create this default user doc in Firestore here if desired
           }
         } catch (error: any) {
           console.error(`AuthProvider onAuthStateChanged: Error fetching user document for ${user.uid}: Code: ${error.code}, Message: ${error.message}`);
@@ -139,11 +150,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
           }
           toast({ title: errorTitle, description: errorDescription, variant: "destructive" });
-          loadedUserProfile = null; // Ensure user is not considered logged in for app purposes
+          setCurrentUser(null); // Ensure user is not considered logged in for app purposes
         } finally {
-          setCurrentUser(loadedUserProfile);
           setLoading(false);
-          // console.log(`AuthProvider onAuthStateChanged: Finished processing for ${user?.uid || 'null'}. Set currentUser to ${loadedUserProfile ? `User (Role: ${loadedUserProfile.role})` : 'null'}. Set loading to false.`);
+          // console.log(`AuthProvider onAuthStateChanged: Finished processing for ${user?.uid || 'null'}. Set loading to false.`);
         }
       } else {
         // console.log("AuthProvider onAuthStateChanged: No user authenticated or user logged out.");
@@ -154,39 +164,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => {
-      // console.log("AuthProvider: Unmounting, cleaning up onAuthStateChanged listener.");
+    //   console.log("AuthProvider: Unmounting, cleaning up onAuthStateChanged listener.");
       unsubscribeAuth();
-      if (inactivityTimerIdRef.current) { // Clean up timer on provider unmount too
+      if (inactivityTimerIdRef.current) { 
+        // console.log(`AuthProvider: Clearing timer ID ${inactivityTimerIdRef.current} during AuthProvider unmount.`);
         clearTimeout(inactivityTimerIdRef.current);
+        inactivityTimerIdRef.current = null;
       }
     };
-  }, [toast]); // Added toast here
+  }, [toast]); // toast hook should be stable
 
   useEffect(() => {
     if (!firebaseUser?.uid) {
+    //   console.log("AuthProvider (snapshot effect): firebaseUser.uid is null/undefined. Skipping snapshot listener setup.");
       return;
     }
-    // console.log(`AuthProvider (onSnapshot effect): firebaseUser.uid found (${firebaseUser.uid}). Setting up snapshot listener for user profile updates.`);
+    // console.log(`AuthProvider (snapshot effect): firebaseUser.uid found (${firebaseUser.uid}). Setting up snapshot listener for user profile updates.`);
 
     const userDocRef = doc(db, "users", firebaseUser.uid);
     const unsubscribeSnapshot = onSnapshot(userDocRef, (docSnap) => {
-      // console.log(`AuthProvider (onSnapshot): Snapshot received for user: ${firebaseUser.uid}. Document exists: ${docSnap.exists()}`);
+    //   console.log(`AuthProvider (onSnapshot): Snapshot received for user: ${firebaseUser.uid}. Document exists: ${docSnap.exists()}`);
       if (docSnap.exists()) {
         const newProfileData = { userId: firebaseUser.uid, ...docSnap.data() } as AppUser;
-        // console.log(`AuthProvider (onSnapshot): User document exists. New profile data (Role: ${newProfileData?.role}).`);
+        // console.log(`AuthProvider (onSnapshot): User document exists. New profile data (Role: ${newProfileData?.role}). Current role: ${currentUser?.role}`);
         setCurrentUser(prevUser => {
-          // Only update if there's an actual change to avoid unnecessary re-renders
           if (JSON.stringify(prevUser) !== JSON.stringify(newProfileData)) {
+            // console.log("AuthProvider (onSnapshot): Profile data has changed, updating currentUser state.");
             return newProfileData;
           }
+          // console.log("AuthProvider (onSnapshot): Profile data is the same as current, no update to currentUser state needed.");
           return prevUser;
         });
       } else {
-        // console.warn(`AuthProvider (onSnapshot): User document NO LONGER exists in Firestore for UID: ${firebaseUser.uid}. Setting currentUser to null.`);
-        setCurrentUser(null); // This will trigger logout flow and clear inactivity timer via the other useEffect
+        console.warn(`AuthProvider (onSnapshot): User document NO LONGER exists in Firestore for UID: ${firebaseUser.uid}. Setting currentUser to null and attempting logout.`);
+        setCurrentUser(null); 
+        signOut(auth).catch(err => console.error("AuthProvider (onSnapshot): Error signing out after profile deletion:", err));
         toast({
           title: "Profile Sync Issue",
-          description: "Your user profile could not be found. You may have been logged out.",
+          description: "Your user profile could not be found. You have been logged out.",
           variant: "destructive",
         });
       }
@@ -207,18 +222,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => {
-      // console.log(`AuthProvider (onSnapshot effect): Cleaning up snapshot listener for user: ${firebaseUser.uid}`);
+    //   console.log(`AuthProvider (snapshot effect): Cleaning up snapshot listener for user: ${firebaseUser.uid}`);
       unsubscribeSnapshot();
     };
-  }, [firebaseUser?.uid, toast]);
+  }, [firebaseUser?.uid, toast, currentUser?.role]); // Added currentUser?.role to ensure re-check if role changes via snapshot
 
   const isAdmin = currentUser?.role === "Admin";
   const isRegistrar = currentUser?.role === "Registrar" || isAdmin;
   const isInspector = currentUser?.role === "Inspector" || isAdmin;
   const isSupervisor = currentUser?.role === "Supervisor" || isAdmin;
 
-  if (currentUser === undefined && loading) {
-    // console.log("AuthProvider Render: Initial load - currentUser is undefined, loading is true. Showing global spinner.");
+  if (currentUser === undefined && loading) { // Changed condition slightly for clarity
+    // console.log("AuthProvider Render: Initial load - currentUser is undefined AND loading is true. Showing global spinner.");
     return (
       <div className="flex h-screen w-full items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -233,5 +248,3 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     </AuthContext.Provider>
   );
 }
-
-    
