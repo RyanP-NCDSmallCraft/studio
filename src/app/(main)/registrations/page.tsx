@@ -9,26 +9,41 @@ import { PlusCircle, Ship, Eye, Edit, Filter, Search, Loader2 } from "lucide-rea
 import type { Registration, Owner } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
-import type { BadgeProps } from "@/components/ui/badge"; 
+import type { BadgeProps } from "@/components/ui/badge";
 import React, { useState, useMemo, useEffect } from "react";
 import { Input } from "@/components/ui/input";
-import { getRegistrations } from "@/actions/registrations"; // Import Server Action
+import { getRegistrations } from "@/actions/registrations"; // Correct import for the Server Action
 import { useToast } from "@/hooks/use-toast";
 
 export default function RegistrationsPage() {
-  const { currentUser, isAdmin, isRegistrar } = useAuth();
+  const { currentUser, isAdmin, isRegistrar, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [registrations, setRegistrations] = useState<Registration[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // Manages loading state for this page's data
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadRegistrations() {
+      // If auth is still loading, we wait before deciding to fetch.
+      if (authLoading) {
+        setIsLoading(true); // Keep page loading indicator active
+        return;
+      }
+
+      // If auth has resolved and there's no current user, don't fetch.
+      if (!currentUser) {
+        setRegistrations([]);
+        setIsLoading(false);
+        setFetchError("Please log in to view registrations.");
+        return;
+      }
+
+      // If there is a user, proceed to fetch registrations.
       setIsLoading(true);
       setFetchError(null);
       try {
-        const fetchedRegistrations = await getRegistrations();
+        const fetchedRegistrations = await getRegistrations(); // Call the Server Action
         setRegistrations(fetchedRegistrations);
       } catch (error) {
         console.error("Failed to load registrations:", error);
@@ -42,13 +57,14 @@ export default function RegistrationsPage() {
         setIsLoading(false);
       }
     }
+
     loadRegistrations();
-  }, [toast]);
+  }, [currentUser, authLoading, toast]); // Dependencies for the effect
 
   const getStatusBadgeVariant = (status?: Registration["status"]): BadgeProps["variant"] => {
     switch (status) {
       case "Approved":
-        return "default"; 
+        return "default";
       case "Submitted":
       case "PendingReview":
         return "secondary";
@@ -66,7 +82,7 @@ export default function RegistrationsPage() {
   const getPrimaryOwnerName = (owners: Owner[] | undefined): string => {
     if (!owners || owners.length === 0) return "N/A";
     const primaryOwner = owners.find(o => o.role === "Primary");
-    return primaryOwner ? `${primaryOwner.firstName} ${primaryOwner.surname}` : `${owners[0].firstName} ${owners[0].surname}` ; // Fallback to first owner
+    return primaryOwner ? `${primaryOwner.firstName} ${primaryOwner.surname}` : `${owners[0].firstName} ${owners[0].surname}`;
   };
 
   const canEditRegistration = (regStatus?: Registration["status"]): boolean => {
@@ -91,6 +107,44 @@ export default function RegistrationsPage() {
     });
   }, [searchTerm, registrations]);
 
+  const retryLoadRegistrations = () => {
+    // Re-trigger the useEffect by changing a dependency or calling the load function directly.
+    // For simplicity, here we ensure authLoading is false before attempting.
+    if (!authLoading && currentUser) {
+        async function load() {
+            setIsLoading(true);
+            setFetchError(null);
+            try {
+                const fetchedRegistrations = await getRegistrations();
+                setRegistrations(fetchedRegistrations);
+            } catch (error) {
+                console.error("Failed to load registrations on retry:", error);
+                setFetchError("Could not load registrations. Please try again.");
+                toast({
+                  title: "Error Loading Registrations",
+                  description: (error as Error).message || "An unexpected error occurred.",
+                  variant: "destructive",
+                });
+            } finally {
+                setIsLoading(false);
+            }
+        }
+        load();
+    } else if (!authLoading && !currentUser) {
+        setFetchError("Please log in to retry fetching registrations.");
+    }
+  };
+
+  // Combined loading state for initial auth check and data fetching
+  if (authLoading || (isLoading && !fetchError && currentUser)) { 
+     return (
+        <div className="flex h-64 justify-center items-center py-10">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="ml-2">Loading registrations...</p>
+        </div>
+     );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -107,6 +161,7 @@ export default function RegistrationsPage() {
               className="pl-10 w-full"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              disabled={!currentUser} // Disable search if not logged in or no data
             />
           </div>
           <Button variant="outline" disabled>
@@ -128,35 +183,11 @@ export default function RegistrationsPage() {
           <CardDescription>Manage and track all craft registrations.</CardDescription>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
-            <div className="flex justify-center items-center py-10">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <p className="ml-2">Loading registrations...</p>
-            </div>
-          ) : fetchError ? (
+           {fetchError ? (
             <div className="text-center py-10 text-destructive">
               <p>{fetchError}</p>
-              <Button onClick={() => {
-                async function loadRegistrations() {
-                    setIsLoading(true);
-                    setFetchError(null);
-                    try {
-                        const fetchedRegistrations = await getRegistrations();
-                        setRegistrations(fetchedRegistrations);
-                    } catch (error) {
-                        console.error("Failed to load registrations:", error);
-                        setFetchError("Could not load registrations. Please try again.");
-                        toast({
-                        title: "Error Loading Registrations",
-                        description: (error as Error).message || "An unexpected error occurred.",
-                        variant: "destructive",
-                        });
-                    } finally {
-                        setIsLoading(false);
-                    }
-                }
-                loadRegistrations();
-              }} className="mt-4">Retry</Button>
+              {currentUser && <Button onClick={retryLoadRegistrations} className="mt-4">Retry</Button>}
+              {!currentUser && <Button asChild className="mt-4"><Link href="/login">Log In</Link></Button>}
             </div>
           ) : (
             <Table>
@@ -182,8 +213,8 @@ export default function RegistrationsPage() {
                       <Badge variant={getStatusBadgeVariant(reg.status)}>{reg.status || "N/A"}</Badge>
                     </TableCell>
                     <TableCell>
-                      {reg.status === "Approved" && reg.expiryDate 
-                        ? formatFirebaseTimestamp(reg.expiryDate, "PP") 
+                      {reg.status === "Approved" && reg.expiryDate
+                        ? formatFirebaseTimestamp(reg.expiryDate, "PP")
                         : "N/A"}
                     </TableCell>
                     <TableCell className="text-right">
@@ -212,4 +243,3 @@ export default function RegistrationsPage() {
     </div>
   );
 }
-
