@@ -25,8 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { Save, Send } from "lucide-react"; 
 import React, { useState } from "react";
-import { Timestamp, doc, type DocumentReference } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { Timestamp } from "firebase/firestore";
 import { OwnerManager } from "./OwnerManager";
 import { FileUploadManager } from "./FileUploadManager";
 import { createRegistration } from '@/actions/registrations';
@@ -162,7 +161,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
         description: d.description || "",
         fileName: d.fileName || "",
         fileUrl: d.fileUrl || "",
-        uploadedAt: d.uploadedAt || Timestamp.now(),
+        uploadedAt: d.uploadedAt instanceof Timestamp ? d.uploadedAt : (d.uploadedAt ? (d.uploadedAt as any instanceof Date ? d.uploadedAt : new Date(d.uploadedAt as string)) : Timestamp.now()),
       })),
       craftMake: existingRegistrationData.craftMake || "",
       craftModel: existingRegistrationData.craftModel || "",
@@ -205,7 +204,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       craftYear: new Date().getFullYear(),
       craftColor: "",
       hullIdNumber: "",
-      craftLength: 0, 
+      craftLength: undefined, // Set to undefined to make Zod check for positive number
       lengthUnits: "m",
       distinguishingFeatures: "",
       propulsionType: "Outboard",
@@ -238,57 +237,75 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
     mode: "onChange",
   });
 
-  const [owners, setOwners] = useState<Owner[]>(defaultValues.owners as Owner[]); // Cast to Owner[]
-  const [proofDocs, setProofDocs] = useState<ProofOfOwnershipDoc[]>(defaultValues.proofOfOwnershipDocs as ProofOfOwnershipDoc[]); // Cast
+  const [ownersData, setOwnersData] = useState<Owner[]>(() => 
+    (defaultValues.owners || []).map(o => ({
+      ...o,
+      dob: o.dob instanceof Timestamp ? o.dob.toDate() : (o.dob ? new Date(o.dob as any) : new Date()),
+    })) as Owner[]
+  );
+  
+  const [proofDocsData, setProofDocsData] = useState<ProofOfOwnershipDoc[]>(() => 
+    (defaultValues.proofOfOwnershipDocs || []).map(d => ({
+      ...d,
+      uploadedAt: d.uploadedAt instanceof Timestamp ? d.uploadedAt : (d.uploadedAt ? ( (d.uploadedAt as any) instanceof Date ? d.uploadedAt : new Date(d.uploadedAt as string) ) : Timestamp.now() )
+    })) as ProofOfOwnershipDoc[]
+  );
 
 
   React.useEffect(() => {
-    form.setValue("owners", owners as any); 
-  }, [owners, form]);
+    form.setValue("owners", ownersData as any); 
+  }, [ownersData, form]);
 
   React.useEffect(() => {
-    form.setValue("proofOfOwnershipDocs", proofDocs as any);
-  }, [proofDocs, form]);
+    form.setValue("proofOfOwnershipDocs", proofDocsData as any);
+  }, [proofDocsData, form]);
 
   const onSubmit = async (data: RegistrationFormValues, submissionStatus: "Draft" | "Submitted") => {
     if (!currentUser?.userId) {
       toast({ title: "Authentication Error", description: "You must be logged in to create a registration.", variant: "destructive" });
       return;
     }
-
-    // Prepare clientData from form values (data)
-    // The server action expects JS Dates for conversion to Timestamps
-    const clientPayload = {
+    
+    const payloadForAction = {
       ...data,
-      status: submissionStatus, // Set the status based on the button clicked
-      owners: data.owners.map(o => ({
-        ...o,
-        dob: o.dob, // Pass as JS Date (already a Date from form)
+      status: submissionStatus,
+      owners: data.owners.map(owner => ({
+        ...owner,
+        dob: owner.dob instanceof Date ? owner.dob : new Date(owner.dob as string), // Ensure dob is a JS Date
       })),
-      proofOfOwnershipDocs: data.proofOfOwnershipDocs.map(docEntry => ({
-        ...docEntry,
-        uploadedAt: docEntry.uploadedAt, // Pass as Timestamp or JS Date/string (FileUploadManager sets as Timestamp)
-      })),
-      paymentDate: data.paymentDate, // Pass as JS Date if present
+      proofOfOwnershipDocs: data.proofOfOwnershipDocs.map(doc => {
+        let serializableUploadedAt: Date;
+        if (doc.uploadedAt instanceof Timestamp) {
+          serializableUploadedAt = doc.uploadedAt.toDate();
+        } else if (doc.uploadedAt instanceof Date) {
+          serializableUploadedAt = doc.uploadedAt;
+        } else {
+          serializableUploadedAt = new Date(doc.uploadedAt as string);
+        }
+        return {
+          ...doc,
+          uploadedAt: serializableUploadedAt, // Send as JS Date
+        };
+      }),
+      paymentDate: data.paymentDate instanceof Date ? data.paymentDate : (data.paymentDate ? new Date(data.paymentDate) : undefined),
     };
     
     // Remove fields not expected by the server action for create
     const { 
-      registrationId: _regId, // This is not defined in RegistrationFormValues but good to exclude if it were
       // These fields are set by the server or not on initial creation
-      scaRegoNo, interimRegoNo, approvedAt, effectiveDate, expiryDate,
-      submittedAt, // Server will set this if status is 'Submitted'
-      certificateGeneratedAt, certificateFileName, certificateFileUrl,
-      createdAt, lastUpdatedAt, createdByRef, lastUpdatedByRef,
-      ...payloadForAction 
-    } = clientPayload;
+      // scaRegoNo, interimRegoNo, approvedAt, effectiveDate, expiryDate,
+      // submittedAt, // Server will set this if status is 'Submitted'
+      // certificateGeneratedAt, certificateFileName, certificateFileUrl,
+      // createdAt, lastUpdatedAt, createdByRef, lastUpdatedByRef, // these are fine as they are Omit-ted in ClientRegistrationFormData
+      ...clientDataForAction 
+    } = payloadForAction;
 
 
     form.clearErrors(); 
 
     try {
       if (mode === "create") {
-        const result = await createRegistration(payloadForAction as any, currentUser.userId); // Cast as any to match Server Action input for now
+        const result = await createRegistration(clientDataForAction as any, currentUser.userId); 
         if (result.success && result.registrationId) {
           toast({ title: "Registration Saved", description: `Status: ${submissionStatus}. ID: ${result.registrationId}` });
           router.push(`/registrations/${result.registrationId}`);
@@ -296,12 +313,8 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
           toast({ title: "Save Failed", description: result.error || "Could not save registration.", variant: "destructive" });
         }
       } else if (registrationId) {
-        // Placeholder for update logic
         toast({ title: "Update (Simulated)", description: "Update functionality not yet fully implemented for Firestore." });
-        // const updatePayload = { ...payloadForAction, lastUpdatedAt: Timestamp.now(), lastUpdatedByRef: doc(db, "users", currentUser.userId) };
-        // const result = await updateRegistration(registrationId, updatePayload); 
-        // ... handle result ...
-        router.push(`/registrations/${registrationId}`); // Go back to detail page for now
+        router.push(`/registrations/${registrationId}`); 
       }
     } catch (error) {
       console.error("Error in onSubmit registration form:", error);
@@ -357,9 +370,9 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
           </CardContent>
         </Card>
         
-        <OwnerManager owners={owners} setOwners={setOwners} form={form} />
+        <OwnerManager owners={ownersData} setOwners={setOwnersData} form={form} />
 
-        <FileUploadManager title="Proof of Ownership Documents *" docs={proofDocs} setDocs={setProofDocs} storagePath="registrations_proof_of_ownership/" form={form} fieldName="proofOfOwnershipDocs" />
+        <FileUploadManager title="Proof of Ownership Documents *" docs={proofDocsData} setDocs={setProofDocsData} storagePath="registrations_proof_of_ownership/" form={form} fieldName="proofOfOwnershipDocs" />
 
 
         {/* Craft Details */}
