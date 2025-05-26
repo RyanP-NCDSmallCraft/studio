@@ -1,9 +1,49 @@
+
 // src/actions/registrations.ts
 'use server';
 
 import { collection, getDocs, Timestamp, type DocumentReference } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Registration, Owner, ProofOfOwnershipDoc, User } from '@/types';
+
+// Helper function to safely convert a Firestore Timestamp, JS Date, or Firestore-like object to a JS Date object.
+// Returns undefined if input is null/undefined or cannot be converted.
+const ensureSerializableDate = (dateValue: any): Date | undefined => {
+  if (!dateValue) return undefined;
+  if (dateValue instanceof Timestamp) {
+    return dateValue.toDate();
+  }
+  if (dateValue instanceof Date) {
+    return dateValue; // Already a JS Date
+  }
+  // If it's an object from Firestore that looks like a Timestamp (e.g., { seconds: ..., nanoseconds: ... })
+  // This case might occur if data isn't directly from a snapshot but constructed elsewhere
+  if (typeof dateValue === 'object' && dateValue !== null && typeof dateValue.seconds === 'number' && typeof dateValue.nanoseconds === 'number') {
+    try {
+      return new Timestamp(dateValue.seconds, dateValue.nanoseconds).toDate();
+    } catch (e) {
+      console.warn('Failed to convert object to Timestamp then to Date:', dateValue, e);
+      return undefined;
+    }
+  }
+  // If it's a string that can be parsed into a Date (e.g., ISO string)
+  if (typeof dateValue === 'string') {
+    const parsedDate = new Date(dateValue);
+    if (!isNaN(parsedDate.getTime())) {
+      return parsedDate;
+    }
+  }
+  // If it's a number (timestamp in millis)
+  if (typeof dateValue === 'number') {
+      const parsedDate = new Date(dateValue);
+      if (!isNaN(parsedDate.getTime())) {
+          return parsedDate;
+      }
+  }
+  console.warn(`Could not convert field to a serializable Date:`, dateValue);
+  return undefined;
+};
+
 
 export async function getRegistrations(): Promise<Registration[]> {
   try {
@@ -13,33 +53,12 @@ export async function getRegistrations(): Promise<Registration[]> {
     const registrations = registrationSnapshot.docs.map(docSnapshot => {
       const data = docSnapshot.data();
 
-      // Helper to ensure a field is a Firestore Timestamp or convert it
-      const ensureTimestamp = (field: any): Timestamp | undefined => {
-        if (!field) return undefined;
-        if (field instanceof Timestamp) return field;
-        // If it's an object from Firestore that looks like a Timestamp (e.g., { seconds: ..., nanoseconds: ... })
-        if (typeof field === 'object' && field !== null && typeof field.seconds === 'number' && typeof field.nanoseconds === 'number') {
-          return new Timestamp(field.seconds, field.nanoseconds);
-        }
-        // If it's a JS Date object
-        if (field instanceof Date) {
-          return Timestamp.fromDate(field);
-        }
-        // If it's a string or number that can be parsed into a Date
-        const date = new Date(field);
-        if (!isNaN(date.getTime())) {
-          return Timestamp.fromDate(date);
-        }
-        console.warn(`Could not convert field to Timestamp:`, field);
-        return undefined;
-      };
-
       const mapOwner = (ownerData: any): Owner => ({
         ownerId: ownerData.ownerId || '',
         role: ownerData.role || 'Primary',
         surname: ownerData.surname || '',
         firstName: ownerData.firstName || '',
-        dob: ensureTimestamp(ownerData.dob) || Timestamp.now(), // Default if invalid
+        dob: ensureSerializableDate(ownerData.dob) as Date, // Cast to Date as per new type
         sex: ownerData.sex || 'Male',
         phone: ownerData.phone || '',
         fax: ownerData.fax,
@@ -50,6 +69,14 @@ export async function getRegistrations(): Promise<Registration[]> {
         wardVillage: ownerData.wardVillage || '',
       });
 
+      const mapProofDoc = (docData: any): ProofOfOwnershipDoc => ({
+        docId: docData.docId || '',
+        description: docData.description || '',
+        fileName: docData.fileName || '',
+        fileUrl: docData.fileUrl || '',
+        uploadedAt: ensureSerializableDate(docData.uploadedAt) as Date, // Cast to Date
+      });
+
       return {
         registrationId: docSnapshot.id,
         scaRegoNo: data.scaRegoNo,
@@ -57,23 +84,20 @@ export async function getRegistrations(): Promise<Registration[]> {
         registrationType: data.registrationType || 'New',
         previousScaRegoNo: data.previousScaRegoNo,
         status: data.status || 'Draft',
-        submittedAt: ensureTimestamp(data.submittedAt),
-        approvedAt: ensureTimestamp(data.approvedAt),
-        effectiveDate: ensureTimestamp(data.effectiveDate),
-        expiryDate: ensureTimestamp(data.expiryDate),
+        submittedAt: ensureSerializableDate(data.submittedAt),
+        approvedAt: ensureSerializableDate(data.approvedAt),
+        effectiveDate: ensureSerializableDate(data.effectiveDate),
+        expiryDate: ensureSerializableDate(data.expiryDate),
         paymentMethod: data.paymentMethod,
         paymentReceiptNumber: data.paymentReceiptNumber,
         bankStampRef: data.bankStampRef,
         paymentAmount: data.paymentAmount,
-        paymentDate: ensureTimestamp(data.paymentDate),
+        paymentDate: ensureSerializableDate(data.paymentDate),
         safetyCertNumber: data.safetyCertNumber,
         safetyEquipIssued: data.safetyEquipIssued || false,
         safetyEquipReceiptNumber: data.safetyEquipReceiptNumber,
         owners: Array.isArray(data.owners) ? data.owners.map(mapOwner) : [],
-        proofOfOwnershipDocs: (data.proofOfOwnershipDocs || []).map((doc: any) => ({
-            ...doc,
-            uploadedAt: ensureTimestamp(doc.uploadedAt) || Timestamp.now()
-        })) as ProofOfOwnershipDoc[],
+        proofOfOwnershipDocs: Array.isArray(data.proofOfOwnershipDocs) ? data.proofOfOwnershipDocs.map(mapProofDoc) : [],
         craftMake: data.craftMake || '',
         craftModel: data.craftModel || '',
         craftYear: data.craftYear || new Date().getFullYear(),
@@ -95,13 +119,13 @@ export async function getRegistrations(): Promise<Registration[]> {
         engineHorsepower: data.engineHorsepower,
         engineMake: data.engineMake,
         engineSerialNumbers: data.engineSerialNumbers,
-        certificateGeneratedAt: ensureTimestamp(data.certificateGeneratedAt),
+        certificateGeneratedAt: ensureSerializableDate(data.certificateGeneratedAt),
         certificateFileName: data.certificateFileName,
         certificateFileUrl: data.certificateFileUrl,
-        lastUpdatedByRef: data.lastUpdatedByRef as DocumentReference<User> | undefined,
-        lastUpdatedAt: ensureTimestamp(data.lastUpdatedAt) || Timestamp.now(),
-        createdByRef: data.createdByRef as DocumentReference<User>, // Assuming this will exist
-        createdAt: ensureTimestamp(data.createdAt) || Timestamp.now(),
+        lastUpdatedByRef: (data.lastUpdatedByRef as DocumentReference<User>)?.id, // Pass ID string
+        lastUpdatedAt: ensureSerializableDate(data.lastUpdatedAt) as Date,
+        createdByRef: (data.createdByRef as DocumentReference<User>)?.id, // Pass ID string
+        createdAt: ensureSerializableDate(data.createdAt) as Date,
       } as Registration;
     });
     return registrations;
@@ -110,9 +134,8 @@ export async function getRegistrations(): Promise<Registration[]> {
     const originalErrorCode = error.code || "N/A";
     console.error(
       `Error fetching registrations in Server Action. Original Error Code: ${originalErrorCode}, Message: ${originalErrorMessage}`,
-      error // Log the full error object for more details if available
+      error 
     );
-    // Re-throw an error that includes the original error details
     throw new Error(
       `Failed to fetch registrations from server. Original error: [${originalErrorCode}] ${originalErrorMessage}`
     );

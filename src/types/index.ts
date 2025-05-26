@@ -6,7 +6,7 @@ export interface User {
   email: string;
   displayName?: string;
   role: "Admin" | "Registrar" | "Inspector" | "Supervisor" | "ReadOnly";
-  createdAt: Timestamp;
+  createdAt: Timestamp | Date | string; // Allow Date or string for client-side
   isActive: boolean;
 }
 
@@ -15,7 +15,7 @@ export interface Owner {
   role: "Primary" | "CoOwner";
   surname: string;
   firstName: string;
-  dob: Timestamp;
+  dob: Timestamp | Date | string; // Allow Date or string
   sex: "Male" | "Female" | "Other";
   phone: string;
   fax?: string;
@@ -31,7 +31,7 @@ export interface ProofOfOwnershipDoc {
   description: string;
   fileName: string;
   fileUrl: string;
-  uploadedAt: Timestamp;
+  uploadedAt: Timestamp | Date | string; // Allow Date or string
 }
 
 export interface Registration {
@@ -41,15 +41,15 @@ export interface Registration {
   registrationType: "New" | "Renewal";
   previousScaRegoNo?: string;
   status: "Draft" | "Submitted" | "PendingReview" | "Approved" | "Rejected" | "Expired" | "RequiresInfo";
-  submittedAt?: Timestamp;
-  approvedAt?: Timestamp;
-  effectiveDate?: Timestamp;
-  expiryDate?: Timestamp;
+  submittedAt?: Timestamp | Date | string;
+  approvedAt?: Timestamp | Date | string;
+  effectiveDate?: Timestamp | Date | string;
+  expiryDate?: Timestamp | Date | string;
   paymentMethod?: "Cash" | "Card" | "BankDeposit";
   paymentReceiptNumber?: string;
   bankStampRef?: string;
   paymentAmount?: number;
-  paymentDate?: Timestamp;
+  paymentDate?: Timestamp | Date | string;
   safetyCertNumber?: string;
   safetyEquipIssued?: boolean;
   safetyEquipReceiptNumber?: string;
@@ -79,13 +79,13 @@ export interface Registration {
   engineMake?: string;
   engineSerialNumbers?: string; // Could be one or more, comma-separated
 
-  certificateGeneratedAt?: Timestamp;
+  certificateGeneratedAt?: Timestamp | Date | string;
   certificateFileName?: string;
   certificateFileUrl?: string;
-  lastUpdatedByRef?: DocumentReference<User>;
-  lastUpdatedAt: Timestamp;
-  createdByRef: DocumentReference<User>;
-  createdAt: Timestamp;
+  lastUpdatedByRef?: string | DocumentReference<User>; // Store ID string on client
+  lastUpdatedAt: Timestamp | Date | string;
+  createdByRef: string | DocumentReference<User>; // Store ID string on client
+  createdAt: Timestamp | Date | string;
 }
 
 export interface ChecklistItemResult {
@@ -100,24 +100,24 @@ export interface Inspection {
   inspectionId: string;
   registrationRef: DocumentReference<Registration>;
   registrationData?: { id: string, scaRegoNo?: string, hullIdNumber?: string, craftType?: string, craftMake?: string, craftModel?: string };
-  inspectorRef?: DocumentReference<User>;
+  inspectorRef?: DocumentReference<User>; // Keep as DocRef for internal logic, pass ID to client if needed
   inspectorData?: { id: string, displayName?: string };
   inspectionType: "Initial" | "Annual" | "Compliance" | "FollowUp";
-  scheduledDate: Timestamp;
-  inspectionDate?: Timestamp;
+  scheduledDate: Timestamp | Date | string;
+  inspectionDate?: Timestamp | Date | string;
   status: "Scheduled" | "InProgress" | "PendingReview" | "Passed" | "Failed" | "Cancelled";
   overallResult?: "Pass" | "PassWithRecommendations" | "Fail" | "N/A";
   findings?: string;
   correctiveActions?: string;
   followUpRequired: boolean;
   checklistItems: ChecklistItemResult[];
-  completedAt?: Timestamp;
-  reviewedAt?: Timestamp;
-  reviewedByRef?: DocumentReference<User>;
-  createdAt: Timestamp;
-  createdByRef: DocumentReference<User>;
-  lastUpdatedAt?: Timestamp;
-  lastUpdatedByRef?: DocumentReference<User>;
+  completedAt?: Timestamp | Date | string;
+  reviewedAt?: Timestamp | Date | string;
+  reviewedByRef?: DocumentReference<User>; // Keep as DocRef, pass ID if needed
+  createdAt: Timestamp | Date | string;
+  createdByRef: DocumentReference<User>; // Keep as DocRef, pass ID if needed
+  lastUpdatedAt?: Timestamp | Date | string;
+  lastUpdatedByRef?: DocumentReference<User>; // Keep as DocRef, pass ID if needed
 }
 
 export interface ChecklistTemplateItem {
@@ -133,7 +133,7 @@ export interface ChecklistTemplate {
   inspectionType: "Initial" | "Annual" | "Compliance" | "FollowUp";
   items: ChecklistTemplateItem[];
   isActive: boolean;
-  createdAt: Timestamp;
+  createdAt: Timestamp | Date | string;
   createdByRef: DocumentReference<User>;
 }
 
@@ -147,7 +147,7 @@ export interface Operator {
   operatorId: string; // Auto-generated Unique ID
   surname: string;
   firstName: string;
-  dob: Timestamp; // Date of Birth
+  dob: Timestamp | Date | string; // Date of Birth
   age?: number; // Can be derived or manually entered
   sex: "Male" | "Female" | "Other";
   placeOfOriginTown: string;
@@ -164,9 +164,9 @@ export interface Operator {
   weightKg?: number;
   bodyMarks?: string; // e.g., tattoo; scar etc.
   idSizePhotoUrl?: string; // Link to uploaded ID photo in Firebase Storage
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-  createdByRef?: DocumentReference<User>; // User who created this operator record
+  createdAt: Timestamp | Date | string;
+  updatedAt: Timestamp | Date | string;
+  createdByRef?: DocumentReference<User> | string; 
 }
 
 export interface OperatorLicenseAttachedDoc {
@@ -175,39 +175,39 @@ export interface OperatorLicenseAttachedDoc {
   docOtherDescription?: string; // If docType is "Other"
   fileName: string;
   fileUrl: string; // Link to Firebase Storage
-  uploadedAt: Timestamp;
+  uploadedAt: Timestamp | Date | string;
   verifiedStatus: "Pending" | "Verified" | "Rejected" | "NotRequired";
-  verifiedAt?: Timestamp;
-  verifiedByRef?: DocumentReference<User>;
+  verifiedAt?: Timestamp | Date | string;
+  verifiedByRef?: DocumentReference<User> | string;
   notes?: string;
 }
 
 export interface OperatorLicense {
   licenseApplicationId: string; // Auto-generated Unique ID
-  operatorRef: DocumentReference<Operator>;
+  operatorRef: DocumentReference<Operator> | string;
   operatorData?: Partial<Operator>; // Denormalized for quick display
   applicationType: "New" | "Renewal";
   previousLicenseNumber?: string; // If applicationType is "Renewal"
   status: "Draft" | "Submitted" | "PendingReview" | "RequiresInfo" | "AwaitingTest" | "TestScheduled" | "TestPassed" | "TestFailed" | "Approved" | "Rejected" | "Expired" | "Revoked";
-  submittedAt?: Timestamp;
-  approvedAt?: Timestamp;
-  issuedAt?: Timestamp;
-  expiryDate?: Timestamp;
+  submittedAt?: Timestamp | Date | string;
+  approvedAt?: Timestamp | Date | string;
+  issuedAt?: Timestamp | Date | string;
+  expiryDate?: Timestamp | Date | string;
   // Office Use Only Fields
   assignedLicenseNumber?: string; // The official license number once issued
   receiptNo?: string;
   placeIssued?: string;
   methodOfPayment?: "Cash" | "Card" | "BankDeposit" | "Other";
   paymentBy?: string;
-  paymentDate?: Timestamp;
+  paymentDate?: Timestamp | Date | string;
   paymentAmount?: number;
   attachedDocuments: OperatorLicenseAttachedDoc[];
-  competencyTestRef?: DocumentReference<CompetencyTest>;
+  competencyTestRef?: DocumentReference<CompetencyTest> | string;
   notes?: string; // General notes for the application
-  createdByUserRef: DocumentReference<User>;
-  lastUpdatedByRef?: DocumentReference<User>;
-  createdAt: Timestamp;
-  lastUpdatedAt: Timestamp;
+  createdByUserRef: DocumentReference<User> | string;
+  lastUpdatedByRef?: DocumentReference<User> | string;
+  createdAt: Timestamp | Date | string;
+  lastUpdatedAt: Timestamp | Date | string;
 }
 
 export interface CompetencyTestTemplateQuestion {
@@ -227,8 +227,8 @@ export interface CompetencyTestTemplate {
   questions: CompetencyTestTemplateQuestion[];
   passingScorePercentage: number;
   isActive: boolean;
-  createdAt: Timestamp;
-  createdByRef: DocumentReference<User>;
+  createdAt: Timestamp | Date | string;
+  createdByRef: DocumentReference<User> | string;
   version?: number;
 }
 
@@ -241,16 +241,16 @@ export interface CompetencyTestAnswer {
 
 export interface CompetencyTest {
   testId: string; // Auto-generated
-  licenseApplicationRef: DocumentReference<OperatorLicense>;
-  operatorRef: DocumentReference<Operator>;
-  testTemplateRef: DocumentReference<CompetencyTestTemplate>;
+  licenseApplicationRef: DocumentReference<OperatorLicense> | string;
+  operatorRef: DocumentReference<Operator> | string;
+  testTemplateRef: DocumentReference<CompetencyTestTemplate> | string;
   testTemplateVersion?: number; // To capture which version of template was used
-  testDate: Timestamp;
-  examinerRef: DocumentReference<User>; // User who administered/graded
+  testDate: Timestamp | Date | string;
+  examinerRef: DocumentReference<User> | string; // User who administered/graded
   scoreAchieved?: number;
   percentageAchieved?: number;
   result: "Pass" | "Fail" | "PendingGrading";
   answers?: CompetencyTestAnswer[]; // Optional: for detailed review
   notes?: string; // Examiner's comments
-  createdAt: Timestamp;
+  createdAt: Timestamp | Date | string;
 }
