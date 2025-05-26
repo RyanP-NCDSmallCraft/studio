@@ -14,7 +14,7 @@ import type { BadgeProps } from "@/components/ui/badge";
 import React, { useState, useMemo, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { collection, getDocs, Timestamp, type DocumentReference } from 'firebase/firestore'; // Added DocumentReference
+import { collection, getDocs, Timestamp, type DocumentReference } from 'firebase/firestore'; // Corrected import
 import { db } from '@/lib/firebase';
 
 // Helper function to safely convert Firestore Timestamps or other date forms to JS Date
