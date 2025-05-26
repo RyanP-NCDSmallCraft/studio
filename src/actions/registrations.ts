@@ -105,10 +105,16 @@ export async function getRegistrations(): Promise<Registration[]> {
       } as Registration;
     });
     return registrations;
-  } catch (error) {
-    console.error("Error fetching registrations in Server Action:", error);
-    // Optionally, rethrow or return a specific error structure
-    // For now, let's rethrow so the client can catch it
-    throw new Error("Failed to fetch registrations from server.");
+  } catch (error: any) {
+    const originalErrorMessage = error.message || "Unknown Firebase error";
+    const originalErrorCode = error.code || "N/A";
+    console.error(
+      `Error fetching registrations in Server Action. Original Error Code: ${originalErrorCode}, Message: ${originalErrorMessage}`,
+      error // Log the full error object for more details if available
+    );
+    // Re-throw an error that includes the original error details
+    throw new Error(
+      `Failed to fetch registrations from server. Original error: [${originalErrorCode}] ${originalErrorMessage}`
+    );
   }
 }
