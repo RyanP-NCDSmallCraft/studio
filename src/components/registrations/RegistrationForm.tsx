@@ -18,22 +18,23 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+// import { Separator } from "@/components/ui/separator"; // Not used
 import type { Registration, Owner, ProofOfOwnershipDoc } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
-import { Save, Send } from "lucide-react"; // Removed unused icons
+import { Save, Send } from "lucide-react"; 
 import React, { useState } from "react";
-import { Timestamp, doc } from "firebase/firestore";
+import { Timestamp, doc, type DocumentReference } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { OwnerManager } from "./OwnerManager";
 import { FileUploadManager } from "./FileUploadManager";
+import { createRegistration } from '@/actions/registrations';
 
 
 // Define Zod schema for validation
 const ownerSchema = z.object({
-  ownerId: z.string().uuid().optional(), // Optional because it's generated on add
+  ownerId: z.string().uuid().optional(), 
   role: z.enum(["Primary", "CoOwner"]),
   surname: z.string().min(1, "Surname is required"),
   firstName: z.string().min(1, "First name is required"),
@@ -53,7 +54,7 @@ const proofOfOwnershipDocSchema = z.object({
   description: z.string().min(1, "Description is required"),
   fileName: z.string().min(1, "File name is required"),
   fileUrl: z.string().url("Invalid URL"),
-  uploadedAt: z.custom<Timestamp>(val => val instanceof Timestamp, "Invalid timestamp"),
+  uploadedAt: z.custom<Timestamp | Date | string>(val => val instanceof Timestamp || val instanceof Date || typeof val === 'string', "Invalid timestamp"),
 });
 
 const registrationFormSchema = z.object({
@@ -96,6 +97,7 @@ const registrationFormSchema = z.object({
   safetyCertNumber: z.string().optional().default(""),
   safetyEquipIssued: z.boolean().optional().default(false),
   safetyEquipReceiptNumber: z.string().optional().default(""),
+  status: z.enum(["Draft", "Submitted", "PendingReview", "Approved", "Rejected", "Expired", "RequiresInfo"]).optional(), // Status is part of form for server action
 }).superRefine((data, ctx) => {
   if (data.registrationType === "Renewal" && !data.previousScaRegoNo) {
     ctx.addIssue({
@@ -134,7 +136,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
   const { toast } = useToast();
   const router = useRouter();
 
-  const defaultValues: RegistrationFormValues = existingRegistrationData
+  const defaultValues: Partial<RegistrationFormValues> = existingRegistrationData
   ? { 
       registrationType: existingRegistrationData.registrationType || "New",
       previousScaRegoNo: existingRegistrationData.previousScaRegoNo || "",
@@ -191,6 +193,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       safetyCertNumber: existingRegistrationData.safetyCertNumber || "",
       safetyEquipIssued: existingRegistrationData.safetyEquipIssued === undefined ? false : existingRegistrationData.safetyEquipIssued,
       safetyEquipReceiptNumber: existingRegistrationData.safetyEquipReceiptNumber || "",
+      status: existingRegistrationData.status || "Draft",
     }
   : { 
       registrationType: "New",
@@ -226,6 +229,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       safetyCertNumber: "",
       safetyEquipIssued: false, 
       safetyEquipReceiptNumber: "",
+      status: "Draft",
     };
 
   const form = useForm<RegistrationFormValues>({
@@ -234,8 +238,8 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
     mode: "onChange",
   });
 
-  const [owners, setOwners] = useState<Owner[]>(defaultValues.owners);
-  const [proofDocs, setProofDocs] = useState<ProofOfOwnershipDoc[]>(defaultValues.proofOfOwnershipDocs);
+  const [owners, setOwners] = useState<Owner[]>(defaultValues.owners as Owner[]); // Cast to Owner[]
+  const [proofDocs, setProofDocs] = useState<ProofOfOwnershipDoc[]>(defaultValues.proofOfOwnershipDocs as ProofOfOwnershipDoc[]); // Cast
 
 
   React.useEffect(() => {
@@ -246,43 +250,62 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
     form.setValue("proofOfOwnershipDocs", proofDocs as any);
   }, [proofDocs, form]);
 
-  const onSubmit = async (data: RegistrationFormValues, status: "Draft" | "Submitted") => {
-    if (!currentUser) {
-      toast({ title: "Error", description: "You must be logged in.", variant: "destructive" });
+  const onSubmit = async (data: RegistrationFormValues, submissionStatus: "Draft" | "Submitted") => {
+    if (!currentUser?.userId) {
+      toast({ title: "Authentication Error", description: "You must be logged in to create a registration.", variant: "destructive" });
       return;
     }
 
-    const submissionData = {
+    // Prepare clientData from form values (data)
+    // The server action expects JS Dates for conversion to Timestamps
+    const clientPayload = {
       ...data,
-      owners: data.owners.map(o => ({...o, dob: Timestamp.fromDate(o.dob)})),
-      paymentDate: data.paymentDate ? Timestamp.fromDate(data.paymentDate) : undefined,
-      paymentAmount: data.paymentAmount === undefined || data.paymentAmount === null || isNaN(Number(data.paymentAmount)) ? undefined : Number(data.paymentAmount),
-      engineHorsepower: data.engineHorsepower === undefined || data.engineHorsepower === null || isNaN(Number(data.engineHorsepower)) ? undefined : Number(data.engineHorsepower),
-      craftLength: Number(data.craftLength), 
-      craftYear: Number(data.craftYear), 
-      status,
-      createdAt: mode === 'create' ? Timestamp.now() : (existingRegistrationData?.createdAt || Timestamp.now()),
-      lastUpdatedAt: Timestamp.now(),
-      createdByRef: mode === 'create' ? doc(db, "users", currentUser.userId) : existingRegistrationData?.createdByRef,
-      lastUpdatedByRef: doc(db, "users", currentUser.userId),
+      status: submissionStatus, // Set the status based on the button clicked
+      owners: data.owners.map(o => ({
+        ...o,
+        dob: o.dob, // Pass as JS Date (already a Date from form)
+      })),
+      proofOfOwnershipDocs: data.proofOfOwnershipDocs.map(docEntry => ({
+        ...docEntry,
+        uploadedAt: docEntry.uploadedAt, // Pass as Timestamp or JS Date/string (FileUploadManager sets as Timestamp)
+      })),
+      paymentDate: data.paymentDate, // Pass as JS Date if present
     };
+    
+    // Remove fields not expected by the server action for create
+    const { 
+      registrationId: _regId, // This is not defined in RegistrationFormValues but good to exclude if it were
+      // These fields are set by the server or not on initial creation
+      scaRegoNo, interimRegoNo, approvedAt, effectiveDate, expiryDate,
+      submittedAt, // Server will set this if status is 'Submitted'
+      certificateGeneratedAt, certificateFileName, certificateFileUrl,
+      createdAt, lastUpdatedAt, createdByRef, lastUpdatedByRef,
+      ...payloadForAction 
+    } = clientPayload;
 
-    console.log("Submitting registration data:", submissionData);
+
+    form.clearErrors(); 
 
     try {
       if (mode === "create") {
-        // const docRef = await addDoc(collection(db, "registrations"), submissionData);
-        toast({ title: "Registration Saved (Simulated)", description: `ID: new_id_placeholder, Status: ${status}` });
-        router.push("/registrations"); 
+        const result = await createRegistration(payloadForAction as any, currentUser.userId); // Cast as any to match Server Action input for now
+        if (result.success && result.registrationId) {
+          toast({ title: "Registration Saved", description: `Status: ${submissionStatus}. ID: ${result.registrationId}` });
+          router.push(`/registrations/${result.registrationId}`);
+        } else {
+          toast({ title: "Save Failed", description: result.error || "Could not save registration.", variant: "destructive" });
+        }
       } else if (registrationId) {
-        // await updateDoc(doc(db, "registrations", registrationId), submissionData);
-        toast({ title: "Registration Updated (Simulated)", description: `ID: ${registrationId}, Status: ${status}` });
-        router.push(`/registrations/${registrationId}`);
+        // Placeholder for update logic
+        toast({ title: "Update (Simulated)", description: "Update functionality not yet fully implemented for Firestore." });
+        // const updatePayload = { ...payloadForAction, lastUpdatedAt: Timestamp.now(), lastUpdatedByRef: doc(db, "users", currentUser.userId) };
+        // const result = await updateRegistration(registrationId, updatePayload); 
+        // ... handle result ...
+        router.push(`/registrations/${registrationId}`); // Go back to detail page for now
       }
-       router.refresh();
     } catch (error) {
-      console.error("Error saving registration:", error);
-      toast({ title: "Save Failed", description: "Could not save registration. Please try again.", variant: "destructive" });
+      console.error("Error in onSubmit registration form:", error);
+      toast({ title: "Submission Error", description: "An unexpected error occurred. Please try again.", variant: "destructive" });
     }
   };
 
@@ -336,7 +359,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
         
         <OwnerManager owners={owners} setOwners={setOwners} form={form} />
 
-        <FileUploadManager title="Proof of Ownership Documents *" docs={proofDocs} setDocs={setProofDocs} storagePath="proof_of_ownership/" form={form} fieldName="proofOfOwnershipDocs" />
+        <FileUploadManager title="Proof of Ownership Documents *" docs={proofDocs} setDocs={setProofDocs} storagePath="registrations_proof_of_ownership/" form={form} fieldName="proofOfOwnershipDocs" />
 
 
         {/* Craft Details */}
@@ -353,7 +376,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                       type="number" 
                       placeholder="e.g., 2023" 
                       {...field} 
-                      value={field.value === undefined || isNaN(Number(field.value)) ? '' : Number(field.value)}
+                      value={field.value === undefined || field.value === null || isNaN(Number(field.value)) ? '' : Number(field.value)}
                       onChange={e => {
                         const val = e.target.value;
                         field.onChange(val === '' || isNaN(parseInt(val, 10)) ? undefined : parseInt(val, 10));
@@ -376,7 +399,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                       step="0.01" 
                       placeholder="e.g., 3.5" 
                       {...field} 
-                       value={field.value === undefined || isNaN(Number(field.value)) ? '' : Number(field.value)}
+                       value={field.value === undefined || field.value === null || isNaN(Number(field.value)) ? '' : Number(field.value)}
                       onChange={e => {
                         const val = e.target.value;
                         field.onChange(val === '' || isNaN(parseFloat(val)) ? undefined : parseFloat(val));
@@ -397,7 +420,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                       type="number" 
                       placeholder="e.g., 150" 
                       {...field} 
-                      value={field.value === undefined || isNaN(Number(field.value)) ? '' : Number(field.value)}
+                      value={field.value === undefined || field.value === null || isNaN(Number(field.value)) ? '' : Number(field.value)}
                       onChange={e => {
                         const val = e.target.value;
                         field.onChange(val === '' || isNaN(parseInt(val, 10)) ? undefined : parseInt(val, 10));
@@ -438,7 +461,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
          <Card>
           <CardHeader><CardTitle>Payment Information (Optional)</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <FormField control={form.control} name="paymentMethod" render={({ field }) => (<FormItem><FormLabel>Payment Method</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select method"/></SelectTrigger></FormControl><SelectContent>{["Cash", "Card", "BankDeposit"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="paymentMethod" render={({ field }) => (<FormItem><FormLabel>Payment Method</FormLabel><Select onValueChange={field.onChange} value={field.value || ""}><FormControl><SelectTrigger><SelectValue placeholder="Select method"/></SelectTrigger></FormControl><SelectContent>{["Cash", "Card", "BankDeposit"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="paymentAmount" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Payment Amount</FormLabel>
@@ -448,7 +471,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                       step="0.01" 
                       placeholder="e.g., 150.00" 
                       {...field} 
-                      value={field.value === undefined || isNaN(Number(field.value)) ? '' : Number(field.value)}
+                      value={field.value === undefined || field.value === null || isNaN(Number(field.value)) ? '' : Number(field.value)}
                       onChange={e => {
                         const val = e.target.value;
                          field.onChange(val === '' || isNaN(parseFloat(val)) ? undefined : parseFloat(val));
@@ -461,7 +484,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
             />
             <FormField control={form.control} name="paymentReceiptNumber" render={({ field }) => (<FormItem><FormLabel>Payment Receipt No.</FormLabel><FormControl><Input placeholder="Receipt number" {...field} /></FormControl><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="bankStampRef" render={({ field }) => (<FormItem><FormLabel>Bank Stamp Ref.</FormLabel><FormControl><Input placeholder="Bank stamp reference" {...field} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="paymentDate" render={({ field }) => (<FormItem><FormLabel>Payment Date</FormLabel><FormControl><Input type="date" {...field} value={field.value ? new Date(field.value).toISOString().split('T')[0] : ''} onChange={e => field.onChange(new Date(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="paymentDate" render={({ field }) => (<FormItem><FormLabel>Payment Date</FormLabel><FormControl><Input type="date" {...field} value={field.value ? new Date(field.value).toISOString().split('T')[0] : ''} onChange={e => field.onChange(e.target.value ? new Date(e.target.value) : undefined)} /></FormControl><FormMessage /></FormItem>)} />
           </CardContent>
         </Card>
 
@@ -469,7 +492,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
           <CardHeader><CardTitle>Safety Certificate (Optional)</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FormField control={form.control} name="safetyCertNumber" render={({ field }) => (<FormItem><FormLabel>Safety Certificate No.</FormLabel><FormControl><Input placeholder="Certificate number" {...field} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="safetyEquipIssued" render={({ field }) => (<FormItem><FormLabel>Safety Equipment Issued?</FormLabel><Select onValueChange={val => field.onChange(val === "true")} defaultValue={field.value === undefined ? undefined : String(field.value)}><FormControl><SelectTrigger><SelectValue placeholder="Select an option"/></SelectTrigger></FormControl><SelectContent><SelectItem value="true">Yes</SelectItem><SelectItem value="false">No</SelectItem></SelectContent></Select><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="safetyEquipIssued" render={({ field }) => (<FormItem><FormLabel>Safety Equipment Issued?</FormLabel><Select onValueChange={val => field.onChange(val === "true")} value={field.value === undefined || field.value === null ? "" : String(field.value)}><FormControl><SelectTrigger><SelectValue placeholder="Select an option"/></SelectTrigger></FormControl><SelectContent><SelectItem value="true">Yes</SelectItem><SelectItem value="false">No</SelectItem></SelectContent></Select><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="safetyEquipReceiptNumber" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Safety Equipment Receipt No.</FormLabel><FormControl><Input placeholder="Equipment receipt number" {...field} /></FormControl><FormMessage /></FormItem>)} />
           </CardContent>
         </Card>

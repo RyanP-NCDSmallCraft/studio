@@ -74,17 +74,16 @@ export interface Registration {
   vesselType: "OpenBoat" | "CabinCruiser" | "Sailboat" | "PWC" | "Other"; // Personal Water Craft
   vesselTypeOtherDesc?: string;
 
-  // Engine Details
   engineHorsepower?: number;
   engineMake?: string;
-  engineSerialNumbers?: string; // Could be one or more, comma-separated
+  engineSerialNumbers?: string;
 
   certificateGeneratedAt?: Timestamp | Date | string;
   certificateFileName?: string;
   certificateFileUrl?: string;
-  lastUpdatedByRef?: string | DocumentReference<User>; // Store ID string on client
+  lastUpdatedByRef: string | DocumentReference<User>; // Store ID string on client for form, convert to Ref on server
   lastUpdatedAt: Timestamp | Date | string;
-  createdByRef: string | DocumentReference<User>; // Store ID string on client
+  createdByRef: string | DocumentReference<User>; // Store ID string on client for form, convert to Ref on server
   createdAt: Timestamp | Date | string;
 }
 
@@ -100,7 +99,7 @@ export interface Inspection {
   inspectionId: string;
   registrationRef: DocumentReference<Registration>;
   registrationData?: { id: string, scaRegoNo?: string, hullIdNumber?: string, craftType?: string, craftMake?: string, craftModel?: string };
-  inspectorRef?: DocumentReference<User>; // Keep as DocRef for internal logic, pass ID to client if needed
+  inspectorRef?: DocumentReference<User>; 
   inspectorData?: { id: string, displayName?: string };
   inspectionType: "Initial" | "Annual" | "Compliance" | "FollowUp";
   scheduledDate: Timestamp | Date | string;
@@ -113,11 +112,11 @@ export interface Inspection {
   checklistItems: ChecklistItemResult[];
   completedAt?: Timestamp | Date | string;
   reviewedAt?: Timestamp | Date | string;
-  reviewedByRef?: DocumentReference<User>; // Keep as DocRef, pass ID if needed
+  reviewedByRef?: DocumentReference<User>; 
   createdAt: Timestamp | Date | string;
-  createdByRef: DocumentReference<User>; // Keep as DocRef, pass ID if needed
+  createdByRef: DocumentReference<User>; 
   lastUpdatedAt?: Timestamp | Date | string;
-  lastUpdatedByRef?: DocumentReference<User>; // Keep as DocRef, pass ID if needed
+  lastUpdatedByRef?: DocumentReference<User>;
 }
 
 export interface ChecklistTemplateItem {
@@ -144,11 +143,11 @@ export type { SuggestChecklistItemsInput, SuggestChecklistItemsOutput } from '@/
 // --- Operator Licensing Module Types ---
 
 export interface Operator {
-  operatorId: string; // Auto-generated Unique ID
+  operatorId: string; 
   surname: string;
   firstName: string;
-  dob: Timestamp | Date | string; // Date of Birth
-  age?: number; // Can be derived or manually entered
+  dob: Timestamp | Date | string; 
+  age?: number; 
   sex: "Male" | "Female" | "Other";
   placeOfOriginTown: string;
   placeOfOriginDistrict: string;
@@ -162,19 +161,19 @@ export interface Operator {
   skinColor?: string;
   hairColor?: string;
   weightKg?: number;
-  bodyMarks?: string; // e.g., tattoo; scar etc.
-  idSizePhotoUrl?: string; // Link to uploaded ID photo in Firebase Storage
+  bodyMarks?: string; 
+  idSizePhotoUrl?: string; 
   createdAt: Timestamp | Date | string;
   updatedAt: Timestamp | Date | string;
   createdByRef?: DocumentReference<User> | string; 
 }
 
 export interface OperatorLicenseAttachedDoc {
-  docId: string; // Auto-generated or a unique ID for the attachment
+  docId: string; 
   docType: "PoliceClearance" | "PreviousLicenseCopy" | "BirthCertificateCopy" | "NIDCardCopy" | "IDPhoto" | "Other";
-  docOtherDescription?: string; // If docType is "Other"
+  docOtherDescription?: string; 
   fileName: string;
-  fileUrl: string; // Link to Firebase Storage
+  fileUrl: string; 
   uploadedAt: Timestamp | Date | string;
   verifiedStatus: "Pending" | "Verified" | "Rejected" | "NotRequired";
   verifiedAt?: Timestamp | Date | string;
@@ -183,18 +182,18 @@ export interface OperatorLicenseAttachedDoc {
 }
 
 export interface OperatorLicense {
-  licenseApplicationId: string; // Auto-generated Unique ID
+  licenseApplicationId: string; 
   operatorRef: DocumentReference<Operator> | string;
-  operatorData?: Partial<Operator>; // Denormalized for quick display
+  operatorData?: Partial<Operator>; 
   applicationType: "New" | "Renewal";
-  previousLicenseNumber?: string; // If applicationType is "Renewal"
+  previousLicenseNumber?: string; 
   status: "Draft" | "Submitted" | "PendingReview" | "RequiresInfo" | "AwaitingTest" | "TestScheduled" | "TestPassed" | "TestFailed" | "Approved" | "Rejected" | "Expired" | "Revoked";
   submittedAt?: Timestamp | Date | string;
   approvedAt?: Timestamp | Date | string;
   issuedAt?: Timestamp | Date | string;
   expiryDate?: Timestamp | Date | string;
-  // Office Use Only Fields
-  assignedLicenseNumber?: string; // The official license number once issued
+  
+  assignedLicenseNumber?: string; 
   receiptNo?: string;
   placeIssued?: string;
   methodOfPayment?: "Cash" | "Card" | "BankDeposit" | "Other";
@@ -203,7 +202,7 @@ export interface OperatorLicense {
   paymentAmount?: number;
   attachedDocuments: OperatorLicenseAttachedDoc[];
   competencyTestRef?: DocumentReference<CompetencyTest> | string;
-  notes?: string; // General notes for the application
+  notes?: string; 
   createdByUserRef: DocumentReference<User> | string;
   lastUpdatedByRef?: DocumentReference<User> | string;
   createdAt: Timestamp | Date | string;
@@ -214,16 +213,16 @@ export interface CompetencyTestTemplateQuestion {
   questionId: string;
   questionText: string;
   questionType: "MultipleChoice" | "TrueFalse" | "ShortAnswer";
-  options?: string[]; // For MultipleChoice
-  correctAnswer?: string | boolean; // For MultipleChoice/TrueFalse
+  options?: string[]; 
+  correctAnswer?: string | boolean; 
   points?: number;
 }
 
 export interface CompetencyTestTemplate {
-  templateId: string; // Auto-generated or predefined
+  templateId: string; 
   templateName: string;
   description?: string;
-  applicableLicenseType: string; // e.g., "CaptainClass1", "CrewGeneral", "SkipperCoastal"
+  applicableLicenseType: string; 
   questions: CompetencyTestTemplateQuestion[];
   passingScorePercentage: number;
   isActive: boolean;
@@ -235,22 +234,22 @@ export interface CompetencyTestTemplate {
 export interface CompetencyTestAnswer {
   questionId: string;
   answerGiven: string | boolean;
-  isCorrect?: boolean; // For auto-gradable questions
+  isCorrect?: boolean; 
   scoreAwarded?: number;
 }
 
 export interface CompetencyTest {
-  testId: string; // Auto-generated
+  testId: string; 
   licenseApplicationRef: DocumentReference<OperatorLicense> | string;
   operatorRef: DocumentReference<Operator> | string;
   testTemplateRef: DocumentReference<CompetencyTestTemplate> | string;
-  testTemplateVersion?: number; // To capture which version of template was used
+  testTemplateVersion?: number; 
   testDate: Timestamp | Date | string;
-  examinerRef: DocumentReference<User> | string; // User who administered/graded
+  examinerRef: DocumentReference<User> | string; 
   scoreAchieved?: number;
   percentageAchieved?: number;
   result: "Pass" | "Fail" | "PendingGrading";
-  answers?: CompetencyTestAnswer[]; // Optional: for detailed review
-  notes?: string; // Examiner's comments
+  answers?: CompetencyTestAnswer[]; 
+  notes?: string; 
   createdAt: Timestamp | Date | string;
 }
