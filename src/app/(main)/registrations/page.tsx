@@ -5,14 +5,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
-import { PlusCircle, Ship, Eye, Edit, Filter, Search, Loader2 } from "lucide-react";
+import { PlusCircle, Ship, Eye, Edit, Filter, Search, Loader2, AlertTriangle } from "lucide-react";
 import type { Registration, Owner } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
 import type { BadgeProps } from "@/components/ui/badge";
 import React, { useState, useMemo, useEffect } from "react";
 import { Input } from "@/components/ui/input";
-import { getRegistrations } from "@/actions/registrations"; // Correct import for the Server Action
+import { getRegistrations } from "@/actions/registrations";
 import { useToast } from "@/hooks/use-toast";
 
 export default function RegistrationsPage() {
@@ -20,18 +20,15 @@ export default function RegistrationsPage() {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [registrations, setRegistrations] = useState<Registration[]>([]);
-  const [isLoading, setIsLoading] = useState(true); // Manages loading state for this page's data
+  const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadRegistrations() {
-      // If auth is still loading, we wait before deciding to fetch.
       if (authLoading) {
-        setIsLoading(true); // Keep page loading indicator active
+        setIsLoading(true);
         return;
       }
-
-      // If auth has resolved and there's no current user, don't fetch.
       if (!currentUser) {
         setRegistrations([]);
         setIsLoading(false);
@@ -39,18 +36,18 @@ export default function RegistrationsPage() {
         return;
       }
 
-      // If there is a user, proceed to fetch registrations.
       setIsLoading(true);
       setFetchError(null);
       try {
-        const fetchedRegistrations = await getRegistrations(); // Call the Server Action
+        const fetchedRegistrations = await getRegistrations();
         setRegistrations(fetchedRegistrations);
       } catch (error) {
-        console.error("Failed to load registrations:", error);
-        setFetchError("Could not load registrations. Please try again.");
+        const errorMessage = (error as Error).message || "An unexpected error occurred while fetching registrations.";
+        console.error("Failed to load registrations:", errorMessage, error);
+        setFetchError(errorMessage);
         toast({
           title: "Error Loading Registrations",
-          description: (error as Error).message || "An unexpected error occurred.",
+          description: errorMessage,
           variant: "destructive",
         });
       } finally {
@@ -59,7 +56,7 @@ export default function RegistrationsPage() {
     }
 
     loadRegistrations();
-  }, [currentUser, authLoading, toast]); // Dependencies for the effect
+  }, [currentUser, authLoading, toast]);
 
   const getStatusBadgeVariant = (status?: Registration["status"]): BadgeProps["variant"] => {
     switch (status) {
@@ -108,41 +105,39 @@ export default function RegistrationsPage() {
   }, [searchTerm, registrations]);
 
   const retryLoadRegistrations = () => {
-    // Re-trigger the useEffect by changing a dependency or calling the load function directly.
-    // For simplicity, here we ensure authLoading is false before attempting.
     if (!authLoading && currentUser) {
-        async function load() {
-            setIsLoading(true);
-            setFetchError(null);
-            try {
-                const fetchedRegistrations = await getRegistrations();
-                setRegistrations(fetchedRegistrations);
-            } catch (error) {
-                console.error("Failed to load registrations on retry:", error);
-                setFetchError("Could not load registrations. Please try again.");
-                toast({
-                  title: "Error Loading Registrations",
-                  description: (error as Error).message || "An unexpected error occurred.",
-                  variant: "destructive",
-                });
-            } finally {
-                setIsLoading(false);
-            }
+      async function load() {
+        setIsLoading(true);
+        setFetchError(null);
+        try {
+          const fetchedRegistrations = await getRegistrations();
+          setRegistrations(fetchedRegistrations);
+        } catch (error) {
+          const errorMessage = (error as Error).message || "An unexpected error occurred on retry.";
+          console.error("Failed to load registrations on retry:", errorMessage, error);
+          setFetchError(errorMessage);
+          toast({
+            title: "Error Loading Registrations",
+            description: errorMessage,
+            variant: "destructive",
+          });
+        } finally {
+          setIsLoading(false);
         }
-        load();
+      }
+      load();
     } else if (!authLoading && !currentUser) {
-        setFetchError("Please log in to retry fetching registrations.");
+      setFetchError("Please log in to retry fetching registrations.");
     }
   };
 
-  // Combined loading state for initial auth check and data fetching
-  if (authLoading || (isLoading && !fetchError && currentUser)) { 
-     return (
-        <div className="flex h-64 justify-center items-center py-10">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="ml-2">Loading registrations...</p>
-        </div>
-     );
+  if (authLoading || (isLoading && !fetchError && currentUser)) {
+    return (
+      <div className="flex h-64 justify-center items-center py-10">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="ml-2">Loading registrations...</p>
+      </div>
+    );
   }
 
   return (
@@ -153,7 +148,7 @@ export default function RegistrationsPage() {
           <h1 className="text-3xl font-bold">Craft Registrations</h1>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
-           <div className="relative w-full sm:max-w-xs">
+          <div className="relative w-full sm:max-w-xs">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               type="search"
@@ -161,7 +156,7 @@ export default function RegistrationsPage() {
               className="pl-10 w-full"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              disabled={!currentUser} // Disable search if not logged in or no data
+              disabled={!currentUser}
             />
           </div>
           <Button variant="outline" disabled>
@@ -183,9 +178,25 @@ export default function RegistrationsPage() {
           <CardDescription>Manage and track all craft registrations.</CardDescription>
         </CardHeader>
         <CardContent>
-           {fetchError ? (
-            <div className="text-center py-10 text-destructive">
-              <p>{fetchError}</p>
+          {fetchError ? (
+            <div className="text-center py-10">
+              {fetchError.includes("permission-denied") || fetchError.includes("Missing or insufficient permissions") ? (
+                <div className="text-destructive space-y-2 p-4 border border-destructive/50 rounded-md bg-destructive/10">
+                  <div className="flex justify-center items-center mb-2">
+                    <AlertTriangle className="h-10 w-10 mr-2" />
+                    <h3 className="text-xl font-semibold">Permission Denied</h3>
+                  </div>
+                  <p>Could not load registrations due to missing Firestore permissions.</p>
+                  <p>
+                    Please check your Firebase console: ensure your
+                    Firestore Security Rules allow authenticated users (or the appropriate roles)
+                    to <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">read</code> from the <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">registrations</code> collection.
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">Detailed error: {fetchError}</p>
+                </div>
+              ) : (
+                <p className="text-destructive">{fetchError}</p>
+              )}
               {currentUser && <Button onClick={retryLoadRegistrations} className="mt-4">Retry</Button>}
               {!currentUser && <Button asChild className="mt-4"><Link href="/login">Log In</Link></Button>}
             </div>
@@ -231,7 +242,7 @@ export default function RegistrationsPage() {
                 )) : (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center text-muted-foreground">
-                      {searchTerm ? "No registrations match your search." : "No registrations found."}
+                      {isLoading ? "Loading..." : (searchTerm ? "No registrations match your search." : "No registrations found.")}
                     </TableCell>
                   </TableRow>
                 )}
@@ -243,3 +254,5 @@ export default function RegistrationsPage() {
     </div>
   );
 }
+
+    
