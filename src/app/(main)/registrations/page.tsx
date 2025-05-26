@@ -6,14 +6,53 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { PlusCircle, Ship, Eye, Edit, Filter, Search, Loader2, AlertTriangle } from "lucide-react";
-import type { Registration, Owner } from "@/types";
+import type { Registration, Owner, ProofOfOwnershipDoc, User } from "@/types"; // Added User for DocumentReference
 import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
 import type { BadgeProps } from "@/components/ui/badge";
 import React, { useState, useMemo, useEffect } from "react";
 import { Input } from "@/components/ui/input";
-import { getRegistrations } from "@/actions/registrations";
 import { useToast } from "@/hooks/use-toast";
+import { collection, getDocs, Timestamp, type DocumentReference } from 'firebase/firestore';
+import { db } from '@/lib/firebase'; // Import client-side db
+
+// Helper function to safely convert Firestore Timestamps or other date forms to JS Date
+const ensureSerializableDate = (dateValue: any): Date | undefined => {
+  if (!dateValue) return undefined;
+  if (dateValue instanceof Timestamp) {
+    return dateValue.toDate();
+  }
+  if (dateValue instanceof Date) {
+    return dateValue;
+  }
+  // Handle cases where data might come from Firestore as an object { seconds, nanoseconds }
+  // but hasn't been converted to a Timestamp instance on the client yet (e.g., if passed through props)
+  if (typeof dateValue === 'object' && dateValue !== null && typeof dateValue.seconds === 'number' && typeof dateValue.nanoseconds === 'number') {
+    try {
+      return new Timestamp(dateValue.seconds, dateValue.nanoseconds).toDate();
+    } catch (e) {
+      console.warn('Failed to convert object to Timestamp then to Date:', dateValue, e);
+      return undefined;
+    }
+  }
+  // Handle ISO strings or other date strings
+  if (typeof dateValue === 'string') {
+    const parsedDate = new Date(dateValue);
+    if (!isNaN(parsedDate.getTime())) {
+      return parsedDate;
+    }
+  }
+  // Handle numeric timestamps (milliseconds)
+  if (typeof dateValue === 'number') {
+      const parsedDate = new Date(dateValue);
+      if (!isNaN(parsedDate.getTime())) {
+          return parsedDate;
+      }
+  }
+  console.warn(`Could not convert field to a serializable Date:`, dateValue);
+  return undefined;
+};
+
 
 export default function RegistrationsPage() {
   const { currentUser, isAdmin, isRegistrar, loading: authLoading } = useAuth();
@@ -38,16 +77,106 @@ export default function RegistrationsPage() {
 
       setIsLoading(true);
       setFetchError(null);
+      console.log("RegistrationsPage (Client): Attempting to fetch registrations directly using client SDK.");
       try {
-        const fetchedRegistrations = await getRegistrations();
+        const registrationsCol = collection(db, "registrations");
+        const registrationSnapshot = await getDocs(registrationsCol);
+        console.log(`RegistrationsPage (Client): Fetched ${registrationSnapshot.docs.length} documents.`);
+
+        const fetchedRegistrations = registrationSnapshot.docs.map(docSnapshot => {
+          const data = docSnapshot.data();
+
+          const mapOwner = (ownerData: any): Owner => ({
+            ownerId: ownerData.ownerId || '',
+            role: ownerData.role || 'Primary',
+            surname: ownerData.surname || '',
+            firstName: ownerData.firstName || '',
+            dob: ensureSerializableDate(ownerData.dob),
+            sex: ownerData.sex || 'Male',
+            phone: ownerData.phone || '',
+            fax: ownerData.fax,
+            email: ownerData.email,
+            postalAddress: ownerData.postalAddress || '',
+            townDistrict: ownerData.townDistrict || '',
+            llg: ownerData.llg || '',
+            wardVillage: ownerData.wardVillage || '',
+          });
+
+          const mapProofDoc = (docData: any): ProofOfOwnershipDoc => ({
+            docId: docData.docId || '',
+            description: docData.description || '',
+            fileName: docData.fileName || '',
+            fileUrl: docData.fileUrl || '',
+            uploadedAt: ensureSerializableDate(docData.uploadedAt),
+          });
+          
+          // Handle DocumentReference fields by storing their ID
+          const createdByRefId = data.createdByRef instanceof DocumentReference ? data.createdByRef.id : data.createdByRef;
+          const lastUpdatedByRefId = data.lastUpdatedByRef instanceof DocumentReference ? data.lastUpdatedByRef.id : data.lastUpdatedByRef;
+
+
+          return {
+            registrationId: docSnapshot.id,
+            scaRegoNo: data.scaRegoNo,
+            interimRegoNo: data.interimRegoNo,
+            registrationType: data.registrationType || 'New',
+            previousScaRegoNo: data.previousScaRegoNo,
+            status: data.status || 'Draft',
+            submittedAt: ensureSerializableDate(data.submittedAt),
+            approvedAt: ensureSerializableDate(data.approvedAt),
+            effectiveDate: ensureSerializableDate(data.effectiveDate),
+            expiryDate: ensureSerializableDate(data.expiryDate),
+            paymentMethod: data.paymentMethod,
+            paymentReceiptNumber: data.paymentReceiptNumber,
+            bankStampRef: data.bankStampRef,
+            paymentAmount: data.paymentAmount,
+            paymentDate: ensureSerializableDate(data.paymentDate),
+            safetyCertNumber: data.safetyCertNumber,
+            safetyEquipIssued: data.safetyEquipIssued || false,
+            safetyEquipReceiptNumber: data.safetyEquipReceiptNumber,
+            owners: Array.isArray(data.owners) ? data.owners.map(mapOwner) : [],
+            proofOfOwnershipDocs: Array.isArray(data.proofOfOwnershipDocs) ? data.proofOfOwnershipDocs.map(mapProofDoc) : [],
+            craftMake: data.craftMake || '',
+            craftModel: data.craftModel || '',
+            craftYear: data.craftYear || new Date().getFullYear(),
+            craftColor: data.craftColor || '',
+            hullIdNumber: data.hullIdNumber || '',
+            craftLength: data.craftLength || 0,
+            lengthUnits: data.lengthUnits || 'm',
+            distinguishingFeatures: data.distinguishingFeatures,
+            propulsionType: data.propulsionType || 'Outboard',
+            propulsionOtherDesc: data.propulsionOtherDesc,
+            hullMaterial: data.hullMaterial || 'Fiberglass',
+            hullMaterialOtherDesc: data.hullMaterialOtherDesc,
+            craftUse: data.craftUse || 'Pleasure',
+            craftUseOtherDesc: data.craftUseOtherDesc,
+            fuelType: data.fuelType || 'Petrol',
+            fuelTypeOtherDesc: data.fuelTypeOtherDesc,
+            vesselType: data.vesselType || 'OpenBoat',
+            vesselTypeOtherDesc: data.vesselTypeOtherDesc,
+            engineHorsepower: data.engineHorsepower,
+            engineMake: data.engineMake,
+            engineSerialNumbers: data.engineSerialNumbers,
+            certificateGeneratedAt: ensureSerializableDate(data.certificateGeneratedAt),
+            certificateFileName: data.certificateFileName,
+            certificateFileUrl: data.certificateFileUrl,
+            lastUpdatedByRef: lastUpdatedByRefId, // Store ID string
+            lastUpdatedAt: ensureSerializableDate(data.lastUpdatedAt),
+            createdByRef: createdByRefId, // Store ID string
+            createdAt: ensureSerializableDate(data.createdAt),
+          } as Registration;
+        });
         setRegistrations(fetchedRegistrations);
-      } catch (error) {
-        const errorMessage = (error as Error).message || "An unexpected error occurred while fetching registrations.";
-        console.error("Failed to load registrations:", errorMessage, error);
-        setFetchError(errorMessage);
+        console.log("RegistrationsPage (Client): Successfully fetched and mapped registrations.", fetchedRegistrations.length);
+      } catch (error: any) {
+        const originalErrorMessage = error.message || "Unknown Firebase error";
+        const originalErrorCode = error.code || "N/A";
+        const detailedError = `Failed to fetch registrations directly from client. Original error: [${originalErrorCode}] ${originalErrorMessage}`;
+        console.error("RegistrationsPage (Client): Error details:", detailedError, error);
+        setFetchError(detailedError);
         toast({
           title: "Error Loading Registrations",
-          description: errorMessage,
+          description: detailedError,
           variant: "destructive",
         });
       } finally {
@@ -55,8 +184,16 @@ export default function RegistrationsPage() {
       }
     }
 
-    loadRegistrations();
-  }, [currentUser, authLoading, toast]);
+    if (currentUser) { // Only load if a user is authenticated
+        loadRegistrations();
+    } else if (!authLoading && !currentUser) { // If auth is done loading and there's no user
+        setIsLoading(false);
+        setFetchError("Please log in to view registrations.");
+        setRegistrations([]);
+    }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser, authLoading]); // Removed toast from deps as it should be stable
 
   const getStatusBadgeVariant = (status?: Registration["status"]): BadgeProps["variant"] => {
     switch (status) {
@@ -105,12 +242,55 @@ export default function RegistrationsPage() {
   }, [searchTerm, registrations]);
 
   const retryLoadRegistrations = () => {
-    if (!authLoading && currentUser) {
+    if (currentUser && !authLoading) {
+      // Re-trigger loadRegistrations by explicitly calling it
+      // (or you could set a "retry" state that useEffect depends on)
       async function load() {
         setIsLoading(true);
         setFetchError(null);
         try {
-          const fetchedRegistrations = await getRegistrations();
+          const registrationsCol = collection(db, "registrations");
+          const registrationSnapshot = await getDocs(registrationsCol);
+          const fetchedRegistrations = registrationSnapshot.docs.map(docSnapshot => {
+             const data = docSnapshot.data();
+             const mapOwner = (ownerData: any): Owner => ({ /* ... same mapping ... */ 
+                ownerId: ownerData.ownerId || '', role: ownerData.role || 'Primary', surname: ownerData.surname || '', firstName: ownerData.firstName || '',
+                dob: ensureSerializableDate(ownerData.dob), sex: ownerData.sex || 'Male', phone: ownerData.phone || '', fax: ownerData.fax,
+                email: ownerData.email, postalAddress: ownerData.postalAddress || '', townDistrict: ownerData.townDistrict || '',
+                llg: ownerData.llg || '', wardVillage: ownerData.wardVillage || '',
+             });
+             const mapProofDoc = (docData: any): ProofOfOwnershipDoc => ({ /* ... same mapping ... */ 
+                docId: docData.docId || '', description: docData.description || '', fileName: docData.fileName || '',
+                fileUrl: docData.fileUrl || '', uploadedAt: ensureSerializableDate(docData.uploadedAt),
+             });
+             const createdByRefId = data.createdByRef instanceof DocumentReference ? data.createdByRef.id : data.createdByRef;
+             const lastUpdatedByRefId = data.lastUpdatedByRef instanceof DocumentReference ? data.lastUpdatedByRef.id : data.lastUpdatedByRef;
+             return { /* ... same mapping ... */ 
+                registrationId: docSnapshot.id, scaRegoNo: data.scaRegoNo, interimRegoNo: data.interimRegoNo,
+                registrationType: data.registrationType || 'New', previousScaRegoNo: data.previousScaRegoNo,
+                status: data.status || 'Draft', submittedAt: ensureSerializableDate(data.submittedAt),
+                approvedAt: ensureSerializableDate(data.approvedAt), effectiveDate: ensureSerializableDate(data.effectiveDate),
+                expiryDate: ensureSerializableDate(data.expiryDate), paymentMethod: data.paymentMethod,
+                paymentReceiptNumber: data.paymentReceiptNumber, bankStampRef: data.bankStampRef,
+                paymentAmount: data.paymentAmount, paymentDate: ensureSerializableDate(data.paymentDate),
+                safetyCertNumber: data.safetyCertNumber, safetyEquipIssued: data.safetyEquipIssued || false,
+                safetyEquipReceiptNumber: data.safetyEquipReceiptNumber, owners: Array.isArray(data.owners) ? data.owners.map(mapOwner) : [],
+                proofOfOwnershipDocs: Array.isArray(data.proofOfOwnershipDocs) ? data.proofOfOwnershipDocs.map(mapProofDoc) : [],
+                craftMake: data.craftMake || '', craftModel: data.craftModel || '', craftYear: data.craftYear || new Date().getFullYear(),
+                craftColor: data.craftColor || '', hullIdNumber: data.hullIdNumber || '', craftLength: data.craftLength || 0,
+                lengthUnits: data.lengthUnits || 'm', distinguishingFeatures: data.distinguishingFeatures,
+                propulsionType: data.propulsionType || 'Outboard', propulsionOtherDesc: data.propulsionOtherDesc,
+                hullMaterial: data.hullMaterial || 'Fiberglass', hullMaterialOtherDesc: data.hullMaterialOtherDesc,
+                craftUse: data.craftUse || 'Pleasure', craftUseOtherDesc: data.craftUseOtherDesc,
+                fuelType: data.fuelType || 'Petrol', fuelTypeOtherDesc: data.fuelTypeOtherDesc,
+                vesselType: data.vesselType || 'OpenBoat', vesselTypeOtherDesc: data.vesselTypeOtherDesc,
+                engineHorsepower: data.engineHorsepower, engineMake: data.engineMake, engineSerialNumbers: data.engineSerialNumbers,
+                certificateGeneratedAt: ensureSerializableDate(data.certificateGeneratedAt), certificateFileName: data.certificateFileName,
+                certificateFileUrl: data.certificateFileUrl, lastUpdatedByRef: lastUpdatedByRefId,
+                lastUpdatedAt: ensureSerializableDate(data.lastUpdatedAt), createdByRef: createdByRefId,
+                createdAt: ensureSerializableDate(data.createdAt),
+             } as Registration;
+          });
           setRegistrations(fetchedRegistrations);
         } catch (error) {
           const errorMessage = (error as Error).message || "An unexpected error occurred on retry.";
@@ -131,14 +311,16 @@ export default function RegistrationsPage() {
     }
   };
 
-  if (authLoading || (isLoading && !fetchError && currentUser)) {
+
+  if (authLoading && isLoading) { // Show loader if auth is loading AND registrations are loading
     return (
       <div className="flex h-64 justify-center items-center py-10">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="ml-2">Loading registrations...</p>
+        <p className="ml-2">Loading application data...</p>
       </div>
     );
   }
+
 
   return (
     <div className="space-y-6">
@@ -156,7 +338,7 @@ export default function RegistrationsPage() {
               className="pl-10 w-full"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              disabled={!currentUser}
+              disabled={!currentUser || isLoading}
             />
           </div>
           <Button variant="outline" disabled>
@@ -178,7 +360,12 @@ export default function RegistrationsPage() {
           <CardDescription>Manage and track all craft registrations.</CardDescription>
         </CardHeader>
         <CardContent>
-          {fetchError ? (
+          {isLoading && !fetchError ? ( // Show loading specific to data fetch, if not auth loading
+             <div className="flex h-40 justify-center items-center">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="ml-2">Fetching registrations...</p>
+            </div>
+          ) : fetchError ? (
             <div className="text-center py-10">
               {fetchError.includes("permission-denied") || fetchError.includes("Missing or insufficient permissions") ? (
                 <div className="text-destructive space-y-2 p-4 border border-destructive/50 rounded-md bg-destructive/10">
@@ -192,13 +379,13 @@ export default function RegistrationsPage() {
                     Firestore Security Rules allow authenticated users (or the appropriate roles)
                     to <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">read</code> from the <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">registrations</code> collection.
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">Detailed error: {fetchError}</p>
+                   <p className="text-xs text-muted-foreground mt-1">Detailed error: {fetchError}</p>
                 </div>
               ) : (
                 <p className="text-destructive">{fetchError}</p>
               )}
               {currentUser && <Button onClick={retryLoadRegistrations} className="mt-4">Retry</Button>}
-              {!currentUser && <Button asChild className="mt-4"><Link href="/login">Log In</Link></Button>}
+              {!currentUser && !authLoading && <Button asChild className="mt-4"><Link href="/login">Log In</Link></Button>}
             </div>
           ) : (
             <Table>
@@ -242,7 +429,9 @@ export default function RegistrationsPage() {
                 )) : (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center text-muted-foreground">
-                      {isLoading ? "Loading..." : (searchTerm ? "No registrations match your search." : "No registrations found.")}
+                      {/* This message shows if loading is done and registrations array is still empty */}
+                      {!isLoading && registrations.length === 0 && !fetchError ? "No registrations found." : ""}
+                      {searchTerm && !isLoading && filteredRegistrations.length === 0 && registrations.length > 0 ? "No registrations match your search." : ""}
                     </TableCell>
                   </TableRow>
                 )}
