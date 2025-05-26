@@ -11,10 +11,10 @@ import type { Registration, Owner, ProofOfOwnershipDoc, User } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
 import type { BadgeProps } from "@/components/ui/badge";
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { collection, getDocs, Timestamp, type DocumentReference } from 'firebase/firestore'; // Corrected import
+import { collection, getDocs, Timestamp, DocumentReference } from 'firebase/firestore'; // Corrected import
 import { db } from '@/lib/firebase';
 
 // Helper function to safely convert Firestore Timestamps or other date forms to JS Date
@@ -60,135 +60,143 @@ export default function RegistrationsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function loadRegistrations() {
-      if (authLoading) {
-        console.log("RegistrationsPage (Client): Auth is still loading. Waiting...");
-        setIsLoading(true);
-        return;
-      }
-      if (!currentUser) {
-        console.log("RegistrationsPage (Client): No current user. Clearing registrations and not fetching.");
-        setRegistrations([]);
-        setIsLoading(false);
-        setFetchError("Please log in to view registrations.");
-        return;
-      }
-
-      console.log("RegistrationsPage (Client): Current user found, auth loaded. Attempting to fetch registrations directly using client SDK.");
-      setIsLoading(true);
-      setFetchError(null);
-
-      try {
-        const registrationsCol = collection(db, "registrations");
-        const registrationSnapshot = await getDocs(registrationsCol);
-        console.log(`RegistrationsPage (Client): Fetched ${registrationSnapshot.docs.length} documents from Firestore.`);
-
-        const fetchedRegistrations = registrationSnapshot.docs.map(docSnapshot => {
-          const data = docSnapshot.data();
-
-          const mapOwner = (ownerData: any): Owner => ({
-            ownerId: ownerData.ownerId || '',
-            role: ownerData.role || 'Primary',
-            surname: ownerData.surname || '',
-            firstName: ownerData.firstName || '',
-            dob: ensureSerializableDate(ownerData.dob),
-            sex: ownerData.sex || 'Male',
-            phone: ownerData.phone || '',
-            fax: ownerData.fax,
-            email: ownerData.email,
-            postalAddress: ownerData.postalAddress || '',
-            townDistrict: ownerData.townDistrict || '',
-            llg: ownerData.llg || '',
-            wardVillage: ownerData.wardVillage || '',
-          });
-
-          const mapProofDoc = (docData: any): ProofOfOwnershipDoc => ({
-            docId: docData.docId || '',
-            description: docData.description || '',
-            fileName: docData.fileName || '',
-            fileUrl: docData.fileUrl || '',
-            uploadedAt: ensureSerializableDate(docData.uploadedAt),
-          });
-          
-          // Handle DocumentReference fields by storing their ID
-          const createdByRefId = data.createdByRef instanceof DocumentReference ? data.createdByRef.id : data.createdByRef;
-          const lastUpdatedByRefId = data.lastUpdatedByRef instanceof DocumentReference ? data.lastUpdatedByRef.id : data.lastUpdatedByRef;
-
-
-          return {
-            registrationId: docSnapshot.id,
-            scaRegoNo: data.scaRegoNo,
-            interimRegoNo: data.interimRegoNo,
-            registrationType: data.registrationType || 'New',
-            previousScaRegoNo: data.previousScaRegoNo,
-            status: data.status || 'Draft',
-            submittedAt: ensureSerializableDate(data.submittedAt),
-            approvedAt: ensureSerializableDate(data.approvedAt),
-            effectiveDate: ensureSerializableDate(data.effectiveDate),
-            expiryDate: ensureSerializableDate(data.expiryDate),
-            paymentMethod: data.paymentMethod,
-            paymentReceiptNumber: data.paymentReceiptNumber,
-            bankStampRef: data.bankStampRef,
-            paymentAmount: data.paymentAmount,
-            paymentDate: ensureSerializableDate(data.paymentDate),
-            safetyCertNumber: data.safetyCertNumber,
-            safetyEquipIssued: data.safetyEquipIssued || false,
-            safetyEquipReceiptNumber: data.safetyEquipReceiptNumber,
-            owners: Array.isArray(data.owners) ? data.owners.map(mapOwner) : [],
-            proofOfOwnershipDocs: Array.isArray(data.proofOfOwnershipDocs) ? data.proofOfOwnershipDocs.map(mapProofDoc) : [],
-            craftMake: data.craftMake || '',
-            craftModel: data.craftModel || '',
-            craftYear: data.craftYear || new Date().getFullYear(),
-            craftColor: data.craftColor || '',
-            hullIdNumber: data.hullIdNumber || '',
-            craftLength: data.craftLength || 0,
-            lengthUnits: data.lengthUnits || 'm',
-            distinguishingFeatures: data.distinguishingFeatures,
-            propulsionType: data.propulsionType || 'Outboard',
-            propulsionOtherDesc: data.propulsionOtherDesc,
-            hullMaterial: data.hullMaterial || 'Fiberglass',
-            hullMaterialOtherDesc: data.hullMaterialOtherDesc,
-            craftUse: data.craftUse || 'Pleasure',
-            craftUseOtherDesc: data.craftUseOtherDesc,
-            fuelType: data.fuelType || 'Petrol',
-            fuelTypeOtherDesc: data.fuelTypeOtherDesc,
-            vesselType: data.vesselType || 'OpenBoat',
-            vesselTypeOtherDesc: data.vesselTypeOtherDesc,
-            engineHorsepower: data.engineHorsepower,
-            engineMake: data.engineMake,
-            engineSerialNumbers: data.engineSerialNumbers,
-            certificateGeneratedAt: ensureSerializableDate(data.certificateGeneratedAt),
-            certificateFileName: data.certificateFileName,
-            certificateFileUrl: data.certificateFileUrl,
-            lastUpdatedByRef: lastUpdatedByRefId, // Store ID string
-            lastUpdatedAt: ensureSerializableDate(data.lastUpdatedAt),
-            createdByRef: createdByRefId, // Store ID string
-            createdAt: ensureSerializableDate(data.createdAt),
-          } as Registration;
-        });
-        setRegistrations(fetchedRegistrations);
-        console.log("RegistrationsPage (Client): Successfully fetched and mapped registrations.", fetchedRegistrations.length);
-      } catch (error: any) {
-        const originalErrorMessage = error.message || "Unknown Firebase error";
-        const originalErrorCode = error.code || "N/A";
-        const detailedError = `Failed to fetch registrations directly from client. Original error: [${originalErrorCode}] ${originalErrorMessage}`;
-        console.error("RegistrationsPage (Client): Error details:", detailedError, error);
-        setFetchError(detailedError);
-        toast({
-          title: "Error Loading Registrations",
-          description: detailedError,
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-        console.log("RegistrationsPage (Client): Finished fetching. isLoading set to false.");
-      }
+  const loadRegistrations = useCallback(async () => {
+    if (!currentUser) {
+      console.log("RegistrationsPage (Client): No current user. Clearing registrations and not fetching.");
+      setRegistrations([]);
+      setIsLoading(false);
+      setFetchError("Please log in to view registrations.");
+      return;
     }
 
-    loadRegistrations();
+    console.log("RegistrationsPage (Client): Current user found, attempting to fetch registrations directly using client SDK.");
+    setIsLoading(true);
+    setFetchError(null);
 
-  }, [currentUser, authLoading]); // Removed toast from deps as it should be stable
+    try {
+      const registrationsCol = collection(db, "registrations");
+      const registrationSnapshot = await getDocs(registrationsCol);
+      console.log(`RegistrationsPage (Client): Fetched ${registrationSnapshot.docs.length} documents from Firestore.`);
+
+      const fetchedRegistrations = registrationSnapshot.docs.map(docSnapshot => {
+        const data = docSnapshot.data();
+
+        const mapOwner = (ownerData: any): Owner => ({
+          ownerId: ownerData.ownerId || '',
+          role: ownerData.role || 'Primary',
+          surname: ownerData.surname || '',
+          firstName: ownerData.firstName || '',
+          dob: ensureSerializableDate(ownerData.dob),
+          sex: ownerData.sex || 'Male',
+          phone: ownerData.phone || '',
+          fax: ownerData.fax,
+          email: ownerData.email,
+          postalAddress: ownerData.postalAddress || '',
+          townDistrict: ownerData.townDistrict || '',
+          llg: ownerData.llg || '',
+          wardVillage: ownerData.wardVillage || '',
+        });
+
+        const mapProofDoc = (docData: any): ProofOfOwnershipDoc => ({
+          docId: docData.docId || '',
+          description: docData.description || '',
+          fileName: docData.fileName || '',
+          fileUrl: docData.fileUrl || '',
+          uploadedAt: ensureSerializableDate(docData.uploadedAt),
+        });
+        
+        // Handle DocumentReference fields by storing their ID
+        const createdByRefId = data.createdByRef instanceof DocumentReference ? data.createdByRef.id : data.createdByRef;
+        const lastUpdatedByRefId = data.lastUpdatedByRef instanceof DocumentReference ? data.lastUpdatedByRef.id : data.lastUpdatedByRef;
+
+
+        return {
+          registrationId: docSnapshot.id,
+          scaRegoNo: data.scaRegoNo,
+          interimRegoNo: data.interimRegoNo,
+          registrationType: data.registrationType || 'New',
+          previousScaRegoNo: data.previousScaRegoNo,
+          status: data.status || 'Draft',
+          submittedAt: ensureSerializableDate(data.submittedAt),
+          approvedAt: ensureSerializableDate(data.approvedAt),
+          effectiveDate: ensureSerializableDate(data.effectiveDate),
+          expiryDate: ensureSerializableDate(data.expiryDate),
+          paymentMethod: data.paymentMethod,
+          paymentReceiptNumber: data.paymentReceiptNumber,
+          bankStampRef: data.bankStampRef,
+          paymentAmount: data.paymentAmount,
+          paymentDate: ensureSerializableDate(data.paymentDate),
+          safetyCertNumber: data.safetyCertNumber,
+          safetyEquipIssued: data.safetyEquipIssued || false,
+          safetyEquipReceiptNumber: data.safetyEquipReceiptNumber,
+          owners: Array.isArray(data.owners) ? data.owners.map(mapOwner) : [],
+          proofOfOwnershipDocs: Array.isArray(data.proofOfOwnershipDocs) ? data.proofOfOwnershipDocs.map(mapProofDoc) : [],
+          craftMake: data.craftMake || '',
+          craftModel: data.craftModel || '',
+          craftYear: data.craftYear || new Date().getFullYear(),
+          craftColor: data.craftColor || '',
+          hullIdNumber: data.hullIdNumber || '',
+          craftLength: data.craftLength || 0,
+          lengthUnits: data.lengthUnits || 'm',
+          distinguishingFeatures: data.distinguishingFeatures,
+          propulsionType: data.propulsionType || 'Outboard',
+          propulsionOtherDesc: data.propulsionOtherDesc,
+          hullMaterial: data.hullMaterial || 'Fiberglass',
+          hullMaterialOtherDesc: data.hullMaterialOtherDesc,
+          craftUse: data.craftUse || 'Pleasure',
+          craftUseOtherDesc: data.craftUseOtherDesc,
+          fuelType: data.fuelType || 'Petrol',
+          fuelTypeOtherDesc: data.fuelTypeOtherDesc,
+          vesselType: data.vesselType || 'OpenBoat',
+          vesselTypeOtherDesc: data.vesselTypeOtherDesc,
+          engineHorsepower: data.engineHorsepower,
+          engineMake: data.engineMake,
+          engineSerialNumbers: data.engineSerialNumbers,
+          certificateGeneratedAt: ensureSerializableDate(data.certificateGeneratedAt),
+          certificateFileName: data.certificateFileName,
+          certificateFileUrl: data.certificateFileUrl,
+          lastUpdatedByRef: lastUpdatedByRefId, // Store ID string
+          lastUpdatedAt: ensureSerializableDate(data.lastUpdatedAt),
+          createdByRef: createdByRefId, // Store ID string
+          createdAt: ensureSerializableDate(data.createdAt),
+        } as Registration;
+      });
+      setRegistrations(fetchedRegistrations);
+      console.log("RegistrationsPage (Client): Successfully fetched and mapped registrations.", fetchedRegistrations.length);
+    } catch (error: any) {
+      const originalErrorMessage = error.message || "Unknown Firebase error";
+      const originalErrorCode = error.code || "N/A";
+      const detailedError = `Failed to fetch registrations directly from client. Original error: [${originalErrorCode}] ${originalErrorMessage}`;
+      console.error("RegistrationsPage (Client): Error details:", detailedError, error);
+      setFetchError(detailedError);
+      toast({
+        title: "Error Loading Registrations",
+        description: detailedError,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+      console.log("RegistrationsPage (Client): Finished fetching. isLoading set to false.");
+    }
+  }, [currentUser, toast]);
+
+  useEffect(() => {
+    if (authLoading) {
+      console.log("RegistrationsPage (Client): Auth is still loading. Waiting...");
+      setIsLoading(true); // Keep loading if auth is loading
+      return;
+    }
+    // Only call loadRegistrations if currentUser is available (logged in)
+    if (currentUser) {
+      loadRegistrations();
+    } else {
+      // If not logged in and auth is not loading, set loading to false and show appropriate message
+      setIsLoading(false);
+      setFetchError("Please log in to view registrations.");
+      setRegistrations([]); // Clear any existing registrations
+    }
+  }, [currentUser, authLoading, loadRegistrations]);
+
 
   const getStatusBadgeVariant = (status?: Registration["status"]): BadgeProps["variant"] => {
     switch (status) {
@@ -245,7 +253,7 @@ export default function RegistrationsPage() {
   };
 
 
-  if (authLoading && isLoading) {
+  if (authLoading && isLoading) { // Show main loading spinner if auth is loading AND we are still in loading state
     return (
       <div className="flex h-64 justify-center items-center py-10">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -293,7 +301,7 @@ export default function RegistrationsPage() {
           <CardDescription>Manage and track all craft registrations.</CardDescription>
         </CardHeader>
         <CardContent>
-          {isLoading && !fetchError ? (
+          {isLoading && !fetchError ? ( // Show table loading if isLoading is true AND no error yet
              <div className="flex h-40 justify-center items-center">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 <p className="ml-2">Fetching registrations...</p>
@@ -375,3 +383,4 @@ export default function RegistrationsPage() {
     </div>
   );
 }
+
