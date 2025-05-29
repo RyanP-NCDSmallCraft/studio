@@ -18,17 +18,17 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-// import { Separator } from "@/components/ui/separator"; // Not used
-import type { Registration, Owner, ProofOfOwnershipDoc } from "@/types";
+import type { Registration, Owner, ProofOfOwnershipDoc, User } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { Save, Send } from "lucide-react"; 
 import React, { useState } from "react";
-import { Timestamp } from "firebase/firestore";
+import { Timestamp, addDoc, collection, doc, type DocumentReference } from "firebase/firestore";
+import { db } from "@/lib/firebase"; 
 import { OwnerManager } from "./OwnerManager";
 import { FileUploadManager } from "./FileUploadManager";
-import { createRegistration } from '@/actions/registrations';
+// Removed: import { createRegistration } from '@/actions/registrations';
 
 
 // Define Zod schema for validation
@@ -96,7 +96,7 @@ const registrationFormSchema = z.object({
   safetyCertNumber: z.string().optional().default(""),
   safetyEquipIssued: z.boolean().optional().default(false),
   safetyEquipReceiptNumber: z.string().optional().default(""),
-  status: z.enum(["Draft", "Submitted", "PendingReview", "Approved", "Rejected", "Expired", "RequiresInfo"]).optional(), // Status is part of form for server action
+  status: z.enum(["Draft", "Submitted", "PendingReview", "Approved", "Rejected", "Expired", "RequiresInfo"]).optional(), 
 }).superRefine((data, ctx) => {
   if (data.registrationType === "Renewal" && !data.previousScaRegoNo) {
     ctx.addIssue({
@@ -161,7 +161,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
         description: d.description || "",
         fileName: d.fileName || "",
         fileUrl: d.fileUrl || "",
-        uploadedAt: d.uploadedAt instanceof Timestamp ? d.uploadedAt : (d.uploadedAt ? (d.uploadedAt as any instanceof Date ? d.uploadedAt : new Date(d.uploadedAt as string)) : Timestamp.now()),
+        uploadedAt: d.uploadedAt instanceof Timestamp ? d.uploadedAt : (d.uploadedAt ? ( (d.uploadedAt as any) instanceof Date ? d.uploadedAt : new Date(d.uploadedAt as string)) : Timestamp.now()),
       })),
       craftMake: existingRegistrationData.craftMake || "",
       craftModel: existingRegistrationData.craftModel || "",
@@ -204,7 +204,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       craftYear: new Date().getFullYear(),
       craftColor: "",
       hullIdNumber: "",
-      craftLength: undefined, // Set to undefined to make Zod check for positive number
+      craftLength: 0, 
       lengthUnits: "m",
       distinguishingFeatures: "",
       propulsionType: "Outboard",
@@ -247,7 +247,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
   const [proofDocsData, setProofDocsData] = useState<ProofOfOwnershipDoc[]>(() => 
     (defaultValues.proofOfOwnershipDocs || []).map(d => ({
       ...d,
-      uploadedAt: d.uploadedAt instanceof Timestamp ? d.uploadedAt : (d.uploadedAt ? ( (d.uploadedAt as any) instanceof Date ? d.uploadedAt : new Date(d.uploadedAt as string) ) : Timestamp.now() )
+      uploadedAt: d.uploadedAt instanceof Timestamp ? d.uploadedAt : (d.uploadedAt ? ( (d.uploadedAt as any) instanceof Date ? d.uploadedAt : new Date(d.uploadedAt as string)) : Timestamp.now() )
     })) as ProofOfOwnershipDoc[]
   );
 
@@ -266,59 +266,92 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       return;
     }
     
-    const payloadForAction = {
-      ...data,
+    form.clearErrors(); 
+
+    const registrationDataForFirestore: { [key: string]: any } = {
+      registrationType: data.registrationType,
       status: submissionStatus,
       owners: data.owners.map(owner => ({
         ...owner,
-        dob: owner.dob instanceof Date ? owner.dob : new Date(owner.dob as string), // Ensure dob is a JS Date
+        dob: Timestamp.fromDate(owner.dob instanceof Date ? owner.dob : new Date(owner.dob as string)),
       })),
-      proofOfOwnershipDocs: data.proofOfOwnershipDocs.map(doc => {
-        let serializableUploadedAt: Date;
-        if (doc.uploadedAt instanceof Timestamp) {
-          serializableUploadedAt = doc.uploadedAt.toDate();
-        } else if (doc.uploadedAt instanceof Date) {
-          serializableUploadedAt = doc.uploadedAt;
+      proofOfOwnershipDocs: data.proofOfOwnershipDocs.map(docEntry => {
+        let uploadedAtTimestamp: Timestamp;
+        if (docEntry.uploadedAt instanceof Timestamp) {
+          uploadedAtTimestamp = docEntry.uploadedAt;
+        } else if (docEntry.uploadedAt instanceof Date) {
+          uploadedAtTimestamp = Timestamp.fromDate(docEntry.uploadedAt);
         } else {
-          serializableUploadedAt = new Date(doc.uploadedAt as string);
+          uploadedAtTimestamp = Timestamp.fromDate(new Date(docEntry.uploadedAt as string));
         }
-        return {
-          ...doc,
-          uploadedAt: serializableUploadedAt, // Send as JS Date
-        };
+        return { ...docEntry, uploadedAt: uploadedAtTimestamp };
       }),
-      paymentDate: data.paymentDate instanceof Date ? data.paymentDate : (data.paymentDate ? new Date(data.paymentDate) : undefined),
+      craftMake: data.craftMake,
+      craftModel: data.craftModel,
+      craftYear: data.craftYear,
+      craftColor: data.craftColor,
+      hullIdNumber: data.hullIdNumber,
+      craftLength: data.craftLength,
+      lengthUnits: data.lengthUnits,
+      propulsionType: data.propulsionType,
+      hullMaterial: data.hullMaterial,
+      craftUse: data.craftUse,
+      fuelType: data.fuelType,
+      vesselType: data.vesselType,
+      safetyEquipIssued: data.safetyEquipIssued || false,
+
+      createdByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
+      lastUpdatedByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
+      createdAt: Timestamp.now(),
+      lastUpdatedAt: Timestamp.now(),
     };
+
+    // Add optional fields only if they have a value
+    if (data.previousScaRegoNo) registrationDataForFirestore.previousScaRegoNo = data.previousScaRegoNo;
+    if (data.paymentMethod) registrationDataForFirestore.paymentMethod = data.paymentMethod;
+    if (data.paymentReceiptNumber) registrationDataForFirestore.paymentReceiptNumber = data.paymentReceiptNumber;
+    if (data.bankStampRef) registrationDataForFirestore.bankStampRef = data.bankStampRef;
+    if (data.paymentAmount !== undefined && data.paymentAmount !== null) registrationDataForFirestore.paymentAmount = data.paymentAmount;
+    if (data.paymentDate) registrationDataForFirestore.paymentDate = Timestamp.fromDate(data.paymentDate instanceof Date ? data.paymentDate : new Date(data.paymentDate));
+    if (data.safetyCertNumber) registrationDataForFirestore.safetyCertNumber = data.safetyCertNumber;
+    if (data.safetyEquipReceiptNumber) registrationDataForFirestore.safetyEquipReceiptNumber = data.safetyEquipReceiptNumber;
+    if (data.distinguishingFeatures) registrationDataForFirestore.distinguishingFeatures = data.distinguishingFeatures;
     
-    // Remove fields not expected by the server action for create
-    const { 
-      // These fields are set by the server or not on initial creation
-      // scaRegoNo, interimRegoNo, approvedAt, effectiveDate, expiryDate,
-      // submittedAt, // Server will set this if status is 'Submitted'
-      // certificateGeneratedAt, certificateFileName, certificateFileUrl,
-      // createdAt, lastUpdatedAt, createdByRef, lastUpdatedByRef, // these are fine as they are Omit-ted in ClientRegistrationFormData
-      ...clientDataForAction 
-    } = payloadForAction;
+    if (data.propulsionOtherDesc) registrationDataForFirestore.propulsionOtherDesc = data.propulsionOtherDesc;
+    if (data.hullMaterialOtherDesc) registrationDataForFirestore.hullMaterialOtherDesc = data.hullMaterialOtherDesc;
+    if (data.craftUseOtherDesc) registrationDataForFirestore.craftUseOtherDesc = data.craftUseOtherDesc;
+    if (data.fuelTypeOtherDesc) registrationDataForFirestore.fuelTypeOtherDesc = data.fuelTypeOtherDesc;
+    if (data.vesselTypeOtherDesc) registrationDataForFirestore.vesselTypeOtherDesc = data.vesselTypeOtherDesc;
+    
+    if (data.engineHorsepower !== undefined && data.engineHorsepower !== null) registrationDataForFirestore.engineHorsepower = data.engineHorsepower;
+    if (data.engineMake) registrationDataForFirestore.engineMake = data.engineMake;
+    if (data.engineSerialNumbers) registrationDataForFirestore.engineSerialNumbers = data.engineSerialNumbers;
 
-
-    form.clearErrors(); 
+    if (submissionStatus === "Submitted") {
+      registrationDataForFirestore.submittedAt = Timestamp.now();
+    }
 
     try {
       if (mode === "create") {
-        const result = await createRegistration(clientDataForAction as any, currentUser.userId); 
-        if (result.success && result.registrationId) {
-          toast({ title: "Registration Saved", description: `Status: ${submissionStatus}. ID: ${result.registrationId}` });
-          router.push(`/registrations/${result.registrationId}`);
-        } else {
-          toast({ title: "Save Failed", description: result.error || "Could not save registration.", variant: "destructive" });
-        }
+        const registrationsCol = collection(db, "registrations");
+        const docRef = await addDoc(registrationsCol, registrationDataForFirestore);
+        toast({ title: "Registration Saved", description: `Status: ${submissionStatus}. ID: ${docRef.id}` });
+        router.push(`/registrations/${docRef.id}`);
       } else if (registrationId) {
-        toast({ title: "Update (Simulated)", description: "Update functionality not yet fully implemented for Firestore." });
+        // TODO: Implement update logic using setDoc or updateDoc with registrationId
+        console.log("Updating registration (placeholder):", registrationId, registrationDataForFirestore);
+        toast({ title: "Update (Simulated)", description: "Registration update successful (placeholder)." });
         router.push(`/registrations/${registrationId}`); 
       }
-    } catch (error) {
-      console.error("Error in onSubmit registration form:", error);
-      toast({ title: "Submission Error", description: "An unexpected error occurred. Please try again.", variant: "destructive" });
+    } catch (error: any) {
+      console.error("Error saving registration to Firestore:", error);
+      const originalErrorMessage = error.message || "Unknown Firebase error";
+      const originalErrorCode = error.code || "N/A";
+      toast({ 
+        title: "Save Failed", 
+        description: `Failed to save registration. Error: [${originalErrorCode}] ${originalErrorMessage}`, 
+        variant: "destructive" 
+      });
     }
   };
 
@@ -523,3 +556,5 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
     </Form>
   );
 }
+
+    
