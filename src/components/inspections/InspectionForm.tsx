@@ -25,7 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { Save, Send, Ship, User as UserIcon, CalendarDays, Trash2, PlusCircle, Lightbulb, Loader2, ImageUp, Settings, Play, Info, ChevronsUpDown, Check } from "lucide-react";
 import React, { useState, useEffect } from "react";
-import { Timestamp, collection, getDocs, doc } from "firebase/firestore";
+import { Timestamp, addDoc, updateDoc, collection, getDocs, doc, type DocumentReference } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { suggestChecklistItems } from "@/ai/flows/suggest-checklist-items";
 import Link from "next/link";
@@ -62,66 +62,67 @@ const inspectionFormSchema = z.object({
 type InspectionFormValues = z.infer<typeof inspectionFormSchema>;
 
 // NCD Small Craft Inspection Checklist Items
-const ncdChecklistTemplateItems: ChecklistItemResultType[] = [
+const ncdChecklistTemplateItems: Array<Omit<ChecklistItemResultType, 'result' | 'comments'> & {order?: number}> = [
   // A. Marking and Load Line Requirements (Schedule 1)
-  { itemId: "A_1_a", itemDescription: "Registration Number Marking: Legibly & permanently printed on BOTH sides?", category: "A. Marking: Registration Number", result: "N/A", comments: "" },
-  { itemId: "A_1_b", itemDescription: "Registration Number Marking: Located approx. 120cm from bow center, near top of hull?", category: "A. Marking: Registration Number", result: "N/A", comments: "" },
-  { itemId: "A_1_c", itemDescription: "Registration Number Marking: Letters/Numbers at least 10cm high?", category: "A. Marking: Registration Number", result: "N/A", comments: "" },
-  { itemId: "A_1_d", itemDescription: "Registration Number Marking: Stroke of letters/numbers at least 2cm wide?", category: "A. Marking: Registration Number", result: "N/A", comments: "" },
-  { itemId: "A_2_a", itemDescription: "Load Line Marking (if commercial/open craft): Legibly & permanently marked on BOTH sides?", category: "A. Marking: Load Line", result: "N/A", comments: "" },
-  { itemId: "A_2_b", itemDescription: "Load Line Marking (if commercial/open craft): Located at craft mid-length?", category: "A. Marking: Load Line", result: "N/A", comments: "" },
-  { itemId: "A_2_c", itemDescription: "Load Line Marking (if commercial/open craft): Is it a triangle shape?", category: "A. Marking: Load Line", result: "N/A", comments: "" },
-  { itemId: "A_2_d", itemDescription: "Load Line Marking (if commercial/open craft): Triangle approx. 100mm high?", category: "A. Marking: Load Line", result: "N/A", comments: "" },
-  { itemId: "A_2_e", itemDescription: "Load Line Marking (if commercial/open craft): Triangle base approx. 20mm?", category: "A. Marking: Load Line", result: "N/A", comments: "" },
-  { itemId: "A_2_f", itemDescription: "Load Line Marking (if commercial/open craft): Triangle inverted (point down)?", category: "A. Marking: Load Line", result: "N/A", comments: "" },
-  { itemId: "A_2_g", itemDescription: "Load Line Marking (if commercial/open craft): Point of triangle >= 300mm from top edge of hull?", category: "A. Marking: Load Line", result: "N/A", comments: "" },
-  { itemId: "A_3", itemDescription: "Marking and Load Line: Exemption Notice Presented (if applicable)?", category: "A. Marking: Exemptions", result: "N/A", comments: "" },
+  { itemId: "A_1_a", itemDescription: "Registration Number Marking: Legibly & permanently printed on BOTH sides?", category: "A. Marking: Registration Number" },
+  { itemId: "A_1_b", itemDescription: "Registration Number Marking: Located approx. 120cm from bow center, near top of hull?", category: "A. Marking: Registration Number" },
+  { itemId: "A_1_c", itemDescription: "Registration Number Marking: Letters/Numbers at least 10cm high?", category: "A. Marking: Registration Number" },
+  { itemId: "A_1_d", itemDescription: "Registration Number Marking: Stroke of letters/numbers at least 2cm wide?", category: "A. Marking: Registration Number" },
+  { itemId: "A_2_a", itemDescription: "Load Line Marking (if commercial/open craft): Legibly & permanently marked on BOTH sides?", category: "A. Marking: Load Line" },
+  { itemId: "A_2_b", itemDescription: "Load Line Marking (if commercial/open craft): Located at craft mid-length?", category: "A. Marking: Load Line" },
+  { itemId: "A_2_c", itemDescription: "Load Line Marking (if commercial/open craft): Is it a triangle shape?", category: "A. Marking: Load Line" },
+  { itemId: "A_2_d", itemDescription: "Load Line Marking (if commercial/open craft): Triangle approx. 100mm high?", category: "A. Marking: Load Line" },
+  { itemId: "A_2_e", itemDescription: "Load Line Marking (if commercial/open craft): Triangle base approx. 20mm?", category: "A. Marking: Load Line" },
+  { itemId: "A_2_f", itemDescription: "Load Line Marking (if commercial/open craft): Triangle inverted (point down)?", category: "A. Marking: Load Line" },
+  { itemId: "A_2_g", itemDescription: "Load Line Marking (if commercial/open craft): Point of triangle >= 300mm from top edge of hull?", category: "A. Marking: Load Line" },
+  { itemId: "A_3", itemDescription: "Marking and Load Line: Exemption Notice Presented (if applicable)?", category: "A. Marking: Exemptions" },
 
   // B. Safety Standards (Schedule 3)
-  { itemId: "B_1_a", itemDescription: "For ALL Registered Craft: ISO 12402 compliant Lifejackets (sufficient for all persons, incl. children sizes)?", category: "B. Safety: All Registered Craft", result: "N/A", comments: "" },
-  { itemId: "B_1_b", itemDescription: "For ALL Registered Craft: Pair of oars or paddles?", category: "B. Safety: All Registered Craft", result: "N/A", comments: "" },
-  { itemId: "B_1_c", itemDescription: "For ALL Registered Craft: Functioning waterproof torch?", category: "B. Safety: All Registered Craft", result: "N/A", comments: "" },
-  { itemId: "B_1_d", itemDescription: "For ALL Registered Craft: Mirror or similar signalling device?", category: "B. Safety: All Registered Craft", result: "N/A", comments: "" },
-  { itemId: "B_1_e", itemDescription: "For ALL Registered Craft: Anchor with at least 20 meters of rope?", category: "B. Safety: All Registered Craft", result: "N/A", comments: "" },
-  { itemId: "B_1_f", itemDescription: "For ALL Registered Craft: Sea anchor/tarpaulin with deployment rope?", category: "B. Safety: All Registered Craft", result: "N/A", comments: "" },
-  { itemId: "B_1_g", itemDescription: "For ALL Registered Craft: Bucket or bailer?", category: "B. Safety: All Registered Craft", result: "N/A", comments: "" },
-  { itemId: "B_1_h", itemDescription: "For ALL Registered Craft: First aid kit present?", category: "B. Safety: All Registered Craft", result: "N/A", comments: "" },
-  { itemId: "B_1_i", itemDescription: "For ALL Registered Craft: Fire extinguisher (if enclosed hull craft)?", category: "B. Safety: All Registered Craft", result: "N/A", comments: "" },
-  { itemId: "B_1_j", itemDescription: "For ALL Registered Craft: Engine (if fitted) appears maintained & functional?", category: "B. Safety: All Registered Craft", result: "N/A", comments: "" },
-  { itemId: "B_1_k", itemDescription: "For ALL Registered Craft: Basic engine tools/spares (e.g., sparkplug, tool if petrol engine)?", category: "B. Safety: All Registered Craft", result: "N/A", comments: "" },
-  { itemId: "B_1_l", itemDescription: "For ALL Registered Craft: Sail or tarpaulin (bright color) for alternative use?", category: "B. Safety: All Registered Craft", result: "N/A", comments: "" },
-  { itemId: "B_1_m", itemDescription: "For ALL Registered Craft: Sufficient fuel observed for intended short journey/operation?", category: "B. Safety: All Registered Craft", result: "N/A", comments: "" },
-  { itemId: "B_2_a", itemDescription: "For Craft Traveling OUT OF SIGHT OF LAND: Reliable compass OR mobile phone with emergency call capability?", category: "B. Safety: Out of Sight of Land", result: "N/A", comments: "" },
-  { itemId: "B_2_b", itemDescription: "For Craft Traveling OUT OF SIGHT OF LAND: Emergency food and water (sufficient for persons/24hrs)?", category: "B. Safety: Out of Sight of Land", result: "N/A", comments: "" },
-  { itemId: "B_2_c", itemDescription: "For Craft Traveling OUT OF SIGHT OF LAND: Reserve fuel supply (25% of journey needs)?", category: "B. Safety: Out of Sight of Land", result: "N/A", comments: "" },
-  { itemId: "B_3_a", itemDescription: "For Craft Traveling AT NIGHT: Bright light(s) visible from all directions?", category: "B. Safety: Night Travel", result: "N/A", comments: "" },
-  { itemId: "B_3_b", itemDescription: "For Craft Traveling AT NIGHT: Other navigation lights (as required/approved)?", category: "B. Safety: Night Travel", result: "N/A", comments: "" },
-  { itemId: "B_4_a", itemDescription: "For COMMERCIAL Small Craft (Licensed): Reliable compass OR GPS (device or phone)?", category: "B. Safety: Commercial Craft", result: "N/A", comments: "" },
-  { itemId: "B_4_b", itemDescription: "For COMMERCIAL Small Craft (Licensed): Emergency food and water (sufficient for persons/24hrs)? (Covered above but confirm)", category: "B. Safety: Commercial Craft", result: "N/A", comments: "" },
-  { itemId: "B_4_c", itemDescription: "For COMMERCIAL Small Craft (Licensed): Whistle or horn?", category: "B. Safety: Commercial Craft", result: "N/A", comments: "" },
-  { itemId: "B_5", itemDescription: "Safety Standards: Exemption Notice Presented (if applicable)?", category: "B. Safety: Exemptions", result: "N/A", comments: "" },
+  { itemId: "B_1_a", itemDescription: "For ALL Registered Craft: ISO 12402 compliant Lifejackets (sufficient for all persons, incl. children sizes)?", category: "B. Safety: All Registered Craft" },
+  { itemId: "B_1_b", itemDescription: "For ALL Registered Craft: Pair of oars or paddles?", category: "B. Safety: All Registered Craft" },
+  { itemId: "B_1_c", itemDescription: "For ALL Registered Craft: Functioning waterproof torch?", category: "B. Safety: All Registered Craft" },
+  { itemId: "B_1_d", itemDescription: "For ALL Registered Craft: Mirror or similar signalling device?", category: "B. Safety: All Registered Craft" },
+  { itemId: "B_1_e", itemDescription: "For ALL Registered Craft: Anchor with at least 20 meters of rope?", category: "B. Safety: All Registered Craft" },
+  { itemId: "B_1_f", itemDescription: "For ALL Registered Craft: Sea anchor/tarpaulin with deployment rope?", category: "B. Safety: All Registered Craft" },
+  { itemId: "B_1_g", itemDescription: "For ALL Registered Craft: Bucket or bailer?", category: "B. Safety: All Registered Craft" },
+  { itemId: "B_1_h", itemDescription: "For ALL Registered Craft: First aid kit present?", category: "B. Safety: All Registered Craft" },
+  { itemId: "B_1_i", itemDescription: "For ALL Registered Craft: Fire extinguisher (if enclosed hull craft)?", category: "B. Safety: All Registered Craft" },
+  { itemId: "B_1_j", itemDescription: "For ALL Registered Craft: Engine (if fitted) appears maintained & functional?", category: "B. Safety: All Registered Craft" },
+  { itemId: "B_1_k", itemDescription: "For ALL Registered Craft: Basic engine tools/spares (e.g., sparkplug, tool if petrol engine)?", category: "B. Safety: All Registered Craft" },
+  { itemId: "B_1_l", itemDescription: "For ALL Registered Craft: Sail or tarpaulin (bright color) for alternative use?", category: "B. Safety: All Registered Craft" },
+  { itemId: "B_1_m", itemDescription: "For ALL Registered Craft: Sufficient fuel observed for intended short journey/operation?", category: "B. Safety: All Registered Craft" },
+  { itemId: "B_2_a", itemDescription: "For Craft Traveling OUT OF SIGHT OF LAND: Reliable compass OR mobile phone with emergency call capability?", category: "B. Safety: Out of Sight of Land" },
+  { itemId: "B_2_b", itemDescription: "For Craft Traveling OUT OF SIGHT OF LAND: Emergency food and water (sufficient for persons/24hrs)?", category: "B. Safety: Out of Sight of Land" },
+  { itemId: "B_2_c", itemDescription: "For Craft Traveling OUT OF SIGHT OF LAND: Reserve fuel supply (25% of journey needs)?", category: "B. Safety: Out of Sight of Land" },
+  { itemId: "B_3_a", itemDescription: "For Craft Traveling AT NIGHT: Bright light(s) visible from all directions?", category: "B. Safety: Night Travel" },
+  { itemId: "B_3_b", itemDescription: "For Craft Traveling AT NIGHT: Other navigation lights (as required/approved)?", category: "B. Safety: Night Travel" },
+  { itemId: "B_4_a", itemDescription: "For COMMERCIAL Small Craft (Licensed): Reliable compass OR GPS (device or phone)?", category: "B. Safety: Commercial Craft" },
+  { itemId: "B_4_b", itemDescription: "For COMMERCIAL Small Craft (Licensed): Emergency food and water (sufficient for persons/24hrs)? (Covered above but confirm)", category: "B. Safety: Commercial Craft" },
+  { itemId: "B_4_c", itemDescription: "For COMMERCIAL Small Craft (Licensed): Whistle or horn?", category: "B. Safety: Commercial Craft" },
+  { itemId: "B_5", itemDescription: "Safety Standards: Exemption Notice Presented (if applicable)?", category: "B. Safety: Exemptions" },
 
   // C. Construction Standards (Schedule 2 - Simplified Visual Checks)
-  { itemId: "C_1_a", itemDescription: "General Condition: Hull appears sound, no obvious major damage/leaks?", category: "C. Construction: General Condition", result: "N/A", comments: "" },
-  { itemId: "C_2_a", itemDescription: "Builder's Plate (if fitted/required): Builder's Plate visible and legible?", category: "C. Construction: Builder's Plate", result: "N/A", comments: "" },
-  { itemId: "C_2_b", itemDescription: "Builder's Plate (if fitted/required): Plate shows max power, load, persons capacity?", category: "C. Construction: Builder's Plate", result: "N/A", comments: "" },
-  { itemId: "C_2_c", itemDescription: "Builder's Plate (if fitted/required): Plate shows constructor's serial number & completion date?", category: "C. Construction: Builder's Plate", result: "N/A", comments: "" },
-  { itemId: "C_3_a", itemDescription: "Flotation & Buoyancy: Evidence of built-in flotation (material/air chambers)?", category: "C. Construction: Flotation & Buoyancy", result: "N/A", comments: "" },
-  { itemId: "C_3_b", itemDescription: "Flotation & Buoyancy: Air compartments (if used for buoyancy) marked with \"Caution...\" label?", category: "C. Construction: Flotation & Buoyancy", result: "N/A", comments: "" },
-  { itemId: "C_4_a", itemDescription: "Hull Integrity & Fittings: Bilge pump functional OR bucket/bailer present?", category: "C. Construction: Hull Integrity & Fittings", result: "N/A", comments: "" },
-  { itemId: "C_4_b", itemDescription: "Hull Integrity & Fittings: Drain plugs appear secure, in good condition, and lockable?", category: "C. Construction: Hull Integrity & Fittings", result: "N/A", comments: "" },
-  { itemId: "C_4_c", itemDescription: "Hull Integrity & Fittings: Deck surfaces intended for walking appear slip-resistant?", category: "C. Construction: Hull Integrity & Fittings", result: "N/A", comments: "" },
-  { itemId: "C_4_d", itemDescription: "Hull Integrity & Fittings: Toe rail or similar on outboard edges of deck?", category: "C. Construction: Hull Integrity & Fittings", result: "N/A", comments: "" },
-  { itemId: "C_4_e", itemDescription: "Hull Integrity & Fittings: Transom appears sound and able to support engine?", category: "C. Construction: Hull Integrity & Fittings", result: "N/A", comments: "" },
-  { itemId: "C_4_f", itemDescription: "Hull Integrity & Fittings: Motor well (if present) appears watertight to hull & drains properly?", category: "C. Construction: Hull Integrity & Fittings", result: "N/A", comments: "" },
-  { itemId: "C_4_g", itemDescription: "Hull Integrity & Fittings: Hardware/fittings (cleats, etc.) secure, good condition, no sharp edges?", category: "C. Construction: Hull Integrity & Fittings", result: "N/A", comments: "" },
-  { itemId: "C_4_h", itemDescription: "Hull Integrity & Fittings: Bow eye suitable for towing, secure, above waterline?", category: "C. Construction: Hull Integrity & Fittings", result: "N/A", comments: "" },
-  { itemId: "C_5_a", itemDescription: "Visibility: Sufficient area of hull painted NMSA approved marine orange?", category: "C. Construction: Visibility", result: "N/A", comments: "" },
-  { itemId: "C_6_a", itemDescription: "Fire Safety (Enclosed / Inboard): Fire extinguisher(s) properly mounted & accessible? (If required by type)", category: "C. Construction: Fire Safety", result: "N/A", comments: "" },
-  { itemId: "C_6_b", itemDescription: "Fire Safety (Enclosed / Inboard): Discharge port for extinguisher into inboard engine compartment (if applicable)?", category: "C. Construction: Fire Safety", result: "N/A", comments: "" },
-  { itemId: "C_7", itemDescription: "Construction Standards: Exemption Notice Presented (if applicable)?", category: "C. Construction: Exemptions & Certifications", result: "N/A", comments: "" },
-  { itemId: "C_8", itemDescription: "Construction Standards: Construction Certification Presented (if post Oct 2016 commercial)?", category: "C. Construction: Exemptions & Certifications", result: "N/A", comments: "" },
+  { itemId: "C_1_a", itemDescription: "General Condition: Hull appears sound, no obvious major damage/leaks?", category: "C. Construction: General Condition" },
+  { itemId: "C_2_a", itemDescription: "Builder's Plate (if fitted/required): Builder's Plate visible and legible?", category: "C. Construction: Builder's Plate" },
+  { itemId: "C_2_b", itemDescription: "Builder's Plate (if fitted/required): Plate shows max power, load, persons capacity?", category: "C. Construction: Builder's Plate" },
+  { itemId: "C_2_c", itemDescription: "Builder's Plate (if fitted/required): Plate shows constructor's serial number & completion date?", category: "C. Construction: Builder's Plate" },
+  { itemId: "C_3_a", itemDescription: "Flotation & Buoyancy: Evidence of built-in flotation (material/air chambers)?", category: "C. Construction: Flotation & Buoyancy" },
+  { itemId: "C_3_b", itemDescription: "Flotation & Buoyancy: Air compartments (if used for buoyancy) marked with \"Caution...\" label?", category: "C. Construction: Flotation & Buoyancy" },
+  { itemId: "C_4_a", itemDescription: "Hull Integrity & Fittings: Bilge pump functional OR bucket/bailer present?", category: "C. Construction: Hull Integrity & Fittings" },
+  { itemId: "C_4_b", itemDescription: "Hull Integrity & Fittings: Drain plugs appear secure, in good condition, and lockable?", category: "C. Construction: Hull Integrity & Fittings" },
+  { itemId: "C_4_c", itemDescription: "Hull Integrity & Fittings: Deck surfaces intended for walking appear slip-resistant?", category: "C. Construction: Hull Integrity & Fittings" },
+  { itemId: "C_4_d", itemDescription: "Hull Integrity & Fittings: Toe rail or similar on outboard edges of deck?", category: "C. Construction: Hull Integrity & Fittings" },
+  { itemId: "C_4_e", itemDescription: "Hull Integrity & Fittings: Transom appears sound and able to support engine?", category: "C. Construction: Hull Integrity & Fittings" },
+  { itemId: "C_4_f", itemDescription: "Hull Integrity & Fittings: Motor well (if present) appears watertight to hull & drains properly?", category: "C. Construction: Hull Integrity & Fittings" },
+  { itemId: "C_4_g", itemDescription: "Hull Integrity & Fittings: Hardware/fittings (cleats, etc.) secure, good condition, no sharp edges?", category: "C. Construction: Hull Integrity & Fittings" },
+  { itemId: "C_4_h", itemDescription: "Hull Integrity & Fittings: Bow eye suitable for towing, secure, above waterline?", category: "C. Construction: Hull Integrity & Fittings" },
+  { itemId: "C_5_a", itemDescription: "Visibility: Sufficient area of hull painted NMSA approved marine orange?", category: "C. Construction: Visibility" },
+  { itemId: "C_6_a", itemDescription: "Fire Safety (Enclosed / Inboard): Fire extinguisher(s) properly mounted & accessible? (If required by type)", category: "C. Construction: Fire Safety" },
+  { itemId: "C_6_b", itemDescription: "Fire Safety (Enclosed / Inboard): Discharge port for extinguisher into inboard engine compartment (if applicable)?", category: "C. Construction: Fire Safety" },
+  { itemId: "C_7", itemDescription: "Construction Standards: Exemption Notice Presented (if applicable)?", category: "C. Construction: Exemptions & Certifications" },
+  { itemId: "C_8", itemDescription: "Construction Standards: Construction Certification Presented (if post Oct 2016 commercial)?", category: "C. Construction: Exemptions & Certifications" },
 ];
+
 
 const ncdChecklistTemplate: ChecklistTemplate = {
   templateId: "NCD_SCA_COMPREHENSIVE_V1",
@@ -130,7 +131,7 @@ const ncdChecklistTemplate: ChecklistTemplate = {
   isActive: true,
   createdAt: Timestamp.now(),
   createdByRef: {} as any, 
-  items: ncdChecklistTemplateItems.map(item => ({ ...item, category: item.category || "General" })) as any,
+  items: ncdChecklistTemplateItems.map(item => ({ ...item, result: "N/A", comments: "" })) as any,
 };
 
 const placeholderChecklistTemplates: ChecklistTemplate[] = [
@@ -147,11 +148,11 @@ const placeholderChecklistTemplates: ChecklistTemplate[] = [
   }
 ];
 
-const mockInspectorsForSelect: Array<Pick<User, 'userId' | 'displayName'>> = [
-  { userId: "USER001", displayName: "Admin User (Inspector)" },
-  { userId: "USER002", displayName: "Inspector Bob" },
-  { userId: "USER003", displayName: "Registrar Ray (Inspector)" },
-  { userId: "USER004", displayName: "Supervisor Sue (Inspector)" },
+const mockInspectorsForSelect: Array<Pick<User, 'userId' | 'displayName' | 'email'>> = [
+  { userId: "USER001", displayName: "Admin User (Inspector)", email: "admin@regocraft.com" },
+  { userId: "USER002", displayName: "Inspector Bob", email: "inspector.bob@regocraft.com" },
+  { userId: "USER003", displayName: "Registrar Ray (Inspector)", email: "registrar@regocraft.com" },
+  { userId: "USER004", displayName: "Supervisor Sue (Inspector)", email: "supervisor.sue@regocraft.com" },
 ];
 
 
@@ -168,6 +169,10 @@ interface RegistrationSelectItem {
   label: string; // Concatenated string for display e.g., "NCD-123 / Yamaha WaveRunner"
   scaRegoNo?: string;
   craftDetails?: string;
+  craftType?: string; // To help with dynamic checklist items later
+  craftMake?: string;
+  craftModel?: string;
+  craftYear?: number;
 }
 
 export function InspectionForm({ mode, usageContext, inspectionId, existingInspectionData, prefilledRegistrationId }: InspectionFormProps) {
@@ -195,13 +200,13 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
   const defaultValues: Partial<InspectionFormValues> = existingInspectionData
   ? {
       ...existingInspectionData,
-      registrationRefId: (typeof existingInspectionData.registrationRef === 'string' ? existingInspectionData.registrationRef : existingInspectionData.registrationRef?.id) || "",
+      registrationRefId: (typeof existingInspectionData.registrationRef === 'string' ? existingInspectionData.registrationRef : (existingInspectionData.registrationRef as DocumentReference)?.id) || "",
       inspectorRefId: initialInspectorId || "",
       scheduledDate: existingInspectionData.scheduledDate
-        ? (existingInspectionData.scheduledDate instanceof Timestamp ? existingInspectionData.scheduledDate.toDate() : new Date(existingInspectionData.scheduledDate))
+        ? (existingInspectionData.scheduledDate instanceof Timestamp ? existingInspectionData.scheduledDate.toDate() : new Date(existingInspectionData.scheduledDate as any))
         : new Date(), 
       inspectionDate: existingInspectionData.inspectionDate
-        ? (existingInspectionData.inspectionDate instanceof Timestamp ? existingInspectionData.inspectionDate.toDate() : new Date(existingInspectionData.inspectionDate))
+        ? (existingInspectionData.inspectionDate instanceof Timestamp ? existingInspectionData.inspectionDate.toDate() : new Date(existingInspectionData.inspectionDate as any))
         : (usageContext === 'conduct' ? new Date() : undefined),
       checklistItems: (existingInspectionData.checklistItems || []).map(item => ({...item, category: item.category || ncdChecklistTemplate.items.find(t => t.itemId === item.itemId)?.category, result: item.result || "N/A" })),
       findings: existingInspectionData.findings || "",
@@ -237,8 +242,9 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
 
 
   useEffect(() => {
-    if (usageContext === 'conduct' && (mode === 'create' || (mode === 'edit' && fields.length === 0 && (!existingInspectionData?.checklistItems || existingInspectionData.checklistItems.length === 0)))) {
-        console.log("InspectionForm: Attempting to load NCD default checklist. Mode:", mode, "UsageContext:", usageContext);
+    console.log("InspectionForm Effect: Context:", usageContext, "Mode:", mode, "Fields length:", fields.length, "Existing items:", existingInspectionData?.checklistItems?.length);
+    if (usageContext === 'conduct' && (mode === 'create' || (mode === 'edit' && (!existingInspectionData?.checklistItems || existingInspectionData.checklistItems.length === 0)))) {
+        console.log("InspectionForm: Attempting to load NCD default checklist.");
         const ncdItemsToLoad = ncdChecklistTemplate.items.map(templateItem => ({
             itemId: templateItem.itemId,
             itemDescription: templateItem.itemDescription,
@@ -249,7 +255,8 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
         form.setValue("checklistItems", ncdItemsToLoad);
         console.log("InspectionForm: NCD checklist loaded with", ncdItemsToLoad.length, "items.");
     }
-  }, [mode, usageContext, existingInspectionData, form, fields.length]); 
+}, [mode, usageContext, existingInspectionData, form, fields.length]); 
+
 
   useEffect(() => {
     const fetchRegs = async () => {
@@ -264,9 +271,13 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
           const data = docSnap.data() as Registration;
           return {
             value: docSnap.id,
-            label: `${data.scaRegoNo || 'No Rego'} - ${data.craftMake} ${data.craftModel}`,
-            scaRegoNo: data.scaRegoNo || 'No Rego',
-            craftDetails: `${data.craftMake} ${data.craftModel} (HIN: ${data.hullIdNumber || 'N/A'})`
+            label: `${data.scaRegoNo || 'Draft/Pending Rego'} - ${data.craftMake} ${data.craftModel}`,
+            scaRegoNo: data.scaRegoNo || 'Draft/Pending Rego',
+            craftDetails: `${data.craftMake} ${data.craftModel} (HIN: ${data.hullIdNumber || 'N/A'})`,
+            craftType: data.vesselType,
+            craftMake: data.craftMake,
+            craftModel: data.craftModel,
+            craftYear: data.craftYear,
           };
         });
         setRegistrationsForSelect(regs);
@@ -277,12 +288,10 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
       setLoadingRegistrations(false);
     };
 
-    if (usageContext === 'schedule' && mode === 'create' && !prefilledRegistrationId) {
+    if (usageContext === 'schedule' && (mode === 'create' || (mode === 'edit' && !form.getValues('registrationRefId')))) {
       fetchRegs();
-    } else if (usageContext === 'schedule' && mode === 'edit' && !form.getValues('registrationRefId')) {
-       fetchRegs(); // Also fetch if editing and no reg ID is set yet
     }
-  }, [usageContext, mode, prefilledRegistrationId, toast, form]);
+  }, [usageContext, mode, form, toast]);
 
 
   const handleAISuggestions = async () => {
@@ -295,11 +304,27 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
         return;
       }
       
-      let craftDetailsInput: SuggestChecklistItemsInput = {
-        craftMake: existingInspectionData?.registrationData?.craftMake || "GenericCraft",
-        craftModel: existingInspectionData?.registrationData?.craftModel || "ModelX",
-        craftYear: new Date().getFullYear() - 2, 
-        craftType: existingInspectionData?.registrationData?.craftType || "OpenBoat", 
+      const linkedReg = registrationsForSelect.find(r => r.value === currentRegId) || 
+                        (existingInspectionData?.registrationData 
+                            ? { 
+                                craftMake: existingInspectionData.registrationData.craftMake,
+                                craftModel: existingInspectionData.registrationData.craftModel,
+                                craftYear: existingInspectionData.registrationData.craftMake ? new Date().getFullYear() -2 : undefined, // Placeholder if no year
+                                craftType: existingInspectionData.registrationData.craftType,
+                              } 
+                            : null);
+
+      if (!linkedReg) {
+        toast({ title: "Craft Data Missing", description: "Could not retrieve details for the linked craft.", variant: "destructive" });
+        setIsAISuggesting(false);
+        return;
+      }
+
+      const craftDetailsInput: SuggestChecklistItemsInput = {
+        craftMake: linkedReg.craftMake || "GenericCraft",
+        craftModel: linkedReg.craftModel || "ModelX",
+        craftYear: linkedReg.craftYear || new Date().getFullYear() - 2, 
+        craftType: linkedReg.craftType || "OpenBoat", 
         registrationHistory: "No prior issues noted.", 
       };
 
@@ -330,33 +355,94 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
 
 
   const onSubmit = async (data: InspectionFormValues, action: "schedule" | "saveProgress" | "submitReview") => {
-    if (!currentUser) {
+    if (!currentUser?.userId) {
       toast({ title: "Error", description: "You must be logged in.", variant: "destructive" });
       return;
     }
 
     let finalStatus: Inspection['status'];
-    let submissionPayload = { ...data }; 
+    let submissionPayload: Partial<InspectionFormValues> = { ...data };
+
+    const baseInspectionData: Omit<Inspection, 
+      'inspectionId' | // Auto-generated by Firestore or already exists
+      'createdAt' | 'createdByRef' | // Set on create
+      // Fields that are set contextually or might not exist yet
+      'inspectionDate' | 'findings' | 'correctiveActions' | 'overallResult' | 
+      'completedAt' | 'reviewedAt' | 'reviewedByRef' | 'checklistItems'
+    > & {
+      // These will be converted to DocumentReference
+      registrationRef?: string;
+      inspectorRef?: string;
+      // These will be converted to Timestamp
+      scheduledDate: Date;
+    } = {
+      registrationRef: data.registrationRefId,
+      inspectorRef: data.inspectorRefId,
+      inspectionType: data.inspectionType,
+      scheduledDate: data.scheduledDate, // Will be converted
+      followUpRequired: data.followUpRequired || false,
+      lastUpdatedAt: Timestamp.now(),
+      lastUpdatedByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
+      status: "Scheduled" // Default, will be overridden
+    };
+
 
     if (action === "schedule") {
       finalStatus = "Scheduled";
-      submissionPayload = {
-        registrationRefId: data.registrationRefId,
-        inspectorRefId: data.inspectorRefId,
+      const schedulePayload: Partial<Inspection> = {
+        registrationRef: doc(db, "registrations", data.registrationRefId) as DocumentReference<Registration>,
+        inspectorRef: data.inspectorRefId ? doc(db, "users", data.inspectorRefId) as DocumentReference<User> : undefined,
         inspectionType: data.inspectionType,
-        scheduledDate: data.scheduledDate,
-        followUpRequired: false, 
-        checklistItems: [], 
-        findings: undefined,
-        correctiveActions: undefined,
-        overallResult: undefined,
-        inspectionDate: undefined,
-      } as any; 
+        scheduledDate: Timestamp.fromDate(new Date(data.scheduledDate)),
+        status: finalStatus,
+        followUpRequired: false,
+        checklistItems: [],
+        findings: null,
+        correctiveActions: null,
+        overallResult: null,
+        inspectionDate: null,
+        completedAt: null,
+        reviewedAt: null,
+        reviewedByRef: null,
+        lastUpdatedAt: Timestamp.now(),
+        lastUpdatedByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
+      };
+      if (mode === 'create') {
+        schedulePayload.createdAt = Timestamp.now();
+        schedulePayload.createdByRef = doc(db, "users", currentUser.userId) as DocumentReference<User>;
+      } else if (mode === 'edit' && existingInspectionData) {
+         schedulePayload.createdAt = existingInspectionData.createdAt as Timestamp; // Keep original
+         schedulePayload.createdByRef = existingInspectionData.createdByRef as DocumentReference<User>; // Keep original
+      }
+      submissionPayload = schedulePayload as any;
+
     } else if (action === "saveProgress") {
       finalStatus = "InProgress";
-       if (!data.inspectionDate) { 
-        submissionPayload.inspectionDate = new Date(); 
+      if (!data.inspectionDate) { 
+        data.inspectionDate = new Date(); 
       }
+       submissionPayload = {
+        ...baseInspectionData,
+        status: finalStatus,
+        inspectionDate: data.inspectionDate ? Timestamp.fromDate(new Date(data.inspectionDate)) : null,
+        findings: data.findings || null,
+        correctiveActions: data.correctiveActions || null,
+        overallResult: data.overallResult || null,
+        followUpRequired: data.followUpRequired,
+        checklistItems: data.checklistItems || [],
+        registrationRef: doc(db, "registrations", data.registrationRefId) as DocumentReference<Registration>,
+        inspectorRef: data.inspectorRefId ? doc(db, "users", data.inspectorRefId) as DocumentReference<User> : undefined,
+        scheduledDate: Timestamp.fromDate(new Date(data.scheduledDate)),
+      } as any;
+      if (mode === 'create' && !existingInspectionData?.createdAt) { // Should not happen for conduct if starting from existing
+        (submissionPayload as Partial<Inspection>).createdAt = Timestamp.now();
+        (submissionPayload as Partial<Inspection>).createdByRef = doc(db, "users", currentUser.userId) as DocumentReference<User>;
+      } else if (existingInspectionData) {
+        (submissionPayload as Partial<Inspection>).createdAt = existingInspectionData.createdAt as Timestamp;
+        (submissionPayload as Partial<Inspection>).createdByRef = existingInspectionData.createdByRef as DocumentReference<User>;
+      }
+
+
     } else if (action === "submitReview") {
       if (!data.inspectionDate) {
          toast({ title: "Missing Information", description: "Please set the Actual Inspection Date.", variant: "destructive"});
@@ -367,65 +453,66 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
         return;
       }
       finalStatus = "PendingReview";
+      submissionPayload = {
+        ...baseInspectionData,
+        status: finalStatus,
+        inspectionDate: data.inspectionDate ? Timestamp.fromDate(new Date(data.inspectionDate)) : null,
+        findings: data.findings || null,
+        correctiveActions: data.correctiveActions || null,
+        overallResult: data.overallResult || null,
+        followUpRequired: data.followUpRequired,
+        checklistItems: data.checklistItems || [],
+        completedAt: Timestamp.now(), // Set completedAt on submission
+        registrationRef: doc(db, "registrations", data.registrationRefId) as DocumentReference<Registration>,
+        inspectorRef: data.inspectorRefId ? doc(db, "users", data.inspectorRefId) as DocumentReference<User> : undefined,
+        scheduledDate: Timestamp.fromDate(new Date(data.scheduledDate)),
+      } as any;
+       if (mode === 'create' && !existingInspectionData?.createdAt) {
+        (submissionPayload as Partial<Inspection>).createdAt = Timestamp.now();
+        (submissionPayload as Partial<Inspection>).createdByRef = doc(db, "users", currentUser.userId) as DocumentReference<User>;
+      } else if (existingInspectionData) {
+        (submissionPayload as Partial<Inspection>).createdAt = existingInspectionData.createdAt as Timestamp;
+        (submissionPayload as Partial<Inspection>).createdByRef = existingInspectionData.createdByRef as DocumentReference<User>;
+      }
+
+
     } else {
       toast({ title: "Error", description: "Invalid action.", variant: "destructive" });
       return;
     }
 
-    const fullSubmissionData: Partial<Inspection> = {
-      ...(submissionPayload as Omit<InspectionFormValues, 'registrationRefId' | 'inspectorRefId'>), 
-      registrationRef: submissionPayload.registrationRefId ? doc(db, "registrations", submissionPayload.registrationRefId) : undefined, 
-      inspectorRef: submissionPayload.inspectorRefId ? doc(db, "users", submissionPayload.inspectorRefId) : undefined, 
-
-      scheduledDate: submissionPayload.scheduledDate ? Timestamp.fromDate(new Date(submissionPayload.scheduledDate)) : undefined,
-      inspectionDate: submissionPayload.inspectionDate ? Timestamp.fromDate(new Date(submissionPayload.inspectionDate)) : undefined,
-      status: finalStatus,
-      ...(action !== "schedule" && { 
-        findings: submissionPayload.findings,
-        correctiveActions: submissionPayload.correctiveActions,
-        overallResult: submissionPayload.overallResult,
-        followUpRequired: submissionPayload.followUpRequired,
-        checklistItems: submissionPayload.checklistItems,
-      }),
-      ...(mode === 'create' && { createdAt: Timestamp.now(), createdByRef: doc(db, "users", currentUser.userId) }), 
-      ...(mode === 'edit' && existingInspectionData && { createdAt: existingInspectionData.createdAt, createdByRef: existingInspectionData.createdByRef }),
-      lastUpdatedAt: Timestamp.now(),
-      lastUpdatedByRef: doc(db, "users", currentUser.userId), 
-      ...(action === "submitReview" && { completedAt: Timestamp.now() }),
-    };
-
-
-    console.log("Submitting inspection data (placeholder):", { id: inspectionId || `new_insp_${Date.now()}`, ...fullSubmissionData });
+    console.log("Submitting inspection data:", { id: inspectionId || `new_insp_${Date.now()}`, ...submissionPayload });
     try {
-      // Placeholder for actual Firestore write operation
-      // if (mode === "create") {
-      //   await addDoc(collection(db, "inspections"), fullSubmissionData);
-      // } else if (inspectionId) {
-      //   await updateDoc(doc(db, "inspections", inspectionId), fullSubmissionData);
-      // }
-      toast({ title: `Inspection ${action === "schedule" ? "Scheduled" : (action === "saveProgress" ? "Saved" : "Submitted")} (Placeholder)`, description: `Status: ${finalStatus}` });
-      
-      if (mode === 'create' && action === 'schedule') router.push("/inspections");
-      else if (inspectionId) router.push(`/inspections/${inspectionId}`);
-      else router.push('/inspections');
-
+      if (mode === "create") {
+        const docRef = await addDoc(collection(db, "inspections"), submissionPayload as Inspection);
+        toast({ title: `Inspection ${action === "schedule" ? "Scheduled" : (action === "saveProgress" ? "Saved" : "Submitted")}`, description: `ID: ${docRef.id}, Status: ${finalStatus}` });
+        router.push(action === "schedule" ? "/inspections" : `/inspections/${docRef.id}`);
+      } else if (inspectionId) {
+        await updateDoc(doc(db, "inspections", inspectionId), submissionPayload as Partial<Inspection>);
+        toast({ title: `Inspection ${action === "schedule" ? "Schedule Updated" : (action === "saveProgress" ? "Progress Saved" : "Submitted for Review")}`, description: `Status: ${finalStatus}` });
+        router.push(`/inspections/${inspectionId}`);
+      }
       router.refresh(); 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving inspection:", error);
-      toast({ title: "Save Failed", description: "Could not save inspection.", variant: "destructive" });
+      const errorMessage = error.message || "Could not save inspection.";
+      const errorCode = error.code || "N/A";
+      toast({ title: "Save Failed", description: `[${errorCode}] ${errorMessage}`, variant: "destructive" });
     }
   };
   
-  const currentInspectorName = () => {
+  const currentInspectorInfo = () => {
     const inspectorId = form.getValues("inspectorRefId");
-    if(existingInspectionData?.inspectorData?.displayName && existingInspectionData.inspectorData.id === inspectorId) return existingInspectionData.inspectorData.displayName;
+    if(existingInspectionData?.inspectorData?.displayName && ((typeof existingInspectionData.inspectorRef === 'string' && existingInspectionData.inspectorRef === inspectorId) || (typeof existingInspectionData.inspectorRef !== 'string' && existingInspectionData.inspectorRef?.id === inspectorId))) {
+      return existingInspectionData.inspectorData.displayName;
+    }
     if(inspectorId) {
         const selected = mockInspectorsForSelect.find(i => i.userId === inspectorId);
         if(selected) return selected.displayName;
     }
     if(currentUser?.displayName && (!inspectorId || inspectorId === currentUser.userId) ) return currentUser.displayName;
-    return inspectorId || "N/A";
-  }
+    return inspectorId || "Not Assigned";
+  };
 
   const selectedRegistrationDisplay = registrationsForSelect.find(
     (reg) => reg.value === watchRegistrationRefId
@@ -433,7 +520,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
 
   const currentRegistrationScaRegoNo = selectedRegistrationDisplay?.scaRegoNo || existingInspectionData?.registrationData?.scaRegoNo || watchRegistrationRefId || "N/A";
   const currentRegistrationHullId = selectedRegistrationDisplay?.craftDetails ? selectedRegistrationDisplay.craftDetails.split('(HIN: ')[1]?.slice(0,-1) : existingInspectionData?.registrationData?.hullIdNumber || "N/A (Link craft)";
-  const currentCraftType = existingInspectionData?.registrationData?.craftType || "N/A (Link craft)";
+  const currentCraftType = selectedRegistrationDisplay?.craftType || existingInspectionData?.registrationData?.craftType || "N/A (Link craft)";
 
   // Grouping logic for checklist items
   const categoryTitles: Record<string, string> = {
@@ -443,37 +530,25 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     "AI Suggested": "AI Suggested Items",
     "Custom": "Custom Items",
   };
-  const mainCategoriesOrder = ['A', 'B', 'C'];
+  const mainCategoriesOrder = ['A', 'B', 'C', "AI Suggested", "Custom"]; // Ensure order
 
   const groupedChecklistItems: Record<string, Array<typeof fields[number] & { originalIndex: number }>> = {};
-  const customAndAISuggestedItems: Array<typeof fields[number] & { originalIndex: number }> = [];
   
   fields.forEach((fieldItem, index) => {
-    const itemCategory = (fieldItem as any).category as string | undefined; // Cast to access category
-    const mainCategoryKey = itemCategory ? itemCategory.charAt(0) : null;
+    const itemCategoryFull = (fieldItem as any).category as string | undefined; // Cast to access category
+    let mainCategoryKey = "Custom"; // Default to custom
+
+    if (itemCategoryFull) {
+        if (itemCategoryFull.startsWith("A.")) mainCategoryKey = "A";
+        else if (itemCategoryFull.startsWith("B.")) mainCategoryKey = "B";
+        else if (itemCategoryFull.startsWith("C.")) mainCategoryKey = "C";
+        else if (itemCategoryFull === "AI Suggested") mainCategoryKey = "AI Suggested";
+    }
   
-    if (itemCategory === "AI Suggested") {
-        if (!groupedChecklistItems["AI Suggested"]) {
-            groupedChecklistItems["AI Suggested"] = [];
-        }
-        groupedChecklistItems["AI Suggested"].push({ ...fieldItem, originalIndex: index });
-    } else if (itemCategory === "Custom") {
-        if (!groupedChecklistItems["Custom"]) {
-            groupedChecklistItems["Custom"] = [];
-        }
-        groupedChecklistItems["Custom"].push({ ...fieldItem, originalIndex: index });
-    } else if (mainCategoryKey && mainCategoriesOrder.includes(mainCategoryKey)) {
-      if (!groupedChecklistItems[mainCategoryKey]) {
-        groupedChecklistItems[mainCategoryKey] = [];
-      }
-      groupedChecklistItems[mainCategoryKey].push({ ...fieldItem, originalIndex: index });
+    if (!groupedChecklistItems[mainCategoryKey]) {
+      groupedChecklistItems[mainCategoryKey] = [];
     }
-    else { // Fallback for items without a clear category or if category doesn't start with A, B, C
-      if (!groupedChecklistItems["Custom"]) { // Put them in Custom or another general category
-            groupedChecklistItems["Custom"] = [];
-        }
-        groupedChecklistItems["Custom"].push({ ...fieldItem, originalIndex: index });
-    }
+    groupedChecklistItems[mainCategoryKey].push({ ...fieldItem, originalIndex: index });
   });
 
 
@@ -487,7 +562,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
                 <CardTitle>Inspection Context</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                <div><strong>Inspector:</strong> {currentInspectorName()}</div>
+                <div><strong>Inspector:</strong> {currentInspectorInfo()}</div>
                 <div><strong>Date of Inspection:</strong> {watchInspectionDate ? formatFirebaseTimestamp(watchInspectionDate, "PP") : "Not set"}</div>
                 <div><strong>Craft Rego No. (SCA):</strong> {currentRegistrationScaRegoNo}</div>
                 <div><strong>Hull ID No.:</strong> {currentRegistrationHullId}</div>
@@ -497,7 +572,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
         )}
 
         <Card>
-          <CardHeader><CardTitle>{usageContext === "schedule" ? "Schedule New Inspection" : "Inspection Details"}</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{usageContext === "schedule" ? (mode === "create" ? "Schedule New Inspection" : "Update Inspection Schedule") : "Inspection Details"}</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FormField
               control={form.control}
@@ -516,7 +591,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
                             "w-full justify-between",
                             !field.value && "text-muted-foreground"
                           )}
-                          disabled={!!prefilledRegistrationId || (mode === 'edit' && usageContext === 'schedule')}
+                           disabled={!!prefilledRegistrationId || (mode === 'edit' && usageContext === 'conduct')}
                         >
                           {field.value
                             ? registrationsForSelect.find(
@@ -527,7 +602,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
                         </Button>
                       </FormControl>
                     </PopoverTrigger>
-                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0 max-h-[300px] overflow-y-auto">
                       <Command>
                         <CommandInput placeholder="Search by Rego No, Make, Model..." disabled={loadingRegistrations} />
                         <CommandList>
@@ -536,7 +611,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
                           <CommandGroup>
                             {registrationsForSelect.map((reg) => (
                               <CommandItem
-                                value={reg.label}
+                                value={reg.label} // Use a unique value here, e.g., reg.value or reg.label
                                 key={reg.value}
                                 onSelect={() => {
                                   form.setValue("registrationRefId", reg.value);
@@ -562,7 +637,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
                       </Command>
                     </PopoverContent>
                   </Popover>
-                  {field.value && !prefilledRegistrationId && (mode === 'edit' && usageContext === 'schedule') && 
+                  {field.value && (mode === 'edit' || prefilledRegistrationId) && 
                     <FormDescription>
                       <Link href={`/registrations/${field.value}`} target="_blank" className="text-xs text-primary hover:underline">
                         View selected registration details <Ship className="inline h-3 w-3 ml-1"/>
@@ -584,7 +659,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
                     <Select
                       onValueChange={field.onChange}
                       value={field.value || ""}
-                      disabled={!canAssignInspector && mode === 'edit' && usageContext !== 'schedule'} 
+                       disabled={!canAssignInspector && mode === 'edit' && usageContext !== 'schedule'}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -594,7 +669,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
                       <SelectContent>
                         {mockInspectorsForSelect.map((inspector) => (
                           <SelectItem key={inspector.userId} value={inspector.userId}>
-                            {inspector.displayName || inspector.userId}
+                            {inspector.displayName || inspector.email}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -631,7 +706,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
             <FormField control={form.control} name="inspectionType" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Inspection Type *</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value} disabled={usageContext === 'conduct' && mode === 'edit'}>
                     <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                     <SelectContent>{["Initial", "Annual", "Compliance", "FollowUp"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent>
                   </Select>
@@ -663,228 +738,94 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
         {usageContext === "conduct" && (
           <>
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Checklist</CardTitle>
-                <div className="flex gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={handleAISuggestions} disabled={isAISuggesting || !form.getValues("registrationRefId")}>
-                        {isAISuggesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Lightbulb className="mr-2 h-4 w-4" />}
-                        Suggest Items (AI)
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" onClick={() => append({ itemId: `custom_${Date.now()}`, itemDescription: "New Custom Item", category: "Custom", result: "N/A", comments: "" })}>
-                        <PlusCircle className="mr-2 h-4 w-4" /> Add Custom Item
-                    </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {mainCategoriesOrder.map(mainCatKey => {
-                  const itemsInCategory = groupedChecklistItems[mainCatKey];
-                  if (!itemsInCategory || itemsInCategory.length === 0) return null;
-                  
-                  return (
-                    <Card key={mainCatKey} className="mt-4 mb-2 shadow-md">
-                      <CardHeader className="py-3 px-4 bg-muted/30 rounded-t-md border-b">
-                        <CardTitle className="text-base font-semibold">{categoryTitles[mainCatKey as keyof typeof categoryTitles]}</CardTitle>
-                        {mainCatKey === 'B' && <CardDescription className="text-xs">Note: Some items depend on craft type/operation.</CardDescription>}
-                        {mainCatKey === 'C' && <CardDescription className="text-xs">Note: Many construction standards require detailed assessment or certification. This focuses on observable aspects.</CardDescription>}
-                      </CardHeader>
-                      <CardContent className="space-y-3 p-3">
-                        {itemsInCategory.map((item) => {
-                           const originalIndex = item.originalIndex;
-                           return (
-                            <Card key={item.id} className="p-3 bg-background shadow-sm">
-                                <p className="font-medium mb-2 text-sm">{item.itemDescription}</p>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 items-start">
-                                <FormField
-                                  control={form.control}
-                                  name={`checklistItems.${originalIndex}.result`}
-                                  render={({ field: resultField }) => (
-                                    <FormItem className="space-y-1">
-                                      <FormLabel className="text-xs">Result *</FormLabel>
-                                       <FormControl>
-                                        <RadioGroup
-                                          onValueChange={resultField.onChange}
-                                          defaultValue={resultField.value}
-                                          className="flex space-x-3 items-center pt-1"
-                                        >
-                                          {(["Yes", "No", "N/A"] as const).map((val) => (
-                                            <FormItem key={`${item.itemId}-${originalIndex}-${val}`} className="flex items-center space-x-1.5 space-y-0">
-                                              <FormControl>
-                                                <RadioGroupItem value={val} id={`${item.itemId}-${originalIndex}-${val.toLowerCase()}`} />
-                                              </FormControl>
-                                              <Label htmlFor={`${item.itemId}-${originalIndex}-${val.toLowerCase()}`} className={`font-normal text-xs ${val === "Yes" ? "text-green-600" : val === "No" ? "text-red-600" : "text-muted-foreground"}`}>
-                                                {val}
-                                              </Label>
-                                            </FormItem>
-                                          ))}
-                                        </RadioGroup>
-                                      </FormControl>
-                                      <FormMessage />
-                                    </FormItem>
-                                  )}
-                                />
-                                <FormField
-                                  control={form.control}
-                                  name={`checklistItems.${originalIndex}.comments`}
-                                  render={({ field: commentsField }) => (
-                                    <FormItem>
-                                      <FormLabel className="text-xs">Notes / Photo Ref.</FormLabel>
-                                      <FormControl><Textarea placeholder="Optional comments" {...commentsField} rows={1} className="text-sm" /></FormControl>
-                                      <FormMessage />
-                                    </FormItem>
-                                  )}
-                                />
-                              </div>
-                              <div className="mt-2 flex justify-between items-center">
-                                  <Button type="button" size="xs" variant="outline" className="text-xs py-1 px-2 h-auto" disabled><ImageUp className="mr-1 h-3 w-3" /> Upload Photo</Button>
-                                  {item.itemId?.startsWith("custom_") && (
-                                      <Button type="button" variant="ghost" size="xs" onClick={() => remove(originalIndex)} className="text-destructive hover:text-destructive-foreground hover:bg-destructive text-xs py-1 px-2 h-auto">
-                                          <Trash2 className="mr-1 h-3 w-3" /> Remove
-                                      </Button>
-                                  )}
-                              </div>
-                            </Card>
-                          );
-                        })}
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-
-                {(groupedChecklistItems["AI Suggested"] && groupedChecklistItems["AI Suggested"].length > 0) && (
-                     <Card className="mt-4 mb-2 shadow-md">
-                        <CardHeader className="py-3 px-4 bg-muted/30 rounded-t-md border-b">
-                            <CardTitle className="text-base font-semibold">{categoryTitles["AI Suggested"]}</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-3 p-3">
-                        {groupedChecklistItems["AI Suggested"].map((item) => {
-                            const originalIndex = item.originalIndex;
-                            return ( <Card key={item.id} className="p-3 bg-background shadow-sm">
-                                <p className="font-medium mb-2 text-sm">{item.itemDescription}</p>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 items-start">
-                                <FormField
-                                  control={form.control}
-                                  name={`checklistItems.${originalIndex}.result`}
-                                  render={({ field: resultField }) => (
-                                    <FormItem className="space-y-1">
-                                      <FormLabel className="text-xs">Result *</FormLabel>
-                                       <FormControl>
-                                        <RadioGroup
-                                          onValueChange={resultField.onChange}
-                                          defaultValue={resultField.value}
-                                          className="flex space-x-3 items-center pt-1"
-                                        >
-                                          {(["Yes", "No", "N/A"] as const).map((val) => (
-                                            <FormItem key={`${item.itemId}-${originalIndex}-${val}`} className="flex items-center space-x-1.5 space-y-0">
-                                              <FormControl>
-                                                <RadioGroupItem value={val} id={`${item.itemId}-${originalIndex}-${val.toLowerCase()}`} />
-                                              </FormControl>
-                                              <Label htmlFor={`${item.itemId}-${originalIndex}-${val.toLowerCase()}`} className={`font-normal text-xs ${val === "Yes" ? "text-green-600" : val === "No" ? "text-red-600" : "text-muted-foreground"}`}>
-                                                {val}
-                                              </Label>
-                                            </FormItem>
-                                          ))}
-                                        </RadioGroup>
-                                      </FormControl>
-                                      <FormMessage />
-                                    </FormItem>
-                                  )}
-                                />
-                                <FormField
-                                  control={form.control}
-                                  name={`checklistItems.${originalIndex}.comments`}
-                                  render={({ field: commentsField }) => (
-                                    <FormItem>
-                                      <FormLabel className="text-xs">Notes / Photo Ref.</FormLabel>
-                                      <FormControl><Textarea placeholder="Optional comments" {...commentsField} rows={1} className="text-sm" /></FormControl>
-                                      <FormMessage />
-                                    </FormItem>
-                                  )}
-                                />
-                              </div>
-                              <div className="mt-2 flex justify-between items-center">
-                                  <Button type="button" size="xs" variant="outline" className="text-xs py-1 px-2 h-auto" disabled><ImageUp className="mr-1 h-3 w-3" /> Upload Photo</Button>
-                                   {item.itemId?.startsWith("custom_") && (
-                                      <Button type="button" variant="ghost" size="xs" onClick={() => remove(originalIndex)} className="text-destructive hover:text-destructive-foreground hover:bg-destructive text-xs py-1 px-2 h-auto">
-                                          <Trash2 className="mr-1 h-3 w-3" /> Remove
-                                      </Button>
-                                  )}
-                              </div>
-
-                            </Card>);
-                        })}
-                        </CardContent>
-                     </Card>
-                )}
-                
-                {(groupedChecklistItems["Custom"] && groupedChecklistItems["Custom"].length > 0) && (
-                  <Card className="mt-4 mb-2 shadow-md">
-                    <CardHeader className="py-3 px-4 bg-muted/30 rounded-t-md border-b">
-                      <CardTitle className="text-base font-semibold">{categoryTitles["Custom"]}</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3 p-3">
-                      {groupedChecklistItems["Custom"].map((item) => {
-                        const originalIndex = item.originalIndex;
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle>Checklist</CardTitle>
+                    <div className="flex gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={handleAISuggestions} disabled={isAISuggesting || !form.getValues("registrationRefId")}>
+                            {isAISuggesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Lightbulb className="mr-2 h-4 w-4" />}
+                            Suggest Items (AI)
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" onClick={() => append({ itemId: `custom_${Date.now()}`, itemDescription: "New Custom Item", category: "Custom", result: "N/A", comments: "" })}>
+                            <PlusCircle className="mr-2 h-4 w-4" /> Add Custom Item
+                        </Button>
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    {mainCategoriesOrder.map(mainCatKey => {
+                        const itemsInCategory = groupedChecklistItems[mainCatKey];
+                        if (!itemsInCategory || itemsInCategory.length === 0) return null;
+                        
                         return (
-                          <Card key={item.id} className="p-3 bg-background shadow-sm">
-                            <p className="font-medium mb-2 text-sm">{item.itemDescription}</p>
-                             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 items-start">
-                                <FormField
-                                  control={form.control}
-                                  name={`checklistItems.${originalIndex}.result`}
-                                  render={({ field: resultField }) => (
-                                    <FormItem className="space-y-1">
-                                      <FormLabel className="text-xs">Result *</FormLabel>
-                                      <FormControl>
-                                        <RadioGroup
-                                          onValueChange={resultField.onChange}
-                                          defaultValue={resultField.value}
-                                          className="flex space-x-3 items-center pt-1"
-                                        >
-                                          {(["Yes", "No", "N/A"] as const).map((val) => (
-                                            <FormItem key={`${item.itemId}-${originalIndex}-${val}`} className="flex items-center space-x-1.5 space-y-0">
-                                              <FormControl>
-                                                <RadioGroupItem value={val} id={`${item.itemId}-${originalIndex}-${val.toLowerCase()}`} />
-                                              </FormControl>
-                                              <Label htmlFor={`${item.itemId}-${originalIndex}-${val.toLowerCase()}`} className={`font-normal text-xs ${val === "Yes" ? "text-green-600" : val === "No" ? "text-red-600" : "text-muted-foreground"}`}>
-                                                {val}
-                                              </Label>
+                            <Card key={mainCatKey} className="mt-4 mb-2 shadow-md">
+                            <CardHeader className="py-3 px-4 bg-muted/30 rounded-t-md border-b">
+                                <CardTitle className="text-base font-semibold">{categoryTitles[mainCatKey as keyof typeof categoryTitles]}</CardTitle>
+                                {mainCatKey === 'B' && <CardDescription className="text-xs">Note: Some items depend on craft type/operation.</CardDescription>}
+                                {mainCatKey === 'C' && <CardDescription className="text-xs">Note: Many construction standards require detailed assessment or certification. This focuses on observable aspects.</CardDescription>}
+                            </CardHeader>
+                            <CardContent className="space-y-2 p-3">
+                                {itemsInCategory.map((item) => {
+                                const originalIndex = item.originalIndex;
+                                return (
+                                    <Card key={item.id} className="p-3 bg-card shadow-sm">
+                                        <p className="font-medium mb-2 text-sm">{item.itemDescription}</p>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 items-start">
+                                        <FormField
+                                        control={form.control}
+                                        name={`checklistItems.${originalIndex}.result`}
+                                        render={({ field: resultField }) => (
+                                            <FormItem className="space-y-1">
+                                            <FormLabel className="text-xs">Result *</FormLabel>
+                                            <FormControl>
+                                                <RadioGroup
+                                                onValueChange={resultField.onChange}
+                                                defaultValue={resultField.value}
+                                                className="flex space-x-3 items-center pt-1"
+                                                >
+                                                {(["Yes", "No", "N/A"] as const).map((val) => (
+                                                    <FormItem key={`${item.itemId}-${originalIndex}-${val}`} className="flex items-center space-x-1.5 space-y-0">
+                                                    <FormControl>
+                                                        <RadioGroupItem value={val} id={`${item.itemId}-${originalIndex}-${val.toLowerCase()}`} />
+                                                    </FormControl>
+                                                    <Label htmlFor={`${item.itemId}-${originalIndex}-${val.toLowerCase()}`} className={`font-normal text-xs ${val === "Yes" ? "text-green-600" : val === "No" ? "text-red-600" : "text-muted-foreground"}`}>
+                                                        {val}
+                                                    </Label>
+                                                    </FormItem>
+                                                ))}
+                                                </RadioGroup>
+                                            </FormControl>
+                                            <FormMessage />
                                             </FormItem>
-                                          ))}
-                                        </RadioGroup>
-                                      </FormControl>
-                                      <FormMessage />
-                                    </FormItem>
-                                  )}
-                                />
-                                <FormField
-                                  control={form.control}
-                                  name={`checklistItems.${originalIndex}.comments`}
-                                  render={({ field: commentsField }) => (
-                                    <FormItem>
-                                      <FormLabel className="text-xs">Notes / Photo Ref.</FormLabel>
-                                      <FormControl><Textarea placeholder="Optional comments" {...commentsField} rows={1} className="text-sm" /></FormControl>
-                                      <FormMessage />
-                                    </FormItem>
-                                  )}
-                                />
-                              </div>
-                              <div className="mt-2 flex justify-between items-center">
-                                  <Button type="button" size="xs" variant="outline" className="text-xs py-1 px-2 h-auto" disabled><ImageUp className="mr-1 h-3 w-3" /> Upload Photo</Button>
-                                  {item.itemId?.startsWith("custom_") && (
-                                      <Button type="button" variant="ghost" size="xs" onClick={() => remove(originalIndex)} className="text-destructive hover:text-destructive-foreground hover:bg-destructive text-xs py-1 px-2 h-auto">
-                                          <Trash2 className="mr-1 h-3 w-3" /> Remove
-                                      </Button>
-                                  )}
-                              </div>
-                          </Card>
+                                        )}
+                                        />
+                                        <FormField
+                                        control={form.control}
+                                        name={`checklistItems.${originalIndex}.comments`}
+                                        render={({ field: commentsField }) => (
+                                            <FormItem>
+                                            <FormLabel className="text-xs">Notes / Photo Ref.</FormLabel>
+                                            <FormControl><Textarea placeholder="Optional comments" {...commentsField} rows={1} className="text-sm" /></FormControl>
+                                            <FormMessage />
+                                            </FormItem>
+                                        )}
+                                        />
+                                    </div>
+                                    <div className="mt-2 flex justify-between items-center">
+                                        <Button type="button" size="xs" variant="outline" className="text-xs py-1 px-2 h-auto" disabled><ImageUp className="mr-1 h-3 w-3" /> Upload Photo</Button>
+                                        {item.itemId?.startsWith("custom_") && (
+                                            <Button type="button" variant="ghost" size="xs" onClick={() => remove(originalIndex)} className="text-destructive hover:text-destructive-foreground hover:bg-destructive text-xs py-1 px-2 h-auto">
+                                                <Trash2 className="mr-1 h-3 w-3" /> Remove
+                                            </Button>
+                                        )}
+                                    </div>
+                                    </Card>
+                                );
+                                })}
+                            </CardContent>
+                            </Card>
                         );
-                      })}
-                    </CardContent>
-                  </Card>
-                )}
-                
-                {fields.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No checklist items. Add items manually, use AI suggestions, or select an inspection type that populates a template.</p>}
-              </CardContent>
+                        })}
+                    {fields.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No checklist items. Add items manually, use AI suggestions, or select an inspection type that populates a template.</p>}
+                </CardContent>
             </Card>
 
             <Card>
