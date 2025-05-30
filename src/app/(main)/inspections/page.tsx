@@ -5,16 +5,45 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
-import { PlusCircle, ClipboardList, Eye, Edit, Filter, Play, CheckSquare, ShieldAlert, CalendarDays, Loader2, AlertTriangle } from "lucide-react";
-import type { Inspection } from "@/types";
+import { PlusCircle, ClipboardList, Eye, Edit, Filter, Play, CheckSquare, CalendarDays, Loader2, AlertTriangle } from "lucide-react";
+import type { Inspection, Registration, User } from "@/types"; // Ensure DocumentReference is imported if used directly
 import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
 import React, { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { getInspections } from "@/actions/inspections"; // Import the server action
+import { collection, getDocs, query, where, doc, getDoc, Timestamp, type DocumentReference } from 'firebase/firestore'; // Added DocumentReference
+import { db, auth as firebaseAuth } from '@/lib/firebase'; // Added firebaseAuth for direct SDK check
+
+// Helper function to safely convert Firestore Timestamps or other date forms to JS Date objects
+const ensureSerializableDate = (dateValue: any): Date | undefined => {
+  if (!dateValue) return undefined;
+  if (dateValue instanceof Timestamp) {
+    return dateValue.toDate();
+  }
+  if (dateValue instanceof Date) {
+    return dateValue;
+  }
+  if (typeof dateValue === 'object' && dateValue !== null && typeof dateValue.seconds === 'number' && typeof dateValue.nanoseconds === 'number') {
+    try {
+      return new Timestamp(dateValue.seconds, dateValue.nanoseconds).toDate();
+    } catch (e) {
+      console.warn('Failed to convert object to Timestamp then to Date:', dateValue, e);
+      return undefined;
+    }
+  }
+  if (typeof dateValue === 'string' || typeof dateValue === 'number') {
+    const parsedDate = new Date(dateValue);
+    if (!isNaN(parsedDate.getTime())) {
+      return parsedDate;
+    }
+  }
+  console.warn(`Could not convert field to a serializable Date:`, dateValue);
+  return undefined;
+};
+
 
 export default function InspectionListPage() {
-  const { currentUser, isInspector, isAdmin, isRegistrar, isSupervisor, loading: authLoading } = useAuth();
+  const { currentUser, isAdmin, isRegistrar, isSupervisor, isInspector, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -24,38 +53,119 @@ export default function InspectionListPage() {
     if (!currentUser) {
       setInspections([]);
       setIsLoading(false);
-      // setFetchError("Please log in to view inspections."); // User might not be logged in yet, wait for auth
       return;
     }
+    console.log(`InspectionsPage: loadInspections called for user: ${currentUser.userId}, role: ${currentUser.role}, isActive: ${currentUser.isActive}`);
+    console.log("InspectionsPage: Firebase SDK currentUser (auth.currentUser):", firebaseAuth.currentUser?.uid);
+
 
     setIsLoading(true);
     setFetchError(null);
     try {
-      const fetchedInspections = await getInspections();
-      setInspections(fetchedInspections);
-    } catch (error) {
-      const errorMessage = (error as Error).message || "An unexpected error occurred while fetching inspections.";
-      console.error("Failed to load inspections:", errorMessage, error);
-      setFetchError(errorMessage);
+      let inspectionsQuery;
+      if (currentUser.role === "Inspector" && !isAdmin && !isRegistrar && !isSupervisor) {
+        const userDocRef = doc(db, "users", currentUser.userId);
+        inspectionsQuery = query(collection(db, "inspections"), where("inspectorRef", "==", userDocRef));
+        console.log("InspectionsPage: Query for Inspector:", inspectionsQuery);
+      } else {
+        inspectionsQuery = query(collection(db, "inspections"));
+        console.log("InspectionsPage: Query for Admin/Registrar/Supervisor (all inspections):", inspectionsQuery);
+      }
+      const inspectionSnapshot = await getDocs(inspectionsQuery);
+
+      const inspectionsPromises = inspectionSnapshot.docs.map(async (docSnapshot) => {
+        const data = docSnapshot.data();
+        let registrationData: Inspection['registrationData'] = undefined;
+        let inspectorData: Inspection['inspectorData'] = undefined;
+
+        try {
+          if (data.registrationRef) {
+            const regRef = data.registrationRef instanceof DocumentReference ? data.registrationRef : doc(db, (data.registrationRef as any).path || `registrations/${data.registrationRef}`);
+            const regDocSnap = await getDoc(regRef as DocumentReference<Registration>);
+            if (regDocSnap.exists()) {
+              const regData = regDocSnap.data();
+              registrationData = {
+                id: regDocSnap.id,
+                scaRegoNo: regData.scaRegoNo,
+                hullIdNumber: regData.hullIdNumber,
+                craftMake: regData.craftMake,
+                craftModel: regData.craftModel,
+                craftType: regData.vesselType,
+              };
+            }
+          }
+        } catch (regError) {
+          console.warn(`Failed to fetch related registration for inspection ${docSnapshot.id}:`, regError);
+        }
+
+        try {
+          if (data.inspectorRef) {
+            const inspRef = data.inspectorRef instanceof DocumentReference ? data.inspectorRef : doc(db, (data.inspectorRef as any).path || `users/${data.inspectorRef}`);
+            const inspectorDocSnap = await getDoc(inspRef as DocumentReference<User>);
+            if (inspectorDocSnap.exists()) {
+              const inspData = inspectorDocSnap.data();
+              inspectorData = {
+                id: inspectorDocSnap.id,
+                displayName: inspData.displayName || inspData.email,
+              };
+            }
+          }
+        } catch (inspError) {
+          console.warn(`Failed to fetch related inspector for inspection ${docSnapshot.id}:`, inspError);
+        }
+
+        return {
+          inspectionId: docSnapshot.id,
+          registrationRef: (data.registrationRef as DocumentReference<Registration>)?.id || data.registrationRef,
+          registrationData,
+          inspectorRef: (data.inspectorRef as DocumentReference<User>)?.id || data.inspectorRef,
+          inspectorData,
+          inspectionType: data.inspectionType || 'Initial',
+          scheduledDate: ensureSerializableDate(data.scheduledDate),
+          inspectionDate: ensureSerializableDate(data.inspectionDate),
+          status: data.status || 'Scheduled',
+          overallResult: data.overallResult,
+          findings: data.findings,
+          correctiveActions: data.correctiveActions,
+          followUpRequired: data.followUpRequired || false,
+          checklistItems: data.checklistItems || [],
+          completedAt: ensureSerializableDate(data.completedAt),
+          reviewedAt: ensureSerializableDate(data.reviewedAt),
+          reviewedByRef: (data.reviewedByRef as DocumentReference<User>)?.id || data.reviewedByRef,
+          createdAt: ensureSerializableDate(data.createdAt),
+          createdByRef: (data.createdByRef as DocumentReference<User>)?.id || data.createdByRef,
+          lastUpdatedAt: ensureSerializableDate(data.lastUpdatedAt),
+          lastUpdatedByRef: (data.lastUpdatedByRef as DocumentReference<User>)?.id || data.lastUpdatedByRef,
+        } as Inspection;
+      });
+
+      const resolvedInspections = await Promise.all(inspectionsPromises);
+      setInspections(resolvedInspections.filter(inspection => inspection !== null) as Inspection[]);
+    } catch (error: any) {
+      const originalErrorMessage = error.message || "Unknown Firebase error";
+      const originalErrorCode = error.code || "N/A";
+      const detailedError = `Failed to fetch inspections from server. Original error: [${originalErrorCode}] ${originalErrorMessage}`;
+      console.error("Failed to load inspections:", detailedError, error);
+      console.error("Current user at time of error:", currentUser);
+      setFetchError(detailedError);
       toast({
         title: "Error Loading Inspections",
-        description: errorMessage,
+        description: detailedError,
         variant: "destructive",
       });
     } finally {
       setIsLoading(false);
     }
-  }, [currentUser, toast]);
+  }, [currentUser, isAdmin, isRegistrar, isSupervisor, toast]);
 
   useEffect(() => {
     if (authLoading) {
-      setIsLoading(true); // Show loading if auth is still processing
+      setIsLoading(true);
       return;
     }
     if (currentUser) {
       loadInspections();
     } else {
-      // Not logged in and auth is resolved
       setIsLoading(false);
       setFetchError("Please log in to view inspections.");
       setInspections([]);
@@ -133,11 +243,13 @@ export default function InspectionListPage() {
                     <h3 className="text-xl font-semibold">Permission Denied</h3>
                   </div>
                   <p>Could not load inspections due to missing Firestore permissions.</p>
-                  <p>
-                    Please check your Firebase console: ensure your Firestore Security Rules allow authenticated users (or the appropriate roles)
-                    to <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">read</code> from the <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">inspections</code> collection.
-                    Also, if fetching related data, ensure read access to <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">registrations</code> and <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">users</code> collections is correctly configured.
-                  </p>
+                  <p className="font-medium mt-2">Please check your Firebase console and ensure your Firestore Security Rules allow:</p>
+                  <ul className="list-disc list-inside text-left text-sm mx-auto max-w-md">
+                    <li>Your current role ({currentUser?.role || 'Unknown Role'}) to <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">read</code> from the <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">inspections</code> collection.</li>
+                    <li>Read access to the <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">registrations</code> collection (for linked craft details).</li>
+                    <li>Read access to the <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">users</code> collection (for inspector details and for your role/active status check in rules via `get()` ).</li>
+                  </ul>
+                  <p className="mt-2">Ensure your user document in Firestore (<code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">/users/{currentUser?.userId || 'YOUR_USER_ID'}</code>) has the correct <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">role</code> and <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">isActive: true</code> fields.</p>
                    <p className="text-xs text-muted-foreground mt-1">Detailed error: {fetchError}</p>
                 </div>
               ) : (
