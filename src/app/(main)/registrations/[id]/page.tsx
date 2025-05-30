@@ -5,8 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
-import type { Registration, Owner, ProofOfOwnershipDoc, Inspection } from "@/types";
-import { Ship, User, FileText, ClipboardCheck, CalendarDays, DollarSign, Edit, CheckCircle, XCircle, Info, FileSpreadsheet, ListChecks, AlertTriangle } from "lucide-react";
+import type { Registration, Owner, ProofOfOwnershipDoc, Inspection, User } from "@/types";
+import { Ship, User as UserIconLucide, FileText, ClipboardCheck, CalendarDays, DollarSign, Edit, CheckCircle, XCircle, Info, FileSpreadsheet, ListChecks, AlertTriangle, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { formatFirebaseTimestamp } from '@/lib/utils';
@@ -24,88 +24,172 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns"; // Keep for specific date string parsing if needed, or remove if formatFirebaseTimestamp covers all.
+import { format, parseISO, isValid } from "date-fns";
+import { doc, getDoc, updateDoc, Timestamp, type DocumentReference } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
-// Placeholder data
-const placeholderRegistration: Registration = {
-  registrationId: "REG001",
-  scaRegoNo: "SCA123",
-  interimRegoNo: "INT789",
-  registrationType: "New",
-  status: "Approved",
-  submittedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000) as any,
-  approvedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) as any,
-  effectiveDate: new Date() as any,
-  expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) as any,
-  paymentMethod: "Card",
-  paymentReceiptNumber: "RCPT001",
-  paymentAmount: 150,
-  paymentDate: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000) as any,
-  safetyCertNumber: "SAFE999",
-  safetyEquipIssued: true,
-  safetyEquipReceiptNumber: "SEQ001",
-  owners: [
-    { ownerId: "owner1", role: "Primary", surname: "Smith", firstName: "John", dob: new Date(1980, 5, 15) as any, sex: "Male", phone: "555-0101", email: "john.smith@example.com", postalAddress: "P.O. Box 123", townDistrict: "Port Moresby", llg: "NCD", wardVillage: "Waigani" },
-    { ownerId: "owner2", role: "CoOwner", surname: "Smith", firstName: "Jane", dob: new Date(1982, 8, 20) as any, sex: "Female", phone: "555-0102", email: "jane.smith@example.com", postalAddress: "P.O. Box 123", townDistrict: "Port Moresby", llg: "NCD", wardVillage: "Waigani" }
-  ],
-  proofOfOwnershipDocs: [
-    { docId: "doc1", description: "Bill of Sale", fileName: "bill_of_sale.pdf", fileUrl: "https://placehold.co/600x400.png?text=Bill+of+Sale", uploadedAt: new Date() as any },
-    { docId: "doc2", description: "ID Document", fileName: "owner_id.jpg", fileUrl: "https://placehold.co/600x400.png?text=ID+Document", uploadedAt: new Date() as any }
-  ],
-  craftMake: "Yamaha",
-  craftModel: "FX Cruiser HO",
-  craftYear: 2022,
-  craftColor: "Blue/White",
-  hullIdNumber: "YAM12345X122",
-  craftLength: 3.56,
-  lengthUnits: "m",
-  distinguishingFeatures: "Custom decals on side",
-  propulsionType: "Inboard",
-  hullMaterial: "Fiberglass",
-  craftUse: "Pleasure",
-  fuelType: "Petrol",
-  vesselType: "PWC",
-  engineHorsepower: 180,
-  engineMake: "Yamaha",
-  engineSerialNumbers: "ENGYMH12345",
-  certificateGeneratedAt: new Date() as any,
-  certificateFileName: "SCA123_Certificate.pdf",
-  certificateFileUrl: "https://placehold.co/800x1100.png?text=Certificate+SCA123",
-  lastUpdatedByRef: {} as any,
-  lastUpdatedAt: new Date() as any,
-  createdByRef: {} as any,
-  createdAt: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000) as any,
-};
 
+// Placeholder for linked inspections - this would also need to be fetched dynamically
 const placeholderInspections: Inspection[] = [
     { inspectionId: "INSP001", registrationRef: {} as any, inspectorRef: {} as any, inspectionType: "Initial", scheduledDate: new Date() as any, inspectionDate: new Date() as any, status: "Passed", overallResult: "Pass", findings: "All clear", followUpRequired: false, checklistItems: [], createdAt: new Date() as any, createdByRef: {} as any },
     { inspectionId: "INSP002", registrationRef: {} as any, inspectorRef: {} as any, inspectionType: "Annual", scheduledDate: new Date() as any, status: "Scheduled", findings: "", followUpRequired: false, checklistItems: [], createdAt: new Date() as any, createdByRef: {} as any },
 ];
 
+// Helper to convert Firestore Timestamps or other date forms to JS Date for client state
+const ensureDateObject = (dateValue: any): Date | undefined => {
+  if (!dateValue) return undefined;
+  if (dateValue instanceof Timestamp) {
+    return dateValue.toDate();
+  }
+  if (dateValue instanceof Date) {
+    return dateValue;
+  }
+  if (typeof dateValue === 'string' || typeof dateValue === 'number') {
+    const parsed = new Date(dateValue);
+    if (isValid(parsed)) return parsed;
+  }
+  // For Firestore-like {seconds, nanoseconds} objects that might come from server actions
+  if (typeof dateValue === 'object' && dateValue !== null && typeof dateValue.seconds === 'number' && typeof dateValue.nanoseconds === 'number') {
+    try {
+      return new Timestamp(dateValue.seconds, dateValue.nanoseconds).toDate();
+    } catch (e) { /* ignore */ }
+  }
+  return undefined;
+};
+
+
 export default function RegistrationDetailPage() {
   const params = useParams();
   const registrationId = params.id as string;
   const { currentUser, isRegistrar, isAdmin, isSupervisor } = useAuth();
-  const registration = placeholderRegistration; // Use placeholder data
-  const inspections = placeholderInspections;
   const router = useRouter();
   const { toast } = useToast();
 
+  const [registration, setRegistration] = useState<Registration | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const inspections = placeholderInspections; // Keep as placeholder for now
+
   const [approveModalOpen, setApproveModalOpen] = useState(false);
-  const [scaRegoNo, setScaRegoNo] = useState(registration.scaRegoNo || "");
-  // Use format from date-fns for initial input values as they are date strings
-  const [effectiveDate, setEffectiveDate] = useState(registration.effectiveDate ? format((registration.effectiveDate as any).toDate ? (registration.effectiveDate as any).toDate() : registration.effectiveDate, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd"));
-  const [expiryDate, setExpiryDate] = useState(registration.expiryDate ? format((registration.expiryDate as any).toDate ? (registration.expiryDate as any).toDate() : registration.expiryDate, "yyyy-MM-dd") : format(new Date(new Date().setFullYear(new Date().getFullYear() + 1)), "yyyy-MM-dd"));
+  const [scaRegoNo, setScaRegoNo] = useState("");
+  const [effectiveDate, setEffectiveDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [expiryDate, setExpiryDate] = useState(format(new Date(new Date().setFullYear(new Date().getFullYear() + 1)), "yyyy-MM-dd"));
+
+  const fetchRegistration = useCallback(async () => {
+    if (!registrationId) {
+      setError("Registration ID is missing.");
+      setLoading(false);
+      return;
+    }
+    if (!currentUser) {
+      // Wait for auth context to be available, or handle unauthorized access
+      // setError("Authentication required to view registration details.");
+      // setLoading(false); // Or keep loading until currentUser is resolved
+      return;
+    }
 
 
-  if (!registration) {
-    return <p>Loading registration details...</p>;
+    setLoading(true);
+    setError(null);
+
+    try {
+      const docRef = doc(db, "registrations", registrationId);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const processedData: Registration = {
+          registrationId: docSnap.id,
+          scaRegoNo: data.scaRegoNo,
+          interimRegoNo: data.interimRegoNo,
+          registrationType: data.registrationType,
+          previousScaRegoNo: data.previousScaRegoNo,
+          status: data.status,
+          submittedAt: ensureDateObject(data.submittedAt),
+          approvedAt: ensureDateObject(data.approvedAt),
+          effectiveDate: ensureDateObject(data.effectiveDate),
+          expiryDate: ensureDateObject(data.expiryDate),
+          paymentMethod: data.paymentMethod,
+          paymentReceiptNumber: data.paymentReceiptNumber,
+          bankStampRef: data.bankStampRef,
+          paymentAmount: data.paymentAmount,
+          paymentDate: ensureDateObject(data.paymentDate),
+          safetyCertNumber: data.safetyCertNumber,
+          safetyEquipIssued: data.safetyEquipIssued,
+          safetyEquipReceiptNumber: data.safetyEquipReceiptNumber,
+          owners: (data.owners || []).map((o: any) => ({ ...o, dob: ensureDateObject(o.dob) })),
+          proofOfOwnershipDocs: (data.proofOfOwnershipDocs || []).map((d: any) => ({ ...d, uploadedAt: ensureDateObject(d.uploadedAt) })),
+          craftMake: data.craftMake,
+          craftModel: data.craftModel,
+          craftYear: data.craftYear,
+          craftColor: data.craftColor,
+          hullIdNumber: data.hullIdNumber,
+          craftLength: data.craftLength,
+          lengthUnits: data.lengthUnits,
+          distinguishingFeatures: data.distinguishingFeatures,
+          propulsionType: data.propulsionType,
+          propulsionOtherDesc: data.propulsionOtherDesc,
+          hullMaterial: data.hullMaterial,
+          hullMaterialOtherDesc: data.hullMaterialOtherDesc,
+          craftUse: data.craftUse,
+          craftUseOtherDesc: data.craftUseOtherDesc,
+          fuelType: data.fuelType,
+          fuelTypeOtherDesc: data.fuelTypeOtherDesc,
+          vesselType: data.vesselType,
+          vesselTypeOtherDesc: data.vesselTypeOtherDesc,
+          engineHorsepower: data.engineHorsepower,
+          engineMake: data.engineMake,
+          engineSerialNumbers: data.engineSerialNumbers,
+          certificateGeneratedAt: ensureDateObject(data.certificateGeneratedAt),
+          certificateFileName: data.certificateFileName,
+          certificateFileUrl: data.certificateFileUrl,
+          lastUpdatedByRef: (data.lastUpdatedByRef as DocumentReference<User>)?.id || data.lastUpdatedByRef,
+          lastUpdatedAt: ensureDateObject(data.lastUpdatedAt),
+          createdByRef: (data.createdByRef as DocumentReference<User>)?.id || data.createdByRef,
+          createdAt: ensureDateObject(data.createdAt),
+        };
+        setRegistration(processedData);
+        // Initialize modal fields if registration data is available
+        setScaRegoNo(processedData.scaRegoNo || "");
+        if (processedData.effectiveDate) setEffectiveDate(format(new Date(processedData.effectiveDate as Date), "yyyy-MM-dd"));
+        if (processedData.expiryDate) setExpiryDate(format(new Date(processedData.expiryDate as Date), "yyyy-MM-dd"));
+
+      } else {
+        setError("Registration not found.");
+        setRegistration(null);
+      }
+    } catch (err: any) {
+      console.error("Error fetching registration:", err);
+      setError(err.message || "Failed to load registration data.");
+      setRegistration(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [registrationId, currentUser]);
+
+  useEffect(() => {
+    if (currentUser !== undefined) { // Ensure currentUser is resolved (not initial undefined)
+        fetchRegistration();
+    }
+  }, [registrationId, currentUser, fetchRegistration]);
+
+
+  if (loading) {
+    return <div className="flex h-64 justify-center items-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /><p className="ml-2">Loading registration details...</p></div>;
   }
 
+  if (error) {
+    return <div className="text-center py-10 text-red-600"><AlertTriangle className="mx-auto h-10 w-10 mb-2" />Error: {error}</div>;
+  }
+
+  if (!registration) {
+    return <div className="text-center py-10 text-muted-foreground">Registration not found or you may not have permission to view it.</div>;
+  }
+
+
   const getStatusBadgeVariant = (status: Registration["status"]) => {
-    // Same as list page
     switch (status) {
       case "Approved": return "default";
       case "PendingReview": case "Submitted": return "secondary";
@@ -116,34 +200,87 @@ export default function RegistrationDetailPage() {
   };
 
   const handleApprove = async () => {
-    // In real app, update Firestore doc with scaRegoNo, effectiveDate, expiryDate, status = "Approved"
-    console.log("Approving registration:", registrationId, { scaRegoNo, effectiveDate, expiryDate });
-    toast({ title: "Registration Approved", description: `SCA Rego No: ${scaRegoNo}` });
-    setApproveModalOpen(false);
-    // Simulate update for UI
-    registration.status = "Approved";
-    registration.scaRegoNo = scaRegoNo;
-    // router.refresh(); // Or update state
+     if (!currentUser?.userId || !registration) {
+      toast({ title: "Error", description: "User or registration data missing.", variant: "destructive" });
+      return;
+    }
+    if (!scaRegoNo.trim()) {
+      toast({ title: "Validation Error", description: "SCA Rego No. is required for approval.", variant: "destructive" });
+      return;
+    }
+     if (!isValid(parseISO(effectiveDate)) || !isValid(parseISO(expiryDate))) {
+      toast({ title: "Validation Error", description: "Effective and Expiry dates must be valid.", variant: "destructive" });
+      return;
+    }
+
+    const registrationDocRef = doc(db, "registrations", registration.registrationId);
+    
+    const updatePayload: Partial<Registration> & { status: string, lastUpdatedAt: Timestamp, lastUpdatedByRef: DocumentReference, approvedAt: Timestamp } = {
+      status: "Approved",
+      scaRegoNo: scaRegoNo,
+      effectiveDate: Timestamp.fromDate(parseISO(effectiveDate)),
+      expiryDate: Timestamp.fromDate(parseISO(expiryDate)),
+      approvedAt: Timestamp.now(),
+      lastUpdatedAt: Timestamp.now(),
+      lastUpdatedByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
+    };
+
+    try {
+      await updateDoc(registrationDocRef, updatePayload as any); // Using 'as any' to bypass strict type checking for partial update
+      toast({ title: "Registration Approved", description: `SCA Rego No: ${scaRegoNo} assigned.` });
+      setApproveModalOpen(false);
+      // Update local state to reflect changes immediately
+      setRegistration(prev => prev ? ({
+        ...prev,
+        ...updatePayload,
+        effectiveDate: (updatePayload.effectiveDate as Timestamp).toDate(),
+        expiryDate: (updatePayload.expiryDate as Timestamp).toDate(),
+        approvedAt: (updatePayload.approvedAt as Timestamp).toDate(),
+        lastUpdatedAt: (updatePayload.lastUpdatedAt as Timestamp).toDate(),
+        lastUpdatedByRef: currentUser.userId, // Store ID for client-side state
+      }) : null);
+      // router.refresh(); // Or update state directly
+    } catch (e: any) {
+      console.error("Error approving registration:", e);
+      toast({ title: "Approval Failed", description: e.message || "Could not update registration.", variant: "destructive" });
+    }
   };
 
   const handleReject = async () => {
-    // In real app, update Firestore doc with status = "Rejected"
-    console.log("Rejecting registration:", registrationId);
-    toast({ title: "Registration Rejected", variant: "destructive" });
-    registration.status = "Rejected";
-    // router.refresh();
+    if (!currentUser?.userId || !registration) return;
+    const registrationDocRef = doc(db, "registrations", registration.registrationId);
+    try {
+      await updateDoc(registrationDocRef, {
+        status: "Rejected",
+        lastUpdatedAt: Timestamp.now(),
+        lastUpdatedByRef: doc(db, "users", currentUser.userId)
+      });
+      toast({ title: "Registration Rejected", variant: "destructive" });
+      setRegistration(prev => prev ? ({ ...prev, status: "Rejected", lastUpdatedAt: new Date() }) : null);
+    } catch (e: any) {
+       toast({ title: "Rejection Failed", description: e.message || "Could not update registration.", variant: "destructive" });
+    }
   };
   
   const handleRequestInfo = async () => {
-    console.log("Requesting info for registration:", registrationId);
-    toast({ title: "Information Requested", description: "Owner will be notified." });
-    registration.status = "RequiresInfo";
-    // router.refresh();
+    if (!currentUser?.userId || !registration) return;
+    const registrationDocRef = doc(db, "registrations", registration.registrationId);
+     try {
+      await updateDoc(registrationDocRef, {
+        status: "RequiresInfo",
+        lastUpdatedAt: Timestamp.now(),
+        lastUpdatedByRef: doc(db, "users", currentUser.userId)
+      });
+      toast({ title: "Information Requested", description: "Owner will be notified." });
+      setRegistration(prev => prev ? ({ ...prev, status: "RequiresInfo", lastUpdatedAt: new Date() }) : null);
+    } catch (e: any) {
+       toast({ title: "Action Failed", description: e.message || "Could not update registration.", variant: "destructive" });
+    }
   };
 
 
-  const canEdit = isRegistrar && (registration.status === "Submitted" || registration.status === "RequiresInfo" || registration.status === "Draft");
-  const canApproveReject = (isRegistrar || isAdmin) && (registration.status === "Submitted" || registration.status === "RequiresInfo");
+  const canEdit = (isRegistrar || isAdmin) && (registration.status === "Submitted" || registration.status === "RequiresInfo" || registration.status === "Draft");
+  const canApproveReject = (isRegistrar || isAdmin) && (registration.status === "Submitted" || registration.status === "RequiresInfo" || registration.status === "PendingReview");
   const canScheduleInspection = (isAdmin || isSupervisor);
   const canGenerateCertificate = (isRegistrar || isAdmin) && registration.status === "Approved";
 
@@ -187,15 +324,15 @@ export default function RegistrationDetailPage() {
                   </AlertDialogHeader>
                   <div className="space-y-4 py-2">
                     <div>
-                      <Label htmlFor="scaRegoNo">SCA Rego No.</Label>
-                      <Input id="scaRegoNo" value={scaRegoNo} onChange={(e) => setScaRegoNo(e.target.value)} placeholder="e.g., SCA00123" />
+                      <Label htmlFor="scaRegoNo">SCA Rego No. *</Label>
+                      <Input id="scaRegoNo" value={scaRegoNo} onChange={(e) => setScaRegoNo(e.target.value)} placeholder="e.g., NCD-00123" />
                     </div>
                      <div>
-                      <Label htmlFor="effectiveDate">Effective Date</Label>
+                      <Label htmlFor="effectiveDate">Effective Date *</Label>
                       <Input id="effectiveDate" type="date" value={effectiveDate} onChange={(e) => setEffectiveDate(e.target.value)} />
                     </div>
                      <div>
-                      <Label htmlFor="expiryDate">Expiry Date</Label>
+                      <Label htmlFor="expiryDate">Expiry Date *</Label>
                       <Input id="expiryDate" type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
                     </div>
                   </div>
@@ -293,7 +430,7 @@ export default function RegistrationDetailPage() {
             <CardHeader><CardTitle>Owners</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               {registration.owners.map((owner: Owner, index: number) => (
-                <div key={owner.ownerId} className="p-3 border rounded-md bg-muted/30">
+                <div key={owner.ownerId || index} className="p-3 border rounded-md bg-muted/30">
                   <div className="font-semibold text-md">{owner.firstName} {owner.surname} <Badge variant="secondary">{owner.role}</Badge></div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm mt-1">
                     <p><strong>DOB:</strong> {formatFirebaseTimestamp(owner.dob, "PP")}</p>
@@ -327,7 +464,7 @@ export default function RegistrationDetailPage() {
             <Card>
               <CardHeader><CardTitle>Payment Details</CardTitle></CardHeader>
               <CardContent className="space-y-1 text-sm">
-                <p><strong>Amount:</strong> ${registration.paymentAmount?.toFixed(2)}</p>
+                <p><strong>Amount:</strong> K{registration.paymentAmount?.toFixed(2)}</p>
                 <p><strong>Method:</strong> {registration.paymentMethod}</p>
                 <p><strong>Receipt No:</strong> {registration.paymentReceiptNumber}</p>
                 <p><strong>Date:</strong> {formatFirebaseTimestamp(registration.paymentDate, "PP")}</p>
@@ -354,7 +491,7 @@ export default function RegistrationDetailPage() {
       <Card>
         <CardHeader><CardTitle>Proof of Ownership</CardTitle></CardHeader>
         <CardContent>
-          {registration.proofOfOwnershipDocs.length > 0 ? (
+          {registration.proofOfOwnershipDocs && registration.proofOfOwnershipDocs.length > 0 ? (
             <ul className="space-y-2">
               {registration.proofOfOwnershipDocs.map((doc: ProofOfOwnershipDoc) => (
                 <li key={doc.docId} className="flex items-center justify-between p-2 border rounded-md">
@@ -403,3 +540,5 @@ export default function RegistrationDetailPage() {
     </div>
   );
 }
+
+    
