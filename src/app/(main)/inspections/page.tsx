@@ -5,74 +5,65 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
-import { PlusCircle, ClipboardList, Eye, Edit, Filter, Play, CheckSquare, ShieldAlert, CalendarDays } from "lucide-react";
+import { PlusCircle, ClipboardList, Eye, Edit, Filter, Play, CheckSquare, ShieldAlert, CalendarDays, Loader2, AlertTriangle } from "lucide-react";
 import type { Inspection } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
-
-// Placeholder data
-const placeholderInspections: Inspection[] = [
-  {
-    inspectionId: "INSP001",
-    registrationRef: { id: "REG001" } as any,
-    registrationData: { id: "REG001", craftMake: "Yamaha", craftModel: "FX Cruiser HO" },
-    inspectorRef: { id: "USER002" } as any,
-    inspectorData: {id: "USER002", displayName: "Inspector Bob"},
-    inspectionType: "Initial",
-    scheduledDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000) as any,
-    inspectionDate: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000) as any,
-    status: "Passed",
-    overallResult: "Pass",
-    findings: "All safety equipment present and in good order.",
-    followUpRequired: false,
-    checklistItems: [
-        { itemId: "chk01", itemDescription: "Hull integrity", result: "Yes" },
-        { itemId: "chk02", itemDescription: "Life jackets", result: "Yes" },
-    ],
-    completedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000) as any, 
-    reviewedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) as any, 
-    createdAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000) as any,
-    createdByRef: { id: "USER001" } as any,
-  },
-  {
-    inspectionId: "INSP002",
-    registrationRef: { id: "REG002" } as any,
-    registrationData: { id: "REG002", craftMake: "Sea-Doo", craftModel: "RXT-X 300" },
-    inspectorRef: { id: "USER003" } as any,
-    inspectorData: {id: "USER003", displayName: "Supervisor Sue"},
-    inspectionType: "Annual",
-    scheduledDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000) as any,
-    status: "Scheduled",
-    findings: "",
-    followUpRequired: false,
-    checklistItems: [],
-    createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000) as any,
-    createdByRef: { id: "USER001" } as any,
-  },
-  {
-    inspectionId: "INSP003_Pending",
-    registrationRef: { id: "REG003" } as any,
-    registrationData: { id: "REG003", craftMake: "Quintrex", craftModel: "Renegade" },
-    inspectorRef: { id: "USER002" } as any,
-    inspectorData: {id: "USER002", displayName: "Inspector Bob"},
-    inspectionType: "Initial",
-    scheduledDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) as any,
-    inspectionDate: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000) as any,
-    status: "PendingReview",
-    overallResult: "Pass", 
-    findings: "All checks passed, minor scuff marks.",
-    followUpRequired: false,
-    checklistItems: [{itemId: "chk01", itemDescription: "Hull", result: "Yes"}],
-    completedAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000) as any,
-    createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) as any,
-    createdByRef: { id: "USER001" } as any,
-  },
-];
+import React, { useState, useEffect, useCallback } from "react";
+import { useToast } from "@/hooks/use-toast";
+import { getInspections } from "@/actions/inspections"; // Import the server action
 
 export default function InspectionListPage() {
-  const { currentUser, isInspector, isAdmin, isRegistrar, isSupervisor } = useAuth();
+  const { currentUser, isInspector, isAdmin, isRegistrar, isSupervisor, loading: authLoading } = useAuth();
+  const { toast } = useToast();
+  const [inspections, setInspections] = useState<Inspection[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
-  const getStatusBadgeVariant = (status: Inspection["status"]) => {
+  const loadInspections = useCallback(async () => {
+    if (!currentUser) {
+      setInspections([]);
+      setIsLoading(false);
+      // setFetchError("Please log in to view inspections."); // User might not be logged in yet, wait for auth
+      return;
+    }
+
+    setIsLoading(true);
+    setFetchError(null);
+    try {
+      const fetchedInspections = await getInspections();
+      setInspections(fetchedInspections);
+    } catch (error) {
+      const errorMessage = (error as Error).message || "An unexpected error occurred while fetching inspections.";
+      console.error("Failed to load inspections:", errorMessage, error);
+      setFetchError(errorMessage);
+      toast({
+        title: "Error Loading Inspections",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentUser, toast]);
+
+  useEffect(() => {
+    if (authLoading) {
+      setIsLoading(true); // Show loading if auth is still processing
+      return;
+    }
+    if (currentUser) {
+      loadInspections();
+    } else {
+      // Not logged in and auth is resolved
+      setIsLoading(false);
+      setFetchError("Please log in to view inspections.");
+      setInspections([]);
+    }
+  }, [currentUser, authLoading, loadInspections]);
+
+
+  const getStatusBadgeVariant = (status?: Inspection["status"]) => {
     switch (status) {
       case "Passed": return "default";
       case "Failed": return "destructive";
@@ -83,6 +74,23 @@ export default function InspectionListPage() {
       default: return "outline";
     }
   };
+  
+  const retryLoadInspections = () => {
+    if (currentUser && !authLoading) {
+      loadInspections();
+    } else if (!authLoading && !currentUser) {
+      setFetchError("Please log in to retry fetching inspections.");
+    }
+  };
+
+  if (authLoading && isLoading) {
+    return (
+      <div className="flex h-64 justify-center items-center py-10">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="ml-2">Loading application data...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -111,80 +119,107 @@ export default function InspectionListPage() {
           <CardDescription>Manage and track all craft safety inspections.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Inspection ID</TableHead>
-                <TableHead>Craft (Rego / Make/Model)</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Scheduled</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Inspector</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {placeholderInspections.map((insp) => {
-                const canBeStartedByCurrentUser = (isInspector && insp.inspectorData?.id === currentUser?.userId) || isAdmin || isRegistrar || isSupervisor;
-                const canEditScheduleByCurrentUser = (isAdmin || isRegistrar || isSupervisor);
-                const canContinueConductingByCurrentUser = (isInspector && insp.inspectorData?.id === currentUser?.userId && insp.status === "InProgress") || ((isAdmin || isRegistrar || isSupervisor) && insp.status === "InProgress");
-                const canReviewByCurrentUser = (isRegistrar || isAdmin);
-
-                return (
-                <TableRow key={insp.inspectionId}>
-                  <TableCell className="font-medium">{insp.inspectionId}</TableCell>
-                  <TableCell>
-                    <div>{insp.registrationRef.id}</div>
-                    <div className="text-xs text-muted-foreground">{insp.registrationData?.craftMake} {insp.registrationData?.craftModel}</div>
-                  </TableCell>
-                  <TableCell>{insp.inspectionType}</TableCell>
-                  <TableCell>{formatFirebaseTimestamp(insp.scheduledDate, "PP")}</TableCell>
-                  <TableCell>
-                    <Badge variant={getStatusBadgeVariant(insp.status)}>{insp.status}</Badge>
-                  </TableCell>
-                  <TableCell>{insp.inspectorData?.displayName || insp.inspectorRef?.id || "N/A"}</TableCell>
-                  <TableCell className="text-right space-x-1">
-                    <Button variant="ghost" size="icon" asChild title="View Details">
-                      <Link href={`/inspections/${insp.inspectionId}`}><Eye className="h-4 w-4" /></Link>
-                    </Button>
-                    
-                    {insp.status === "Scheduled" && canBeStartedByCurrentUser && (
-                       <Button variant="ghost" size="icon" asChild title="Start Inspection">
-                        <Link href={`/inspections/${insp.inspectionId}/conduct`}><Play className="h-4 w-4 text-green-500" /></Link>
-                      </Button>
-                    )}
-
-                    {(insp.status === "Scheduled" || insp.status === "InProgress") && canEditScheduleByCurrentUser && (
-                       <Button variant="ghost" size="icon" asChild title="Edit Schedule/Assignment">
-                        <Link href={`/inspections/${insp.inspectionId}/edit-schedule`}><CalendarDays className="h-4 w-4" /></Link>
-                      </Button>
-                    )}
-                    
-                    {insp.status === "InProgress" && canContinueConductingByCurrentUser && (
-                       <Button variant="ghost" size="icon" asChild title="Continue/Edit Inspection">
-                        <Link href={`/inspections/${insp.inspectionId}/conduct`}><Edit className="h-4 w-4" /></Link>
-                      </Button>
-                    )}
-
-                    {insp.status === "PendingReview" && canReviewByCurrentUser && (
-                       <Button variant="ghost" size="icon" asChild title="Review Inspection">
-                        <Link href={`/inspections/${insp.inspectionId}`}><CheckSquare className="h-4 w-4 text-blue-500" /></Link>
-                      </Button>
-                    )}
-                  </TableCell>
+          {isLoading ? (
+            <div className="flex h-40 justify-center items-center">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="ml-2">Fetching inspections...</p>
+            </div>
+          ) : fetchError ? (
+             <div className="text-center py-10">
+              {fetchError.includes("permission-denied") || fetchError.includes("Missing or insufficient permissions") ? (
+                <div className="text-destructive space-y-2 p-4 border border-destructive/50 rounded-md bg-destructive/10">
+                  <div className="flex justify-center items-center mb-2">
+                    <AlertTriangle className="h-10 w-10 mr-2" />
+                    <h3 className="text-xl font-semibold">Permission Denied</h3>
+                  </div>
+                  <p>Could not load inspections due to missing Firestore permissions.</p>
+                  <p>
+                    Please check your Firebase console: ensure your Firestore Security Rules allow authenticated users (or the appropriate roles)
+                    to <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">read</code> from the <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">inspections</code> collection.
+                  </p>
+                   <p className="text-xs text-muted-foreground mt-1">Detailed error: {fetchError}</p>
+                </div>
+              ) : (
+                <p className="text-destructive">{fetchError}</p>
+              )}
+              {currentUser && <Button onClick={retryLoadInspections} className="mt-4">Retry</Button>}
+              {!currentUser && !authLoading && <Button asChild className="mt-4"><Link href="/login">Log In</Link></Button>}
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Inspection ID</TableHead>
+                  <TableHead>Craft (Rego / Make/Model)</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Scheduled</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Inspector</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              )})}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {inspections.length > 0 ? inspections.map((insp) => {
+                  const canBeStartedByCurrentUser = (isInspector && insp.inspectorData?.id === currentUser?.userId) || isAdmin || isRegistrar || isSupervisor;
+                  const canEditScheduleByCurrentUser = (isAdmin || isRegistrar || isSupervisor);
+                  const canContinueConductingByCurrentUser = (isInspector && insp.inspectorData?.id === currentUser?.userId && insp.status === "InProgress") || ((isAdmin || isRegistrar || isSupervisor) && insp.status === "InProgress");
+                  const canReviewByCurrentUser = (isRegistrar || isAdmin);
+
+                  return (
+                  <TableRow key={insp.inspectionId}>
+                    <TableCell className="font-medium">{insp.inspectionId}</TableCell>
+                    <TableCell>
+                      <div>{insp.registrationData?.scaRegoNo || insp.registrationData?.id || (typeof insp.registrationRef === 'string' ? insp.registrationRef : 'N/A')}</div>
+                      <div className="text-xs text-muted-foreground">{insp.registrationData?.craftMake} {insp.registrationData?.craftModel}</div>
+                    </TableCell>
+                    <TableCell>{insp.inspectionType}</TableCell>
+                    <TableCell>{formatFirebaseTimestamp(insp.scheduledDate, "PP")}</TableCell>
+                    <TableCell>
+                      <Badge variant={getStatusBadgeVariant(insp.status)}>{insp.status}</Badge>
+                    </TableCell>
+                    <TableCell>{insp.inspectorData?.displayName || (typeof insp.inspectorRef === 'string' ? insp.inspectorRef : "N/A")}</TableCell>
+                    <TableCell className="text-right space-x-1">
+                      <Button variant="ghost" size="icon" asChild title="View Details">
+                        <Link href={`/inspections/${insp.inspectionId}`}><Eye className="h-4 w-4" /></Link>
+                      </Button>
+                      
+                      {insp.status === "Scheduled" && canBeStartedByCurrentUser && (
+                         <Button variant="ghost" size="icon" asChild title="Start Inspection">
+                          <Link href={`/inspections/${insp.inspectionId}/conduct`}><Play className="h-4 w-4 text-green-500" /></Link>
+                        </Button>
+                      )}
+
+                      {(insp.status === "Scheduled" || insp.status === "InProgress") && canEditScheduleByCurrentUser && (
+                         <Button variant="ghost" size="icon" asChild title="Edit Schedule/Assignment">
+                          <Link href={`/inspections/${insp.inspectionId}/edit-schedule`}><CalendarDays className="h-4 w-4" /></Link>
+                        </Button>
+                      )}
+                      
+                      {insp.status === "InProgress" && canContinueConductingByCurrentUser && (
+                         <Button variant="ghost" size="icon" asChild title="Continue/Edit Inspection">
+                          <Link href={`/inspections/${insp.inspectionId}/conduct`}><Edit className="h-4 w-4" /></Link>
+                        </Button>
+                      )}
+
+                      {insp.status === "PendingReview" && canReviewByCurrentUser && (
+                         <Button variant="ghost" size="icon" asChild title="Review Inspection">
+                          <Link href={`/inspections/${insp.inspectionId}`}><CheckSquare className="h-4 w-4 text-blue-500" /></Link>
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                )}) : (
+                   <TableRow>
+                    <TableCell colSpan={7} className="text-center text-muted-foreground">
+                      No inspections found.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
-      {placeholderInspections.length === 0 && (
-        <Card>
-            <CardContent className="pt-6 text-center text-muted-foreground">
-                No inspections found.
-            </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

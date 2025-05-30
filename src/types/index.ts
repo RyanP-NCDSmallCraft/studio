@@ -81,9 +81,9 @@ export interface Registration {
   certificateGeneratedAt?: Timestamp | Date | string;
   certificateFileName?: string;
   certificateFileUrl?: string;
-  lastUpdatedByRef: string | DocumentReference<User>; // Store ID string on client for form, convert to Ref on server
+  lastUpdatedByRef: string | DocumentReference<User>;
   lastUpdatedAt: Timestamp | Date | string;
-  createdByRef: string | DocumentReference<User>; // Store ID string on client for form, convert to Ref on server
+  createdByRef: string | DocumentReference<User>;
   createdAt: Timestamp | Date | string;
 }
 
@@ -97,10 +97,20 @@ export interface ChecklistItemResult {
 
 export interface Inspection {
   inspectionId: string;
-  registrationRef: DocumentReference<Registration>;
-  registrationData?: { id: string, scaRegoNo?: string, hullIdNumber?: string, craftType?: string, craftMake?: string, craftModel?: string };
-  inspectorRef?: DocumentReference<User>; 
-  inspectorData?: { id: string, displayName?: string };
+  registrationRef: string | DocumentReference<Registration>; // Changed to allow string ID from server action
+  registrationData?: { // For denormalized data
+    id: string;
+    scaRegoNo?: string;
+    hullIdNumber?: string;
+    craftType?: string;
+    craftMake?: string;
+    craftModel?: string;
+  };
+  inspectorRef?: string | DocumentReference<User>; // Changed to allow string ID
+  inspectorData?: { // For denormalized data
+    id: string;
+    displayName?: string;
+  };
   inspectionType: "Initial" | "Annual" | "Compliance" | "FollowUp";
   scheduledDate: Timestamp | Date | string;
   inspectionDate?: Timestamp | Date | string;
@@ -112,11 +122,11 @@ export interface Inspection {
   checklistItems: ChecklistItemResult[];
   completedAt?: Timestamp | Date | string;
   reviewedAt?: Timestamp | Date | string;
-  reviewedByRef?: DocumentReference<User>; 
+  reviewedByRef?: string | DocumentReference<User>; // Changed to allow string ID
   createdAt: Timestamp | Date | string;
-  createdByRef: DocumentReference<User>; 
+  createdByRef: string | DocumentReference<User>; // Changed to allow string ID
   lastUpdatedAt?: Timestamp | Date | string;
-  lastUpdatedByRef?: DocumentReference<User>;
+  lastUpdatedByRef?: string | DocumentReference<User>; // Changed to allow string ID
 }
 
 export interface ChecklistTemplateItem {
