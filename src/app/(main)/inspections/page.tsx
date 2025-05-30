@@ -126,7 +126,7 @@ export default function InspectionListPage() {
             </div>
           ) : fetchError ? (
              <div className="text-center py-10">
-              {fetchError.includes("permission-denied") || fetchError.includes("Missing or insufficient permissions") ? (
+              {(fetchError.includes("permission-denied") || fetchError.includes("Missing or insufficient permissions")) ? (
                 <div className="text-destructive space-y-2 p-4 border border-destructive/50 rounded-md bg-destructive/10">
                   <div className="flex justify-center items-center mb-2">
                     <AlertTriangle className="h-10 w-10 mr-2" />
@@ -136,6 +136,7 @@ export default function InspectionListPage() {
                   <p>
                     Please check your Firebase console: ensure your Firestore Security Rules allow authenticated users (or the appropriate roles)
                     to <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">read</code> from the <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">inspections</code> collection.
+                    Also, if fetching related data, ensure read access to <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">registrations</code> and <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">users</code> collections is correctly configured.
                   </p>
                    <p className="text-xs text-muted-foreground mt-1">Detailed error: {fetchError}</p>
                 </div>
