@@ -11,7 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
 import React, { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { collection, getDocs, query, where, doc, getDoc, Timestamp, type DocumentReference } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, getDoc, Timestamp, type DocumentReference } from 'firebase/firestore'; // Added DocumentReference
 import { db, auth as firebaseAuth } from '@/lib/firebase';
 
 // Helper function to safely convert Firestore Timestamps or other date forms to JS Date objects
@@ -74,11 +74,11 @@ export default function InspectionListPage() {
       let inspectionsQuery;
       if (currentUser.role === "Inspector" && !isAdmin && !isRegistrar && !isSupervisor) {
         const userDocRef = doc(db, "users", currentUser.userId);
+        console.log("InspectionsPage: Query for Inspector:", currentUser.userId, "with userDocRef:", userDocRef.path);
         inspectionsQuery = query(collection(db, "inspections"), where("inspectorRef", "==", userDocRef));
-        console.log("InspectionsPage: Query for Inspector:", currentUser.userId);
       } else {
-        inspectionsQuery = query(collection(db, "inspections"));
         console.log("InspectionsPage: Query for Admin/Registrar/Supervisor (all inspections).");
+        inspectionsQuery = query(collection(db, "inspections"));
       }
       const inspectionSnapshot = await getDocs(inspectionsQuery);
       console.log(`InspectionsPage: Fetched ${inspectionSnapshot.docs.length} inspection documents.`);
@@ -90,7 +90,7 @@ export default function InspectionListPage() {
 
         try {
           if (data.registrationRef) {
-            const regRefPath = data.registrationRef.path || (typeof data.registrationRef === 'string' ? `registrations/${data.registrationRef}` : null);
+             const regRefPath = data.registrationRef.path || (typeof data.registrationRef === 'string' ? `registrations/${data.registrationRef}` : null);
             if (regRefPath) {
                 const regRef = doc(db, regRefPath) as DocumentReference<Registration>;
                 const regDocSnap = await getDoc(regRef);
@@ -371,3 +371,5 @@ export default function InspectionListPage() {
   );
 }
 
+
+    
