@@ -6,8 +6,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Link from "next/link";
-import { PlusCircle, Users, Edit, ToggleLeft, ToggleRight, Filter, Loader2, AlertTriangle } from "lucide-react";
-import type { User } from "@/types";
+import { PlusCircle, Users, Edit, ToggleLeft, ToggleRight, Filter, Loader2, AlertTriangle, Trash2 } from "lucide-react";
+import type { User, UserRole } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -19,14 +19,14 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+} from "@/components/ui/alert-dialog"; // Removed AlertDialogTrigger as it's used via asChild
 import { useRouter } from "next/navigation";
 import { formatFirebaseTimestamp } from '@/lib/utils';
 import React, { useState, useEffect, useCallback } from 'react';
-// Removed: import { getUsers, updateUserActiveStatus } from '@/actions/users';
-import { collection, getDocs, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, Timestamp, doc, updateDoc, type DocumentReference } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { updateUserActiveStatusInternal, deleteUserProfileDocument } from "@/actions/users";
+import { UserFormDialog, type UserFormData } from "@/components/admin/UserFormDialog";
 
 // Helper function to safely convert Firestore Timestamps or other date forms to JS Date objects
 const ensureSerializableDate = (dateValue: any): Date | undefined => {
@@ -64,6 +64,12 @@ export default function UserManagementPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  
+  const [isUserFormDialogOpen, setIsUserFormDialogOpen] = useState(false);
+  const [userFormMode, setUserFormMode] = useState<"create" | "edit">("create");
+  const [selectedUserForEdit, setSelectedUserForEdit] = useState<User | null>(null);
+  const [userToConfirmDelete, setUserToConfirmDelete] = useState<User | null>(null);
+
 
   const loadUsers = useCallback(async () => {
     if (!currentUser || (!isAdmin && !isSupervisor)) {
@@ -86,8 +92,10 @@ export default function UserManagementPage() {
           userId: docSnapshot.id,
           email: data.email || '',
           displayName: data.displayName || '',
+          fullname: data.fullname || '',
           role: data.role || 'ReadOnly',
           createdAt: ensureSerializableDate(data.createdAt),
+          lastUpdatedAt: ensureSerializableDate(data.lastUpdatedAt),
           isActive: data.isActive === undefined ? true : data.isActive,
         } as User;
       });
@@ -109,13 +117,51 @@ export default function UserManagementPage() {
   }, [currentUser, isAdmin, isSupervisor, toast]);
 
   useEffect(() => {
-    if (!authLoading && currentUser) { // Ensure currentUser is available before loading
+    if (!authLoading && currentUser) { 
       loadUsers();
     } else if (!authLoading && !currentUser) {
       setFetchError("Please log in to view user management.");
       setIsLoading(false);
     }
   }, [authLoading, currentUser, loadUsers]);
+
+  const handleOpenAddUserDialog = () => {
+    setUserFormMode("create");
+    setSelectedUserForEdit(null);
+    setIsUserFormDialogOpen(true);
+  };
+
+  const handleOpenEditUserDialog = (user: User) => {
+    setUserFormMode("edit");
+    setSelectedUserForEdit(user);
+    setIsUserFormDialogOpen(true);
+  };
+  
+  const handleOpenDeleteConfirmDialog = (user: User) => {
+    setUserToConfirmDelete(user);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!userToConfirmDelete || !currentUser?.userId || !isAdmin) {
+      toast({ title: "Error", description: "Cannot delete user.", variant: "destructive" });
+      setUserToConfirmDelete(null);
+      return;
+    }
+    if (currentUser.userId === userToConfirmDelete.userId) {
+      toast({ title: "Action Denied", description: "You cannot delete your own user profile document.", variant: "destructive"});
+      setUserToConfirmDelete(null);
+      return;
+    }
+
+    const result = await deleteUserProfileDocument(userToConfirmDelete.userId, currentUser.userId);
+    if (result.success) {
+      toast({ title: "User Profile Deleted", description: `Firestore profile for ${userToConfirmDelete.displayName || userToConfirmDelete.email} has been deleted.` });
+      loadUsers(); // Refresh list
+    } else {
+      toast({ title: "Deletion Failed", description: result.error || "Could not delete user profile.", variant: "destructive" });
+    }
+    setUserToConfirmDelete(null);
+  };
 
 
   if (!authLoading && !currentUser && !fetchError) {
@@ -127,9 +173,9 @@ export default function UserManagementPage() {
      return <Card><CardHeader><CardTitle>Access Denied</CardTitle></CardHeader><CardContent>You are not authorized to view this page.</CardContent></Card>;
   }
 
-  const getInitials = (name?: string, email?: string) => {
-    if (name && name.trim()) {
-      const names = name.trim().split(' ');
+  const getInitials = (displayName?: string, email?: string) => {
+    if (displayName && displayName.trim()) {
+      const names = displayName.trim().split(' ');
       if (names.length === 1) return names[0].charAt(0).toUpperCase();
       return names[0].charAt(0).toUpperCase() + names[names.length - 1].charAt(0).toUpperCase();
     }
@@ -137,20 +183,32 @@ export default function UserManagementPage() {
     return "U";
   }
 
-  const handleToggleActive = async (userId: string, currentStatus: boolean) => {
-    // Placeholder - In a real app, call a server action to update user in Firebase Auth & Firestore
-    // For example, using the existing updateUserActiveStatus (which would need to be implemented securely)
-    // For now, just UI update and toast
-    console.log(`Toggling active status for ${userId} from ${currentStatus} to ${!currentStatus}`);
-    setUsers(prevUsers =>
-      prevUsers.map(user =>
-        user.userId === userId ? { ...user, isActive: !currentStatus } : user
-      )
-    );
-     toast({
-          title: `User Status ${!currentStatus ? 'Deactivated' : 'Activated'} (UI Only)`,
-          description: `User ${userId} has been ${!currentStatus ? 'deactivated' : 'activated'} (this is a UI placeholder).`,
+  const handleToggleActive = async (userToToggle: User) => {
+    if (!currentUser || !isAdmin) {
+        toast({ title: "Permission Denied", description: "You are not authorized to perform this action.", variant: "destructive" });
+        return;
+    }
+    if (currentUser.userId === userToToggle.userId) {
+        toast({ title: "Action Denied", description: "You cannot change your own active status.", variant: "destructive"});
+        return;
+    }
+
+    const newStatus = !userToToggle.isActive;
+    const result = await updateUserActiveStatusInternal(userToToggle.userId, newStatus, currentUser.userId);
+
+    if (result.success) {
+      toast({
+          title: `User Status ${newStatus ? 'Activated' : 'Deactivated'}`,
+          description: `User ${userToToggle.displayName || userToToggle.email} has been ${newStatus ? 'activated' : 'deactivated'}.`,
       });
+      loadUsers(); // Refresh list
+    } else {
+      toast({
+          title: "Status Update Failed",
+          description: result.error || "Could not update user status.",
+          variant: "destructive",
+      });
+    }
   };
 
   if (authLoading || isLoading) {
@@ -175,7 +233,7 @@ export default function UserManagementPage() {
                 <Filter className="mr-2 h-4 w-4" /> Filter
             </Button>
             {isAdmin && (
-            <Button disabled>
+            <Button onClick={handleOpenAddUserDialog}>
                 <PlusCircle className="mr-2 h-4 w-4" /> Add New User
             </Button>
             )}
@@ -200,7 +258,7 @@ export default function UserManagementPage() {
                   <p className="font-medium mt-2">
                     Please check your Firebase console and ensure your Firestore Security Rules allow your current role
                     ({currentUser?.role || 'Unknown Role'}) to <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">list</code> or <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">read</code> from the <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">users</code> collection.
-                    The rule often involves checking the requesting user's role (e.g., 'Admin', 'Supervisor') from their own document in <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">/users/{uid}</code>.
+                    The rule often involves checking the requesting user's role (e.g., 'Admin', 'Supervisor') from their own document in <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">/users/{`request.auth.uid`}</code>.
                   </p>
                   <p className="mt-2">Also, ensure your user document in Firestore (<code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">/users/{currentUser?.userId || 'YOUR_USER_ID'}</code>) has the correct <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">role</code> and <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">isActive: true</code> fields, and that these match the conditions in your security rules.</p>
                   <p className="text-xs text-muted-foreground mt-1">Detailed error: {fetchError}</p>
@@ -244,34 +302,63 @@ export default function UserManagementPage() {
                   <TableCell className="text-right">
                      {isAdmin && currentUser?.userId !== user.userId && (
                         <>
-                        <Button variant="ghost" size="icon" disabled title="Edit User (UI Only)">
+                        <Button variant="ghost" size="icon" title="Edit User Details" onClick={() => handleOpenEditUserDialog(user)}>
                             <Edit className="h-4 w-4" />
                         </Button>
                         <AlertDialog>
-                            <AlertDialogTrigger asChild>
+                            <AlertDialog.Trigger asChild>
                                 <Button variant="ghost" size="icon" title={user.isActive ? "Deactivate User" : "Activate User"}>
                                     {user.isActive ? <ToggleRight className="h-4 w-4 text-green-500" /> : <ToggleLeft className="h-4 w-4 text-red-500" />}
                                 </Button>
-                            </AlertDialogTrigger>
+                            </AlertDialog.Trigger>
                             <AlertDialogContent>
                                 <AlertDialogHeader>
                                     <AlertDialogTitle>Confirm Status Change</AlertDialogTitle>
                                     <AlertDialogDescription>
                                         Are you sure you want to {user.isActive ? "deactivate" : "activate"} user {user.displayName || user.email}?
-                                        {user.isActive ? " Deactivating will prevent them from logging in (via Firestore rules if isActive is checked)." : " Activating will allow them to log in."}
-                                        {" "}This is a UI placeholder action.
+                                        {user.isActive ? " Deactivating will prevent them from logging in (if Firestore rules check isActive)." : " Activating will allow them to log in."}
                                     </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => handleToggleActive(user.userId, user.isActive)}>
+                                    <AlertDialogAction onClick={() => handleToggleActive(user)}>
                                         Confirm {user.isActive ? "Deactivate" : "Activate"}
                                     </AlertDialogAction>
                                 </AlertDialogFooter>
                             </AlertDialogContent>
                         </AlertDialog>
+                         <AlertDialog>
+                            <AlertDialog.Trigger asChild>
+                                <Button variant="ghost" size="icon" title="Delete User Profile" onClick={() => handleOpenDeleteConfirmDialog(user)}>
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                            </AlertDialog.Trigger>
+                             {userToConfirmDelete && userToConfirmDelete.userId === user.userId && (
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>Confirm Profile Deletion</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                            Are you sure you want to delete the Firestore profile for {userToConfirmDelete.displayName || userToConfirmDelete.email}? 
+                                            This action only removes their profile document, not their Firebase Authentication account. This cannot be undone.
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel onClick={() => setUserToConfirmDelete(null)}>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+                                            Confirm Delete
+                                        </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                             )}
+                        </AlertDialog>
                         </>
                      )}
+                     {/* Show if current user is THIS user (for future self-edit, if needed) */}
+                     {/* {currentUser?.userId === user.userId && (
+                        <Button variant="ghost" size="icon" disabled title="Edit My Profile (Not Implemented)">
+                            <Edit className="h-4 w-4" />
+                        </Button>
+                     )} */}
                   </TableCell>
                 </TableRow>
               )) : (
@@ -286,9 +373,19 @@ export default function UserManagementPage() {
           )}
         </CardContent>
       </Card>
+
+      {isAdmin && (
+        <UserFormDialog
+            mode={userFormMode}
+            user={selectedUserForEdit}
+            open={isUserFormDialogOpen}
+            onOpenChange={setIsUserFormDialogOpen}
+            onUserUpdated={() => {
+                setIsUserFormDialogOpen(false);
+                loadUsers(); // Refresh the list
+            }}
+        />
+      )}
     </div>
   );
 }
-
-
-    
