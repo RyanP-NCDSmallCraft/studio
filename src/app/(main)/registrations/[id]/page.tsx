@@ -27,7 +27,7 @@ import { Label } from "@/components/ui/label";
 import React, { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { format, parseISO, isValid } from "date-fns";
-import { doc, getDoc, updateDoc, Timestamp, type DocumentReference, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, Timestamp, collection, query, where, getDocs, DocumentReference } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
 
@@ -562,3 +562,4 @@ export default function RegistrationDetailPage() {
     </div>
   );
 }
+
