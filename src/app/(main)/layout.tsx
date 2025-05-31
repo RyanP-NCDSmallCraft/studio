@@ -12,14 +12,17 @@ export default function MainLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    console.log(`MainLayout Effect: loading: ${loading}, currentUser: ${!!currentUser} (ID: ${currentUser?.userId || 'N/A'})`);
+    console.log(`MainLayout Effect: loading=${loading}, currentUser.userId=${currentUser?.userId}, currentUser.isActive=${currentUser?.isActive}`);
     if (!loading && !currentUser) {
       console.log("MainLayout Effect: NOT loading and NO currentUser. Redirecting to /login.");
       router.replace("/login");
-    } else if (!loading && currentUser) {
-      console.log(`MainLayout Effect: NOT loading and currentUser IS present (UID: ${currentUser.userId}). No redirect needed from effect.`);
+    } else if (!loading && currentUser && currentUser.isActive === false) {
+      console.log("MainLayout Effect: User is NOT active. Redirecting to /login.");
+      router.replace("/login"); // Also redirect if user profile loaded but is inactive
     } else if (loading) {
       console.log("MainLayout Effect: STILL loading. No redirect decision yet from effect.");
+    } else if (!loading && currentUser && currentUser.isActive === true) {
+      console.log(`MainLayout Effect: NOT loading and ACTIVE currentUser IS present (UID: ${currentUser.userId}). No redirect needed from effect.`);
     }
   }, [currentUser, loading, router]);
 
@@ -33,10 +36,7 @@ export default function MainLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  // After loading is false, we check currentUser again
   if (!currentUser) {
-    // This case should ideally be caught by the useEffect redirect,
-    // but it acts as a fallback to prevent rendering AppShell if currentUser is null.
     console.log("MainLayout Render: 'loading' is false, but 'currentUser' is still null/undefined. Rendering loading spinner (expecting redirect from effect).");
     return (
       <div className="flex h-screen w-full items-center justify-center">
@@ -45,9 +45,18 @@ export default function MainLayout({ children }: { children: ReactNode }) {
       </div>
     );
   }
+  
+  if (currentUser.isActive === false) {
+     console.log("MainLayout Render: 'currentUser' exists but is NOT active. Rendering loading spinner (expecting redirect from effect).");
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+         <p className="sr-only">Waiting for redirection due to inactive account...</p>
+      </div>
+    );
+  }
 
-  console.log(`MainLayout Render: 'loading' is false and 'currentUser' IS present (UID: ${currentUser.userId}). Rendering AppShell.`);
+
+  console.log(`MainLayout Render: 'loading' is false and ACTIVE 'currentUser' IS present (UID: ${currentUser.userId}). Rendering AppShell.`);
   return <AppShell>{children}</AppShell>;
 }
-
-    
