@@ -6,13 +6,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { PlusCircle, ClipboardList, Eye, Edit, Filter, Play, CheckSquare, CalendarDays, Loader2, AlertTriangle } from "lucide-react";
-import type { Inspection, Registration, User } from "@/types"; // Ensure DocumentReference is imported if used directly
+import type { Inspection, Registration, User } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
 import React, { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { collection, getDocs, query, where, doc, getDoc, Timestamp, type DocumentReference } from 'firebase/firestore'; // Added DocumentReference
-import { db, auth as firebaseAuth } from '@/lib/firebase'; // Added firebaseAuth for direct SDK check
+import { collection, getDocs, query, where, doc, getDoc, Timestamp, type DocumentReference } from 'firebase/firestore';
+import { db, auth as firebaseAuth } from '@/lib/firebase';
 
 // Helper function to safely convert Firestore Timestamps or other date forms to JS Date objects
 const ensureSerializableDate = (dateValue: any): Date | undefined => {
@@ -50,13 +50,22 @@ export default function InspectionListPage() {
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   const loadInspections = useCallback(async () => {
-    if (!currentUser) {
-      setInspections([]);
-      setIsLoading(false);
+    if (authLoading) {
+      console.log("InspectionsPage: Auth is loading. Waiting to fetch inspections.");
+      setIsLoading(true);
       return;
     }
-    console.log(`InspectionsPage: loadInspections called for user: ${currentUser.userId}, role: ${currentUser.role}, isActive: ${currentUser.isActive}`);
-    console.log("InspectionsPage: Firebase SDK currentUser (auth.currentUser):", firebaseAuth.currentUser?.uid);
+    if (!currentUser) {
+      console.log("InspectionsPage: No current user. Clearing inspections, not fetching.");
+      setInspections([]);
+      setIsLoading(false);
+      setFetchError("Please log in to view inspections.");
+      return;
+    }
+
+    console.log(`InspectionsPage: loadInspections called. User: ${currentUser.userId}, Role: ${currentUser.role}, Active: ${currentUser.isActive}`);
+    console.log("InspectionsPage: Firebase SDK currentUser (auth.currentUser) UID:", firebaseAuth.currentUser?.uid);
+    console.log("InspectionsPage: currentUser from useAuth:", currentUser);
 
 
     setIsLoading(true);
@@ -66,12 +75,13 @@ export default function InspectionListPage() {
       if (currentUser.role === "Inspector" && !isAdmin && !isRegistrar && !isSupervisor) {
         const userDocRef = doc(db, "users", currentUser.userId);
         inspectionsQuery = query(collection(db, "inspections"), where("inspectorRef", "==", userDocRef));
-        console.log("InspectionsPage: Query for Inspector:", inspectionsQuery);
+        console.log("InspectionsPage: Query for Inspector:", currentUser.userId);
       } else {
         inspectionsQuery = query(collection(db, "inspections"));
-        console.log("InspectionsPage: Query for Admin/Registrar/Supervisor (all inspections):", inspectionsQuery);
+        console.log("InspectionsPage: Query for Admin/Registrar/Supervisor (all inspections).");
       }
       const inspectionSnapshot = await getDocs(inspectionsQuery);
+      console.log(`InspectionsPage: Fetched ${inspectionSnapshot.docs.length} inspection documents.`);
 
       const inspectionsPromises = inspectionSnapshot.docs.map(async (docSnapshot) => {
         const data = docSnapshot.data();
@@ -80,45 +90,66 @@ export default function InspectionListPage() {
 
         try {
           if (data.registrationRef) {
-            const regRef = data.registrationRef instanceof DocumentReference ? data.registrationRef : doc(db, (data.registrationRef as any).path || `registrations/${data.registrationRef}`);
-            const regDocSnap = await getDoc(regRef as DocumentReference<Registration>);
-            if (regDocSnap.exists()) {
-              const regData = regDocSnap.data();
-              registrationData = {
-                id: regDocSnap.id,
-                scaRegoNo: regData.scaRegoNo,
-                hullIdNumber: regData.hullIdNumber,
-                craftMake: regData.craftMake,
-                craftModel: regData.craftModel,
-                craftType: regData.vesselType,
-              };
+            const regRefPath = data.registrationRef.path || (typeof data.registrationRef === 'string' ? `registrations/${data.registrationRef}` : null);
+            if (regRefPath) {
+                const regRef = doc(db, regRefPath) as DocumentReference<Registration>;
+                const regDocSnap = await getDoc(regRef);
+                if (regDocSnap.exists()) {
+                    const regData = regDocSnap.data();
+                    registrationData = {
+                        id: regDocSnap.id,
+                        scaRegoNo: regData.scaRegoNo,
+                        hullIdNumber: regData.hullIdNumber,
+                        craftMake: regData.craftMake,
+                        craftModel: regData.craftModel,
+                        craftType: regData.vesselType,
+                    };
+                } else {
+                    console.warn(`InspectionsPage: Linked registration document ${regRefPath} not found for inspection ${docSnapshot.id}`);
+                }
+            } else {
+                 console.warn(`InspectionsPage: Malformed registrationRef for inspection ${docSnapshot.id}:`, data.registrationRef);
             }
           }
-        } catch (regError) {
-          console.warn(`Failed to fetch related registration for inspection ${docSnapshot.id}:`, regError);
+        } catch (regError: any) {
+          console.warn(`InspectionsPage: Failed to fetch related registration for inspection ${docSnapshot.id}: Code: ${regError.code}, Msg: ${regError.message}`, regError);
         }
 
         try {
           if (data.inspectorRef) {
-            const inspRef = data.inspectorRef instanceof DocumentReference ? data.inspectorRef : doc(db, (data.inspectorRef as any).path || `users/${data.inspectorRef}`);
-            const inspectorDocSnap = await getDoc(inspRef as DocumentReference<User>);
-            if (inspectorDocSnap.exists()) {
-              const inspData = inspectorDocSnap.data();
-              inspectorData = {
-                id: inspectorDocSnap.id,
-                displayName: inspData.displayName || inspData.email,
-              };
+            const inspRefPath = data.inspectorRef.path || (typeof data.inspectorRef === 'string' ? `users/${data.inspectorRef}` : null);
+            if (inspRefPath) {
+                const inspRef = doc(db, inspRefPath) as DocumentReference<User>;
+                const inspectorDocSnap = await getDoc(inspRef);
+                if (inspectorDocSnap.exists()) {
+                    const inspData = inspectorDocSnap.data();
+                    inspectorData = {
+                        id: inspectorDocSnap.id,
+                        displayName: inspData.displayName || inspData.email,
+                    };
+                } else {
+                     console.warn(`InspectionsPage: Linked inspector document ${inspRefPath} not found for inspection ${docSnapshot.id}`);
+                }
+            } else {
+                 console.warn(`InspectionsPage: Malformed inspectorRef for inspection ${docSnapshot.id}:`, data.inspectorRef);
             }
           }
-        } catch (inspError) {
-          console.warn(`Failed to fetch related inspector for inspection ${docSnapshot.id}:`, inspError);
+        } catch (inspError: any) {
+          console.warn(`InspectionsPage: Failed to fetch related inspector for inspection ${docSnapshot.id}: Code: ${inspError.code}, Msg: ${inspError.message}`, inspError);
         }
+        
+        const inspectionRefId = (data.registrationRef instanceof DocumentReference) ? data.registrationRef.id : (typeof data.registrationRef === 'string' ? data.registrationRef : (data.registrationRef?.id || null));
+        const inspectorRefId = (data.inspectorRef instanceof DocumentReference) ? data.inspectorRef.id : (typeof data.inspectorRef === 'string' ? data.inspectorRef : (data.inspectorRef?.id || null));
+        const createdByRefId = (data.createdByRef instanceof DocumentReference) ? data.createdByRef.id : (typeof data.createdByRef === 'string' ? data.createdByRef : (data.createdByRef?.id || null));
+        const lastUpdatedByRefId = (data.lastUpdatedByRef instanceof DocumentReference) ? data.lastUpdatedByRef.id : (typeof data.lastUpdatedByRef === 'string' ? data.lastUpdatedByRef : (data.lastUpdatedByRef?.id || null));
+        const reviewedByRefId = (data.reviewedByRef instanceof DocumentReference) ? data.reviewedByRef.id : (typeof data.reviewedByRef === 'string' ? data.reviewedByRef : (data.reviewedByRef?.id || null));
+
 
         return {
           inspectionId: docSnapshot.id,
-          registrationRef: (data.registrationRef as DocumentReference<Registration>)?.id || data.registrationRef,
+          registrationRef: inspectionRefId,
           registrationData,
-          inspectorRef: (data.inspectorRef as DocumentReference<User>)?.id || data.inspectorRef,
+          inspectorRef: inspectorRefId,
           inspectorData,
           inspectionType: data.inspectionType || 'Initial',
           scheduledDate: ensureSerializableDate(data.scheduledDate),
@@ -131,11 +162,11 @@ export default function InspectionListPage() {
           checklistItems: data.checklistItems || [],
           completedAt: ensureSerializableDate(data.completedAt),
           reviewedAt: ensureSerializableDate(data.reviewedAt),
-          reviewedByRef: (data.reviewedByRef as DocumentReference<User>)?.id || data.reviewedByRef,
+          reviewedByRef: reviewedByRefId,
           createdAt: ensureSerializableDate(data.createdAt),
-          createdByRef: (data.createdByRef as DocumentReference<User>)?.id || data.createdByRef,
+          createdByRef: createdByRefId,
           lastUpdatedAt: ensureSerializableDate(data.lastUpdatedAt),
-          lastUpdatedByRef: (data.lastUpdatedByRef as DocumentReference<User>)?.id || data.lastUpdatedByRef,
+          lastUpdatedByRef: lastUpdatedByRefId,
         } as Inspection;
       });
 
@@ -146,7 +177,8 @@ export default function InspectionListPage() {
       const originalErrorCode = error.code || "N/A";
       const detailedError = `Failed to fetch inspections from server. Original error: [${originalErrorCode}] ${originalErrorMessage}`;
       console.error("Failed to load inspections:", detailedError, error);
-      console.error("Current user at time of error:", currentUser);
+      console.error("Current user at time of error (InspectionsPage):", currentUser ? {uid: currentUser.userId, role: currentUser.role, isActive: currentUser.isActive} : "null");
+      console.error("Auth SDK currentUser at time of error (InspectionsPage):", firebaseAuth.currentUser?.uid || "null");
       setFetchError(detailedError);
       toast({
         title: "Error Loading Inspections",
@@ -156,21 +188,21 @@ export default function InspectionListPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [currentUser, isAdmin, isRegistrar, isSupervisor, toast]);
+  }, [currentUser, isAdmin, isRegistrar, isSupervisor, toast, authLoading]); // Added authLoading to dependency array
 
   useEffect(() => {
     if (authLoading) {
-      setIsLoading(true);
+      setIsLoading(true); // Explicitly set loading if auth is still loading
       return;
     }
-    if (currentUser) {
+    if (currentUser) { // Only load if currentUser is resolved and present
       loadInspections();
-    } else {
+    } else { // If auth is done and no user, then don't load
       setIsLoading(false);
       setFetchError("Please log in to view inspections.");
       setInspections([]);
     }
-  }, [currentUser, authLoading, loadInspections]);
+  }, [authLoading, currentUser, loadInspections]);
 
 
   const getStatusBadgeVariant = (status?: Inspection["status"]) => {
@@ -246,11 +278,13 @@ export default function InspectionListPage() {
                   <p className="font-medium mt-2">Please check your Firebase console and ensure your Firestore Security Rules allow:</p>
                   <ul className="list-disc list-inside text-left text-sm mx-auto max-w-md">
                     <li>Your current role ({currentUser?.role || 'Unknown Role'}) to <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">read</code> from the <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">inspections</code> collection.</li>
+                    <li>If querying by inspector, ensure the query conditions match your rules for inspectors.</li>
                     <li>Read access to the <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">registrations</code> collection (for linked craft details).</li>
                     <li>Read access to the <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">users</code> collection (for inspector details and for your role/active status check in rules via `get()` ).</li>
                   </ul>
                   <p className="mt-2">Ensure your user document in Firestore (<code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">/users/{currentUser?.userId || 'YOUR_USER_ID'}</code>) has the correct <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">role</code> and <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">isActive: true</code> fields.</p>
                    <p className="text-xs text-muted-foreground mt-1">Detailed error: {fetchError}</p>
+                   <p className="text-xs text-muted-foreground mt-1">Current User (Client): ID: {currentUser?.userId || 'N/A'}, Role: {currentUser?.role || 'N/A'}, Active: {currentUser?.isActive !== undefined ? String(currentUser.isActive) : 'N/A'}</p>
                 </div>
               ) : (
                 <p className="text-destructive">{fetchError}</p>
@@ -262,8 +296,8 @@ export default function InspectionListPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Inspection ID</TableHead>
-                  <TableHead>Craft (Rego / Make/Model)</TableHead>
+                  <TableHead>Inspection ID / Craft Rego</TableHead>
+                  <TableHead>Craft Make/Model</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Scheduled</TableHead>
                   <TableHead>Status</TableHead>
@@ -280,10 +314,10 @@ export default function InspectionListPage() {
 
                   return (
                   <TableRow key={insp.inspectionId}>
-                    <TableCell className="font-medium">{insp.inspectionId}</TableCell>
+                    <TableCell className="font-medium">{insp.registrationData?.scaRegoNo || insp.inspectionId}</TableCell>
                     <TableCell>
-                      <div>{insp.registrationData?.scaRegoNo || insp.registrationData?.id || (typeof insp.registrationRef === 'string' ? insp.registrationRef : 'N/A')}</div>
-                      <div className="text-xs text-muted-foreground">{insp.registrationData?.craftMake} {insp.registrationData?.craftModel}</div>
+                      <div>{insp.registrationData?.craftMake} {insp.registrationData?.craftModel}</div>
+                      <div className="text-xs text-muted-foreground">HIN: {insp.registrationData?.hullIdNumber || 'N/A'}</div>
                     </TableCell>
                     <TableCell>{insp.inspectionType}</TableCell>
                     <TableCell>{formatFirebaseTimestamp(insp.scheduledDate, "PP")}</TableCell>
@@ -336,3 +370,4 @@ export default function InspectionListPage() {
     </div>
   );
 }
+
