@@ -1,8 +1,9 @@
+
 // src/actions/users.ts
 'use server';
 
 import { collection, getDocs, Timestamp, type DocumentReference } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db } from '@/lib/firebase'; // This db is the client SDK instance
 import type { User } from '@/types';
 
 // Helper function to safely convert Firestore Timestamps or other date forms to JS Date objects
@@ -18,7 +19,7 @@ const ensureSerializableDate = (dateValue: any): Date | undefined => {
     try {
       return new Timestamp(dateValue.seconds, dateValue.nanoseconds).toDate();
     } catch (e) {
-      console.warn('Failed to convert object to Timestamp then to Date:', dateValue, e);
+      console.warn('Server Action users.ts: Failed to convert object to Timestamp then to Date:', dateValue, e);
       return undefined;
     }
   }
@@ -28,13 +29,17 @@ const ensureSerializableDate = (dateValue: any): Date | undefined => {
       return parsedDate;
     }
   }
-  console.warn(`Could not convert field to a serializable Date:`, dateValue);
+  console.warn(`Server Action users.ts: Could not convert field to a serializable Date:`, dateValue);
   return undefined;
 };
 
-export async function getUsers(): Promise<User[]> {
+// This server action might still be useful for other server-side operations or if you later
+// implement Firebase Admin SDK for certain backend tasks.
+// However, the UserManagementPage will now fetch users client-side for rule evaluation.
+export async function getUsers_serverAction(): Promise<User[]> {
+  console.log("Server Action getUsers_serverAction: Attempting to fetch users. Note: Firestore rules will apply based on server context, not client's 'request.auth'.");
   try {
-    const usersCol = collection(db, "users");
+    const usersCol = collection(db, "users"); // db here is the client SDK instance
     const userSnapshot = await getDocs(usersCol);
 
     const users = userSnapshot.docs.map((docSnapshot) => {
@@ -43,10 +48,10 @@ export async function getUsers(): Promise<User[]> {
         userId: docSnapshot.id,
         email: data.email || '',
         displayName: data.displayName || '',
-        role: data.role || 'ReadOnly', // Default to ReadOnly if role is missing
-        createdAt: ensureSerializableDate(data.createdAt), // Convert Timestamp to Date
-        isActive: data.isActive === undefined ? true : data.isActive, // Default to true if isActive is missing
-      } as User; // Ensure dates are now serializable
+        role: data.role || 'ReadOnly',
+        createdAt: ensureSerializableDate(data.createdAt),
+        isActive: data.isActive === undefined ? true : data.isActive,
+      } as User;
     });
 
     return users;
@@ -55,7 +60,7 @@ export async function getUsers(): Promise<User[]> {
     const originalErrorMessage = error.message || "Unknown Firebase error";
     const originalErrorCode = error.code || "N/A";
     console.error(
-      `Error fetching users in Server Action. Original Error Code: ${originalErrorCode}, Message: ${originalErrorMessage}`,
+      `Server Action getUsers_serverAction: Error fetching users. Original Error Code: ${originalErrorCode}, Message: ${originalErrorMessage}`,
       error
     );
     throw new Error(
@@ -79,3 +84,5 @@ export async function updateUserActiveStatus(userId: string, isActive: boolean):
   // }
   return { success: true }; // Simulate success
 }
+
+    

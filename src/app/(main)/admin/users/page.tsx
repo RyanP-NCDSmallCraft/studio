@@ -24,7 +24,36 @@ import {
 import { useRouter } from "next/navigation";
 import { formatFirebaseTimestamp } from '@/lib/utils';
 import React, { useState, useEffect, useCallback } from 'react';
-import { getUsers, updateUserActiveStatus } from '@/actions/users';
+// Removed: import { getUsers, updateUserActiveStatus } from '@/actions/users';
+import { collection, getDocs, Timestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+
+// Helper function to safely convert Firestore Timestamps or other date forms to JS Date objects
+const ensureSerializableDate = (dateValue: any): Date | undefined => {
+  if (!dateValue) return undefined;
+  if (dateValue instanceof Timestamp) {
+    return dateValue.toDate();
+  }
+  if (dateValue instanceof Date) {
+    return dateValue;
+  }
+  if (typeof dateValue === 'object' && dateValue !== null && typeof dateValue.seconds === 'number' && typeof dateValue.nanoseconds === 'number') {
+    try {
+      return new Timestamp(dateValue.seconds, dateValue.nanoseconds).toDate();
+    } catch (e) {
+      console.warn('UserManagementPage: Failed to convert object to Timestamp then to Date:', dateValue, e);
+      return undefined;
+    }
+  }
+  if (typeof dateValue === 'string' || typeof dateValue === 'number') {
+    const parsedDate = new Date(dateValue);
+    if (!isNaN(parsedDate.getTime())) {
+      return parsedDate;
+    }
+  }
+  console.warn(`UserManagementPage: Could not convert field to a serializable Date:`, dateValue);
+  return undefined;
+};
 
 
 export default function UserManagementPage() {
@@ -47,15 +76,31 @@ export default function UserManagementPage() {
     setIsLoading(true);
     setFetchError(null);
     try {
-      const fetchedUsers = await getUsers();
+      console.log(`UserManagementPage: Attempting to fetch users directly from client. Current user role: ${currentUser?.role}, isActive: ${currentUser?.isActive}`);
+      const usersCol = collection(db, "users");
+      const userSnapshot = await getDocs(usersCol);
+
+      const fetchedUsers = userSnapshot.docs.map((docSnapshot) => {
+        const data = docSnapshot.data();
+        return {
+          userId: docSnapshot.id,
+          email: data.email || '',
+          displayName: data.displayName || '',
+          role: data.role || 'ReadOnly',
+          createdAt: ensureSerializableDate(data.createdAt),
+          isActive: data.isActive === undefined ? true : data.isActive,
+        } as User;
+      });
       setUsers(fetchedUsers);
     } catch (error: any) {
-      console.error("Failed to load users:", error);
-      const errorMessage = error.message || "An unexpected error occurred while fetching users.";
-      setFetchError(errorMessage);
+      const originalErrorMessage = error.message || "Unknown Firebase error";
+      const originalErrorCode = error.code || "N/A";
+      const detailedError = `Failed to fetch users. Original error: [${originalErrorCode}] ${originalErrorMessage}`;
+      console.error("UserManagementPage: Error fetching users:", detailedError, error);
+      setFetchError(detailedError);
       toast({
         title: "Error Loading Users",
-        description: errorMessage,
+        description: detailedError,
         variant: "destructive",
       });
     } finally {
@@ -64,22 +109,24 @@ export default function UserManagementPage() {
   }, [currentUser, isAdmin, isSupervisor, toast]);
 
   useEffect(() => {
-    if (!authLoading) {
+    if (!authLoading && currentUser) { // Ensure currentUser is available before loading
       loadUsers();
+    } else if (!authLoading && !currentUser) {
+      setFetchError("Please log in to view user management.");
+      setIsLoading(false);
     }
-  }, [authLoading, loadUsers]);
+  }, [authLoading, currentUser, loadUsers]);
 
-  // Protect this page - although layout should also handle it
-  if (!authLoading && !currentUser) {
-    // This should be handled by MainLayout, but as a fallback:
+
+  if (!authLoading && !currentUser && !fetchError) {
     router.replace('/login');
     return <Card><CardContent className="pt-6">Redirecting to login...</CardContent></Card>;
   }
-  
+
   if (!authLoading && currentUser && !isAdmin && !isSupervisor) {
      return <Card><CardHeader><CardTitle>Access Denied</CardTitle></CardHeader><CardContent>You are not authorized to view this page.</CardContent></Card>;
   }
-  
+
   const getInitials = (name?: string, email?: string) => {
     if (name && name.trim()) {
       const names = name.trim().split(' ');
@@ -91,43 +138,22 @@ export default function UserManagementPage() {
   }
 
   const handleToggleActive = async (userId: string, currentStatus: boolean) => {
-    // Placeholder: In a real app, call a server action to update user in Firebase Auth & Firestore
+    // Placeholder - In a real app, call a server action to update user in Firebase Auth & Firestore
+    // For example, using the existing updateUserActiveStatus (which would need to be implemented securely)
+    // For now, just UI update and toast
     console.log(`Toggling active status for ${userId} from ${currentStatus} to ${!currentStatus}`);
-    
-    // Simulate optimistc update for UI
-    setUsers(prevUsers => 
-      prevUsers.map(user => 
+    setUsers(prevUsers =>
+      prevUsers.map(user =>
         user.userId === userId ? { ...user, isActive: !currentStatus } : user
       )
     );
-
-    // Placeholder for server action call
-    // const result = await updateUserActiveStatus(userId, !currentStatus);
-    // if (result.success) {
-    //   toast({
-    //       title: `User Status ${!currentStatus ? 'Deactivated' : 'Activated'}`,
-    //       description: `User ${userId} has been ${!currentStatus ? 'deactivated' : 'activated'}.`,
-    //   });
-    // } else {
-    //   // Revert UI on failure
-    //   setUsers(prevUsers => 
-    //     prevUsers.map(user => 
-    //       user.userId === userId ? { ...user, isActive: currentStatus } : user // Revert to original status
-    //     )
-    //   );
-    //   toast({
-    //       title: `Error Updating Status`,
-    //       description: result.error || "Could not update user status.",
-    //       variant: "destructive",
-    //   });
-    // }
-     toast({ // Keeping current UI-only behavior for now
+     toast({
           title: `User Status ${!currentStatus ? 'Deactivated' : 'Activated'} (UI Only)`,
           description: `User ${userId} has been ${!currentStatus ? 'deactivated' : 'activated'} (this is a UI placeholder).`,
       });
   };
 
-  if (authLoading || (!currentUser && !fetchError)) { // Added !fetchError to avoid double loading message
+  if (authLoading || isLoading) {
     return (
       <div className="flex h-64 justify-center items-center py-10">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -148,8 +174,8 @@ export default function UserManagementPage() {
             <Button variant="outline" disabled>
                 <Filter className="mr-2 h-4 w-4" /> Filter
             </Button>
-            {isAdmin && ( // Only Admin can add new users typically
-            <Button disabled> {/* Add user functionality is complex, involving Auth + Firestore */}
+            {isAdmin && (
+            <Button disabled>
                 <PlusCircle className="mr-2 h-4 w-4" /> Add New User
             </Button>
             )}
@@ -162,12 +188,7 @@ export default function UserManagementPage() {
           <CardDescription>Manage user accounts, roles, and access permissions.</CardDescription>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
-            <div className="flex h-40 justify-center items-center">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <p className="ml-2">Fetching users...</p>
-            </div>
-          ) : fetchError ? (
+          {fetchError ? (
              <div className="text-center py-10">
               {fetchError.includes("permission-denied") || fetchError.includes("Missing or insufficient permissions") ? (
                 <div className="text-destructive space-y-2 p-4 border border-destructive/50 rounded-md bg-destructive/10">
@@ -176,7 +197,12 @@ export default function UserManagementPage() {
                     <h3 className="text-xl font-semibold">Permission Denied</h3>
                   </div>
                   <p>Could not load users due to missing Firestore permissions.</p>
-                  <p className="font-medium mt-2">Please check your Firebase console and ensure your Firestore Security Rules allow your current role ({currentUser?.role || 'Unknown Role'}) to <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">list</code> or <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">read</code> from the <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">users</code> collection.</p>
+                  <p className="font-medium mt-2">
+                    Please check your Firebase console and ensure your Firestore Security Rules allow your current role
+                    ({currentUser?.role || 'Unknown Role'}) to <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">list</code> or <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">read</code> from the <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">users</code> collection.
+                    The rule often involves checking the requesting user's role (e.g., 'Admin', 'Supervisor') from their own document in <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">/users/{uid}</code>.
+                  </p>
+                  <p className="mt-2">Also, ensure your user document in Firestore (<code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">/users/{currentUser?.userId || 'YOUR_USER_ID'}</code>) has the correct <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">role</code> and <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">isActive: true</code> fields, and that these match the conditions in your security rules.</p>
                   <p className="text-xs text-muted-foreground mt-1">Detailed error: {fetchError}</p>
                 </div>
               ) : (
@@ -202,7 +228,6 @@ export default function UserManagementPage() {
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Avatar className="h-8 w-8">
-                        {/* <AvatarImage src={user.photoURL} /> Should come from Firebase Auth user potentially */}
                         <AvatarFallback>{getInitials(user.displayName, user.email)}</AvatarFallback>
                       </Avatar>
                       <span className="font-medium">{user.displayName || user.email?.split('@')[0] || "N/A"}</span>
@@ -217,9 +242,9 @@ export default function UserManagementPage() {
                   </TableCell>
                   <TableCell>{formatFirebaseTimestamp(user.createdAt, "PP")}</TableCell>
                   <TableCell className="text-right">
-                     {isAdmin && currentUser?.userId !== user.userId && ( // Admin can edit/toggle others, not themselves directly here for safety
+                     {isAdmin && currentUser?.userId !== user.userId && (
                         <>
-                        <Button variant="ghost" size="icon" disabled title="Edit User (UI Only)"> {/* Edit user is complex */}
+                        <Button variant="ghost" size="icon" disabled title="Edit User (UI Only)">
                             <Edit className="h-4 w-4" />
                         </Button>
                         <AlertDialog>
@@ -264,3 +289,6 @@ export default function UserManagementPage() {
     </div>
   );
 }
+
+
+    
