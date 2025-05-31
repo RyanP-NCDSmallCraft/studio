@@ -27,15 +27,9 @@ import { Label } from "@/components/ui/label";
 import React, { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { format, parseISO, isValid } from "date-fns";
-import { doc, getDoc, updateDoc, Timestamp, type DocumentReference } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, Timestamp, type DocumentReference, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
-
-// Placeholder for linked inspections - this would also need to be fetched dynamically
-const placeholderInspections: Inspection[] = [
-    { inspectionId: "INSP001", registrationRef: {} as any, inspectorRef: {} as any, inspectionType: "Initial", scheduledDate: new Date() as any, inspectionDate: new Date() as any, status: "Passed", overallResult: "Pass", findings: "All clear", followUpRequired: false, checklistItems: [], createdAt: new Date() as any, createdByRef: {} as any },
-    { inspectionId: "INSP002", registrationRef: {} as any, inspectorRef: {} as any, inspectionType: "Annual", scheduledDate: new Date() as any, status: "Scheduled", findings: "", followUpRequired: false, checklistItems: [], createdAt: new Date() as any, createdByRef: {} as any },
-];
 
 // Helper to convert Firestore Timestamps or other date forms to JS Date for client state
 const ensureDateObject = (dateValue: any): Date | undefined => {
@@ -50,12 +44,12 @@ const ensureDateObject = (dateValue: any): Date | undefined => {
     const parsed = new Date(dateValue);
     if (isValid(parsed)) return parsed;
   }
-  // For Firestore-like {seconds, nanoseconds} objects that might come from server actions
   if (typeof dateValue === 'object' && dateValue !== null && typeof dateValue.seconds === 'number' && typeof dateValue.nanoseconds === 'number') {
     try {
       return new Timestamp(dateValue.seconds, dateValue.nanoseconds).toDate();
     } catch (e) { /* ignore */ }
   }
+  console.warn(`RegistrationDetailPage: Could not convert field to a serializable Date:`, dateValue);
   return undefined;
 };
 
@@ -70,33 +64,36 @@ export default function RegistrationDetailPage() {
   const [registration, setRegistration] = useState<Registration | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const inspections = placeholderInspections; // Keep as placeholder for now
+  
+  const [linkedInspections, setLinkedInspections] = useState<Inspection[]>([]);
+  const [loadingLinkedInspections, setLoadingLinkedInspections] = useState(false);
+  const [errorLinkedInspections, setErrorLinkedInspections] = useState<string | null>(null);
+
 
   const [approveModalOpen, setApproveModalOpen] = useState(false);
   const [scaRegoNo, setScaRegoNo] = useState("");
   const [effectiveDate, setEffectiveDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [expiryDate, setExpiryDate] = useState(format(new Date(new Date().setFullYear(new Date().getFullYear() + 1)), "yyyy-MM-dd"));
 
-  const fetchRegistration = useCallback(async () => {
+  const fetchRegistrationDetails = useCallback(async () => {
     if (!registrationId) {
       setError("Registration ID is missing.");
       setLoading(false);
       return;
     }
     if (!currentUser) {
-      // Wait for auth context to be available, or handle unauthorized access
-      // setError("Authentication required to view registration details.");
-      // setLoading(false); // Or keep loading until currentUser is resolved
+      // Waiting for auth context
       return;
     }
 
-
     setLoading(true);
     setError(null);
+    setLoadingLinkedInspections(true);
+    setErrorLinkedInspections(null);
 
     try {
-      const docRef = doc(db, "registrations", registrationId);
-      const docSnap = await getDoc(docRef);
+      const regDocRef = doc(db, "registrations", registrationId);
+      const docSnap = await getDoc(regDocRef);
 
       if (docSnap.exists()) {
         const data = docSnap.data();
@@ -145,16 +142,46 @@ export default function RegistrationDetailPage() {
           certificateGeneratedAt: ensureDateObject(data.certificateGeneratedAt),
           certificateFileName: data.certificateFileName,
           certificateFileUrl: data.certificateFileUrl,
-          lastUpdatedByRef: (data.lastUpdatedByRef as DocumentReference<User>)?.id || data.lastUpdatedByRef,
+          lastUpdatedByRef: (data.lastUpdatedByRef instanceof DocumentReference) ? data.lastUpdatedByRef.id : data.lastUpdatedByRef,
           lastUpdatedAt: ensureDateObject(data.lastUpdatedAt),
-          createdByRef: (data.createdByRef as DocumentReference<User>)?.id || data.createdByRef,
+          createdByRef: (data.createdByRef instanceof DocumentReference) ? data.createdByRef.id : data.createdByRef,
           createdAt: ensureDateObject(data.createdAt),
         };
         setRegistration(processedData);
-        // Initialize modal fields if registration data is available
         setScaRegoNo(processedData.scaRegoNo || "");
         if (processedData.effectiveDate) setEffectiveDate(format(new Date(processedData.effectiveDate as Date), "yyyy-MM-dd"));
         if (processedData.expiryDate) setExpiryDate(format(new Date(processedData.expiryDate as Date), "yyyy-MM-dd"));
+
+        // Fetch linked inspections
+        try {
+          const inspectionsQuery = query(
+            collection(db, "inspections"),
+            where("registrationRef", "==", doc(db, "registrations", registrationId))
+          );
+          const inspectionSnapshot = await getDocs(inspectionsQuery);
+          const inspectionsData = inspectionSnapshot.docs.map(inspDoc => {
+            const inspData = inspDoc.data();
+            return {
+              inspectionId: inspDoc.id,
+              ...inspData,
+              scheduledDate: ensureDateObject(inspData.scheduledDate),
+              inspectionDate: ensureDateObject(inspData.inspectionDate),
+              completedAt: ensureDateObject(inspData.completedAt),
+              reviewedAt: ensureDateObject(inspData.reviewedAt),
+              createdAt: ensureDateObject(inspData.createdAt),
+              lastUpdatedAt: ensureDateObject(inspData.lastUpdatedAt),
+              registrationRef: (inspData.registrationRef instanceof DocumentReference) ? inspData.registrationRef.id : inspData.registrationRef,
+              inspectorRef: (inspData.inspectorRef instanceof DocumentReference) ? inspData.inspectorRef.id : inspData.inspectorRef,
+              reviewedByRef: (inspData.reviewedByRef instanceof DocumentReference) ? inspData.reviewedByRef.id : inspData.reviewedByRef,
+              createdByRef: (inspData.createdByRef instanceof DocumentReference) ? inspData.createdByRef.id : inspData.createdByRef,
+              lastUpdatedByRef: (inspData.lastUpdatedByRef instanceof DocumentReference) ? inspData.lastUpdatedByRef.id : inspData.lastUpdatedByRef,
+            } as Inspection;
+          });
+          setLinkedInspections(inspectionsData);
+        } catch (inspError: any) {
+          console.error("Error fetching linked inspections:", inspError);
+          setErrorLinkedInspections(inspError.message || "Failed to load linked inspections.");
+        }
 
       } else {
         setError("Registration not found.");
@@ -166,14 +193,15 @@ export default function RegistrationDetailPage() {
       setRegistration(null);
     } finally {
       setLoading(false);
+      setLoadingLinkedInspections(false);
     }
   }, [registrationId, currentUser]);
 
   useEffect(() => {
-    if (currentUser !== undefined) { // Ensure currentUser is resolved (not initial undefined)
-        fetchRegistration();
+    if (currentUser !== undefined) { 
+        fetchRegistrationDetails();
     }
-  }, [registrationId, currentUser, fetchRegistration]);
+  }, [registrationId, currentUser, fetchRegistrationDetails]);
 
 
   if (loading) {
@@ -189,12 +217,12 @@ export default function RegistrationDetailPage() {
   }
 
 
-  const getStatusBadgeVariant = (status: Registration["status"]) => {
+  const getStatusBadgeVariant = (status: Registration["status"] | Inspection["status"]) => {
     switch (status) {
-      case "Approved": return "default";
-      case "PendingReview": case "Submitted": return "secondary";
-      case "Rejected": case "Expired": return "destructive";
-      case "Draft": case "RequiresInfo": return "outline";
+      case "Approved": case "Passed": return "default";
+      case "PendingReview": case "Submitted": case "Scheduled": return "secondary";
+      case "Rejected": case "Expired": case "Failed": case "Cancelled": return "destructive";
+      case "Draft": case "RequiresInfo": case "InProgress": return "outline";
       default: return "outline";
     }
   };
@@ -215,7 +243,7 @@ export default function RegistrationDetailPage() {
 
     const registrationDocRef = doc(db, "registrations", registration.registrationId);
     
-    const updatePayload: Partial<Registration> & { status: string, lastUpdatedAt: Timestamp, lastUpdatedByRef: DocumentReference, approvedAt: Timestamp } = {
+    const updatePayload: Partial<Registration> = {
       status: "Approved",
       scaRegoNo: scaRegoNo,
       effectiveDate: Timestamp.fromDate(parseISO(effectiveDate)),
@@ -226,20 +254,19 @@ export default function RegistrationDetailPage() {
     };
 
     try {
-      await updateDoc(registrationDocRef, updatePayload as any); // Using 'as any' to bypass strict type checking for partial update
+      await updateDoc(registrationDocRef, updatePayload as any); 
       toast({ title: "Registration Approved", description: `SCA Rego No: ${scaRegoNo} assigned.` });
       setApproveModalOpen(false);
-      // Update local state to reflect changes immediately
       setRegistration(prev => prev ? ({
         ...prev,
-        ...updatePayload,
-        effectiveDate: (updatePayload.effectiveDate as Timestamp).toDate(),
-        expiryDate: (updatePayload.expiryDate as Timestamp).toDate(),
-        approvedAt: (updatePayload.approvedAt as Timestamp).toDate(),
-        lastUpdatedAt: (updatePayload.lastUpdatedAt as Timestamp).toDate(),
-        lastUpdatedByRef: currentUser.userId, // Store ID for client-side state
+        status: "Approved",
+        scaRegoNo: scaRegoNo,
+        effectiveDate: parseISO(effectiveDate),
+        expiryDate: parseISO(expiryDate),
+        approvedAt: new Date(),
+        lastUpdatedAt: new Date(),
+        lastUpdatedByRef: currentUser.userId, 
       }) : null);
-      // router.refresh(); // Or update state directly
     } catch (e: any) {
       console.error("Error approving registration:", e);
       toast({ title: "Approval Failed", description: e.message || "Could not update registration.", variant: "destructive" });
@@ -281,7 +308,7 @@ export default function RegistrationDetailPage() {
 
   const canEdit = (isRegistrar || isAdmin) && (registration.status === "Submitted" || registration.status === "RequiresInfo" || registration.status === "Draft");
   const canApproveReject = (isRegistrar || isAdmin) && (registration.status === "Submitted" || registration.status === "RequiresInfo" || registration.status === "PendingReview");
-  const canScheduleInspection = (isAdmin || isSupervisor);
+  const canScheduleInspection = (isAdmin || isSupervisor || isRegistrar);
   const canGenerateCertificate = (isRegistrar || isAdmin) && registration.status === "Approved";
 
 
@@ -304,7 +331,6 @@ export default function RegistrationDetailPage() {
         </div>
       </div>
 
-      {/* Action Buttons */}
       {(canApproveReject || canScheduleInspection || canGenerateCertificate) && (
         <Card>
           <CardHeader><CardTitle>Actions</CardTitle></CardHeader>
@@ -382,7 +408,6 @@ export default function RegistrationDetailPage() {
           </CardHeader>
           <CardContent>
             <p className="text-destructive">This registration has been rejected. Please review comments or contact support for more information.</p>
-            {/* Add reason if available */}
           </CardContent>
         </Card>
       )}
@@ -394,16 +419,12 @@ export default function RegistrationDetailPage() {
           </CardHeader>
           <CardContent>
             <p className="text-yellow-700">Additional information is required for this registration. The owner has been notified.</p>
-            {/* Add comment/reason if available */}
           </CardContent>
         </Card>
       )}
 
-
-      {/* Main Details Card */}
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
-          {/* Craft Details */}
           <Card>
             <CardHeader><CardTitle>Craft Details</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
@@ -425,7 +446,6 @@ export default function RegistrationDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Owners */}
           <Card>
             <CardHeader><CardTitle>Owners</CardTitle></CardHeader>
             <CardContent className="space-y-4">
@@ -446,7 +466,6 @@ export default function RegistrationDetailPage() {
         </div>
 
         <div className="lg:col-span-1 space-y-6">
-          {/* Registration Info */}
           <Card>
             <CardHeader><CardTitle>Registration Info</CardTitle></CardHeader>
             <CardContent className="space-y-1 text-sm">
@@ -459,8 +478,7 @@ export default function RegistrationDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Payment Details */}
-          {registration.paymentAmount && (
+          {registration.paymentAmount != null && (
             <Card>
               <CardHeader><CardTitle>Payment Details</CardTitle></CardHeader>
               <CardContent className="space-y-1 text-sm">
@@ -473,12 +491,11 @@ export default function RegistrationDetailPage() {
             </Card>
           )}
           
-          {/* Safety Equipment */}
-           {registration.safetyCertNumber && (
+           {(registration.safetyCertNumber || registration.safetyEquipIssued) && (
             <Card>
               <CardHeader><CardTitle>Safety Equipment</CardTitle></CardHeader>
               <CardContent className="space-y-1 text-sm">
-                <p><strong>Safety Cert No:</strong> {registration.safetyCertNumber}</p>
+                {registration.safetyCertNumber && <p><strong>Safety Cert No:</strong> {registration.safetyCertNumber}</p>}
                 <p><strong>Equipment Issued:</strong> {registration.safetyEquipIssued ? "Yes" : "No"}</p>
                 {registration.safetyEquipReceiptNumber && <p><strong>Receipt No:</strong> {registration.safetyEquipReceiptNumber}</p>}
               </CardContent>
@@ -487,7 +504,6 @@ export default function RegistrationDetailPage() {
         </div>
       </div>
 
-      {/* Proof of Ownership */}
       <Card>
         <CardHeader><CardTitle>Proof of Ownership</CardTitle></CardHeader>
         <CardContent>
@@ -511,18 +527,24 @@ export default function RegistrationDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Linked Inspections */}
       <Card>
         <CardHeader><CardTitle>Linked Inspections</CardTitle></CardHeader>
         <CardContent>
-          {inspections.length > 0 ? (
+          {loadingLinkedInspections ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-6 w-6 animate-spin text-primary mr-2" />
+              <p>Loading inspections...</p>
+            </div>
+          ) : errorLinkedInspections ? (
+            <p className="text-destructive">Error loading inspections: {errorLinkedInspections}</p>
+          ) : linkedInspections.length > 0 ? (
             <ul className="space-y-3">
-              {inspections.map((insp: Inspection) => (
+              {linkedInspections.map((insp: Inspection) => (
                 <li key={insp.inspectionId} className="p-3 border rounded-md hover:bg-muted/50 transition-colors">
                   <Link href={`/inspections/${insp.inspectionId}`} className="block">
                     <div className="flex justify-between items-center">
                       <p className="font-semibold">{insp.inspectionType} Inspection ({insp.inspectionId})</p>
-                      <Badge>{insp.status}</Badge>
+                      <Badge variant={getStatusBadgeVariant(insp.status)}>{insp.status}</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground mt-1">
                       Scheduled: {formatFirebaseTimestamp(insp.scheduledDate, "PP")} |
@@ -540,5 +562,3 @@ export default function RegistrationDetailPage() {
     </div>
   );
 }
-
-    
