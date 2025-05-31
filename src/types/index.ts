@@ -1,13 +1,17 @@
 
 import type { Timestamp, DocumentReference } from "firebase/firestore";
 
+export type UserRole = "Admin" | "Registrar" | "Inspector" | "Supervisor" | "ReadOnly";
+
 export interface User {
   userId: string;
   email: string;
   displayName?: string;
-  role: "Admin" | "Registrar" | "Inspector" | "Supervisor" | "ReadOnly";
+  fullname?: string; // Added fullname
+  role: UserRole;
   createdAt: Timestamp | Date | string; // Allow Date or string for client-side
   isActive: boolean;
+  lastUpdatedAt?: Timestamp | Date | string; // Added for consistency
 }
 
 export interface Owner {
@@ -81,9 +85,9 @@ export interface Registration {
   certificateGeneratedAt?: Timestamp | Date | string;
   certificateFileName?: string;
   certificateFileUrl?: string;
-  lastUpdatedByRef: string | DocumentReference<User>;
+  lastUpdatedByRef: string | DocumentReference<User>; // Should be User ref ID string or DocumentReference
   lastUpdatedAt: Timestamp | Date | string;
-  createdByRef: string | DocumentReference<User>;
+  createdByRef: string | DocumentReference<User>; // Should be User ref ID string or DocumentReference
   createdAt: Timestamp | Date | string;
 }
 
@@ -97,8 +101,8 @@ export interface ChecklistItemResult {
 
 export interface Inspection {
   inspectionId: string;
-  registrationRef: string | DocumentReference<Registration>; // Changed to allow string ID from server action
-  registrationData?: { // For denormalized data
+  registrationRef: string | DocumentReference<Registration>; 
+  registrationData?: { 
     id: string;
     scaRegoNo?: string;
     hullIdNumber?: string;
@@ -106,8 +110,8 @@ export interface Inspection {
     craftMake?: string;
     craftModel?: string;
   };
-  inspectorRef?: string | DocumentReference<User>; // Changed to allow string ID
-  inspectorData?: { // For denormalized data
+  inspectorRef?: string | DocumentReference<User>; 
+  inspectorData?: { 
     id: string;
     displayName?: string;
   };
@@ -116,24 +120,24 @@ export interface Inspection {
   inspectionDate?: Timestamp | Date | string;
   status: "Scheduled" | "InProgress" | "PendingReview" | "Passed" | "Failed" | "Cancelled";
   overallResult?: "Pass" | "PassWithRecommendations" | "Fail" | "N/A";
-  findings?: string;
-  correctiveActions?: string;
+  findings?: string | null; // Allow null
+  correctiveActions?: string | null; // Allow null
   followUpRequired: boolean;
   checklistItems: ChecklistItemResult[];
   completedAt?: Timestamp | Date | string;
   reviewedAt?: Timestamp | Date | string;
-  reviewedByRef?: string | DocumentReference<User>; // Changed to allow string ID
+  reviewedByRef?: string | DocumentReference<User>; 
   createdAt: Timestamp | Date | string;
-  createdByRef: string | DocumentReference<User>; // Changed to allow string ID
+  createdByRef: string | DocumentReference<User>; 
   lastUpdatedAt?: Timestamp | Date | string;
-  lastUpdatedByRef?: string | DocumentReference<User>; // Changed to allow string ID
+  lastUpdatedByRef?: string | DocumentReference<User>; 
 }
 
 export interface ChecklistTemplateItem {
   itemId: string;
   itemDescription: string;
   category?: string;
-  order: number;
+  order?: number; // Made optional as it might not always be used
 }
 
 export interface ChecklistTemplate {
@@ -143,7 +147,7 @@ export interface ChecklistTemplate {
   items: ChecklistTemplateItem[];
   isActive: boolean;
   createdAt: Timestamp | Date | string;
-  createdByRef: DocumentReference<User>;
+  createdByRef: DocumentReference<User> | string;
 }
 
 // For GenAI flow
