@@ -25,7 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { Save, Send, Ship, User as UserIcon, CalendarDays, Trash2, PlusCircle, Lightbulb, Loader2, ImageUp, Settings, Play, Info, ChevronsUpDown, Check } from "lucide-react";
 import React, { useState, useEffect } from "react";
-import { Timestamp, addDoc, updateDoc, collection, getDocs, doc, type DocumentReference } from "firebase/firestore";
+import { Timestamp, addDoc, updateDoc, collection, getDocs, doc, query, where, type DocumentReference } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { suggestChecklistItems } from "@/ai/flows/suggest-checklist-items";
 import Link from "next/link";
@@ -134,28 +134,6 @@ const ncdChecklistTemplate: ChecklistTemplate = {
   items: ncdChecklistTemplateItems.map(item => ({ ...item, result: "N/A", comments: "" })) as any,
 };
 
-const placeholderChecklistTemplates: ChecklistTemplate[] = [
-  ncdChecklistTemplate,
-   {
-    templateId: "TPL002_Annual", name: "Annual Renewal Inspection (Simplified)", inspectionType: "Annual", isActive: true, createdAt: Timestamp.now(), createdByRef: {} as any,
-    items: [
-      { itemId: "annual_01", itemDescription: "Verify Registration Documents are current.", category: "Documentation", order: 1 },
-      { itemId: "annual_02", itemDescription: "Visual Check of Engine Condition and Mountings.", category: "Engine", order: 2 },
-      { itemId: "annual_03", itemDescription: "Inspect Steering System for play and smooth operation.", category: "Mechanical", order: 3 },
-      { itemId: "annual_04", itemDescription: "Check Lifejackets condition and quantity.", category: "Safety Equipment", order: 4 },
-      { itemId: "annual_05", itemDescription: "Check Fire Extinguisher charge and accessibility (if applicable).", category: "Safety Equipment", order: 5 },
-    ]
-  }
-];
-
-const mockInspectorsForSelect: Array<Pick<User, 'userId' | 'displayName' | 'email'>> = [
-  { userId: "USER001", displayName: "Admin User (Inspector)", email: "admin@regocraft.com" },
-  { userId: "USER002", displayName: "Inspector Bob", email: "inspector.bob@regocraft.com" },
-  { userId: "USER003", displayName: "Registrar Ray (Inspector)", email: "registrar@regocraft.com" },
-  { userId: "USER004", displayName: "Supervisor Sue (Inspector)", email: "supervisor.sue@regocraft.com" },
-];
-
-
 interface InspectionFormProps {
   mode: "create" | "edit";
   usageContext: "schedule" | "conduct";
@@ -183,6 +161,9 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
   const [registrationsForSelect, setRegistrationsForSelect] = useState<RegistrationSelectItem[]>([]);
   const [loadingRegistrations, setLoadingRegistrations] = useState(false);
   const [openRegistrationPopover, setOpenRegistrationPopover] = useState(false);
+  
+  const [availableInspectors, setAvailableInspectors] = useState<Array<Pick<User, 'userId' | 'displayName' | 'email'>>>([]);
+  const [loadingInspectors, setLoadingInspectors] = useState(false);
 
   const canAssignInspector = isAdmin || isRegistrar || isSupervisor;
 
@@ -294,6 +275,61 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
   }, [usageContext, mode, form, toast]);
 
 
+  useEffect(() => {
+    const fetchAndSetInspectors = async () => {
+      if (canAssignInspector) {
+        if (!db) {
+          console.error("InspectionForm: DB not available for fetching inspectors.");
+          setAvailableInspectors([]);
+          return;
+        }
+        setLoadingInspectors(true);
+        try {
+          const usersCol = collection(db, "users");
+          const q = query(usersCol, where("isActive", "==", true), where("role", "in", ["Inspector", "Admin", "Supervisor"]));
+          const querySnapshot = await getDocs(q);
+          const inspectorsData = querySnapshot.docs.map(docSnap => {
+            const data = docSnap.data() as User;
+            return {
+              userId: docSnap.id,
+              displayName: data.displayName || data.email || 'Unnamed User',
+              email: data.email || '',
+            };
+          });
+          setAvailableInspectors(inspectorsData);
+        } catch (error) {
+          console.error("Error fetching eligible inspectors:", error);
+          toast({ title: "Error Loading Inspectors", description: "Could not load the list of available inspectors.", variant: "destructive" });
+          setAvailableInspectors([]); 
+        } finally {
+          setLoadingInspectors(false);
+        }
+      } else { 
+        if (mode === 'create' && isInspector && currentUser?.userId) {
+          const self = { userId: currentUser.userId, displayName: currentUser.displayName || currentUser.email!, email: currentUser.email! };
+          setAvailableInspectors([self]);
+          if (form.getValues('inspectorRefId') !== currentUser.userId) {
+            form.setValue('inspectorRefId', currentUser.userId);
+          }
+        } else if (mode === 'edit' && existingInspectionData?.inspectorRef) {
+          const inspId = typeof existingInspectionData.inspectorRef === 'string' 
+            ? existingInspectionData.inspectorRef 
+            : (existingInspectionData.inspectorRef as DocumentReference)?.id;
+          const inspName = existingInspectionData.inspectorData?.displayName || (inspId ? `User ID: ${inspId}` : 'N/A');
+          if (inspId) {
+            setAvailableInspectors([{ userId: inspId, displayName: inspName, email: '' }]);
+          } else {
+            setAvailableInspectors([]);
+          }
+        } else {
+          setAvailableInspectors([]);
+        }
+      }
+    };
+    fetchAndSetInspectors();
+  }, [db, canAssignInspector, mode, isInspector, currentUser, toast, existingInspectionData, form ]);
+
+
   const handleAISuggestions = async () => {
     setIsAISuggesting(true);
     try {
@@ -309,7 +345,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
                             ? { 
                                 craftMake: existingInspectionData.registrationData.craftMake,
                                 craftModel: existingInspectionData.registrationData.craftModel,
-                                craftYear: existingInspectionData.registrationData.craftMake ? new Date().getFullYear() -2 : undefined, // Placeholder if no year
+                                craftYear: existingInspectionData.registrationData.craftMake ? new Date().getFullYear() -2 : undefined, 
                                 craftType: existingInspectionData.registrationData.craftType,
                               } 
                             : null);
@@ -364,26 +400,23 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     let submissionPayload: Partial<InspectionFormValues> = { ...data };
 
     const baseInspectionData: Omit<Inspection, 
-      'inspectionId' | // Auto-generated by Firestore or already exists
-      'createdAt' | 'createdByRef' | // Set on create
-      // Fields that are set contextually or might not exist yet
+      'inspectionId' | 
+      'createdAt' | 'createdByRef' | 
       'inspectionDate' | 'findings' | 'correctiveActions' | 'overallResult' | 
       'completedAt' | 'reviewedAt' | 'reviewedByRef' | 'checklistItems'
     > & {
-      // These will be converted to DocumentReference
       registrationRef?: string;
       inspectorRef?: string;
-      // These will be converted to Timestamp
       scheduledDate: Date;
     } = {
       registrationRef: data.registrationRefId,
       inspectorRef: data.inspectorRefId,
       inspectionType: data.inspectionType,
-      scheduledDate: data.scheduledDate, // Will be converted
+      scheduledDate: data.scheduledDate, 
       followUpRequired: data.followUpRequired || false,
       lastUpdatedAt: Timestamp.now(),
       lastUpdatedByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
-      status: "Scheduled" // Default, will be overridden
+      status: "Scheduled" 
     };
 
 
@@ -411,8 +444,8 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
         schedulePayload.createdAt = Timestamp.now();
         schedulePayload.createdByRef = doc(db, "users", currentUser.userId) as DocumentReference<User>;
       } else if (mode === 'edit' && existingInspectionData) {
-         schedulePayload.createdAt = existingInspectionData.createdAt as Timestamp; // Keep original
-         schedulePayload.createdByRef = existingInspectionData.createdByRef as DocumentReference<User>; // Keep original
+         schedulePayload.createdAt = existingInspectionData.createdAt as Timestamp; 
+         schedulePayload.createdByRef = existingInspectionData.createdByRef as DocumentReference<User>; 
       }
       submissionPayload = schedulePayload as any;
 
@@ -434,7 +467,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
         inspectorRef: data.inspectorRefId ? doc(db, "users", data.inspectorRefId) as DocumentReference<User> : undefined,
         scheduledDate: Timestamp.fromDate(new Date(data.scheduledDate)),
       } as any;
-      if (mode === 'create' && !existingInspectionData?.createdAt) { // Should not happen for conduct if starting from existing
+      if (mode === 'create' && !existingInspectionData?.createdAt) { 
         (submissionPayload as Partial<Inspection>).createdAt = Timestamp.now();
         (submissionPayload as Partial<Inspection>).createdByRef = doc(db, "users", currentUser.userId) as DocumentReference<User>;
       } else if (existingInspectionData) {
@@ -462,7 +495,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
         overallResult: data.overallResult || null,
         followUpRequired: data.followUpRequired,
         checklistItems: data.checklistItems || [],
-        completedAt: Timestamp.now(), // Set completedAt on submission
+        completedAt: Timestamp.now(), 
         registrationRef: doc(db, "registrations", data.registrationRefId) as DocumentReference<Registration>,
         inspectorRef: data.inspectorRefId ? doc(db, "users", data.inspectorRefId) as DocumentReference<User> : undefined,
         scheduledDate: Timestamp.fromDate(new Date(data.scheduledDate)),
@@ -501,17 +534,13 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     }
   };
   
-  const currentInspectorInfo = () => {
+  const getAssignedInspectorName = () => {
     const inspectorId = form.getValues("inspectorRefId");
-    if(existingInspectionData?.inspectorData?.displayName && ((typeof existingInspectionData.inspectorRef === 'string' && existingInspectionData.inspectorRef === inspectorId) || (typeof existingInspectionData.inspectorRef !== 'string' && existingInspectionData.inspectorRef?.id === inspectorId))) {
-      return existingInspectionData.inspectorData.displayName;
-    }
-    if(inspectorId) {
-        const selected = mockInspectorsForSelect.find(i => i.userId === inspectorId);
-        if(selected) return selected.displayName;
-    }
-    if(currentUser?.displayName && (!inspectorId || inspectorId === currentUser.userId) ) return currentUser.displayName;
-    return inspectorId || "Not Assigned";
+    if (!inspectorId) return "Not Assigned";
+    const foundInspector = availableInspectors.find(insp => insp.userId === inspectorId);
+    if (foundInspector) return foundInspector.displayName;
+    if (existingInspectionData?.inspectorData?.id === inspectorId) return existingInspectionData.inspectorData.displayName;
+    return inspectorId; // Fallback to ID if name not found
   };
 
   const selectedRegistrationDisplay = registrationsForSelect.find(
@@ -522,7 +551,6 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
   const currentRegistrationHullId = selectedRegistrationDisplay?.craftDetails ? selectedRegistrationDisplay.craftDetails.split('(HIN: ')[1]?.slice(0,-1) : existingInspectionData?.registrationData?.hullIdNumber || "N/A (Link craft)";
   const currentCraftType = selectedRegistrationDisplay?.craftType || existingInspectionData?.registrationData?.craftType || "N/A (Link craft)";
 
-  // Grouping logic for checklist items
   const categoryTitles: Record<string, string> = {
     A: "A. Marking and Load Line Requirements (Schedule 1)",
     B: "B. Safety Standards (Schedule 3)",
@@ -530,13 +558,13 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     "AI Suggested": "AI Suggested Items",
     "Custom": "Custom Items",
   };
-  const mainCategoriesOrder = ['A', 'B', 'C', "AI Suggested", "Custom"]; // Ensure order
+  const mainCategoriesOrder = ['A', 'B', 'C', "AI Suggested", "Custom"]; 
 
   const groupedChecklistItems: Record<string, Array<typeof fields[number] & { originalIndex: number }>> = {};
   
   fields.forEach((fieldItem, index) => {
-    const itemCategoryFull = (fieldItem as any).category as string | undefined; // Cast to access category
-    let mainCategoryKey = "Custom"; // Default to custom
+    const itemCategoryFull = (fieldItem as any).category as string | undefined; 
+    let mainCategoryKey = "Custom"; 
 
     if (itemCategoryFull) {
         if (itemCategoryFull.startsWith("A.")) mainCategoryKey = "A";
@@ -562,7 +590,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
                 <CardTitle>Inspection Context</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                <div><strong>Inspector:</strong> {currentInspectorInfo()}</div>
+                <div><strong>Inspector:</strong> {getAssignedInspectorName()}</div>
                 <div><strong>Date of Inspection:</strong> {watchInspectionDate ? formatFirebaseTimestamp(watchInspectionDate, "PP") : "Not set"}</div>
                 <div><strong>Craft Rego No. (SCA):</strong> {currentRegistrationScaRegoNo}</div>
                 <div><strong>Hull ID No.:</strong> {currentRegistrationHullId}</div>
@@ -611,7 +639,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
                           <CommandGroup>
                             {registrationsForSelect.map((reg) => (
                               <CommandItem
-                                value={reg.label} // Use a unique value here, e.g., reg.value or reg.label
+                                value={reg.label} 
                                 key={reg.value}
                                 onSelect={() => {
                                   form.setValue("registrationRefId", reg.value);
@@ -653,21 +681,23 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
               control={form.control}
               name="inspectorRefId"
               render={({ field }) => (
-                canAssignInspector || (mode === 'edit' && !!existingInspectionData?.inspectorRef) ? ( 
+                canAssignInspector ? ( 
                   <FormItem>
                     <FormLabel>Assign Inspector *</FormLabel>
                     <Select
                       onValueChange={field.onChange}
                       value={field.value || ""}
-                       disabled={!canAssignInspector && mode === 'edit' && usageContext !== 'schedule'}
+                      disabled={loadingInspectors}
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select an inspector" />
+                          <SelectValue placeholder={loadingInspectors ? "Loading..." : "Select an inspector"} />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {mockInspectorsForSelect.map((inspector) => (
+                         {loadingInspectors && <SelectItem value="loading" disabled>Loading inspectors...</SelectItem>}
+                         {!loadingInspectors && availableInspectors.length === 0 && <SelectItem value="no_inspectors" disabled>No inspectors available</SelectItem>}
+                         {!loadingInspectors && availableInspectors.map((inspector) => (
                           <SelectItem key={inspector.userId} value={inspector.userId}>
                             {inspector.displayName || inspector.email}
                           </SelectItem>
@@ -684,11 +714,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
                     <FormLabel>Inspector</FormLabel>
                     <FormControl>
                       <Input
-                        value={
-                          field.value 
-                            ? (mockInspectorsForSelect.find(u => u.userId === field.value)?.displayName || field.value)
-                            : (currentUser?.displayName || currentUser?.email || "N/A")
-                        }
+                        value={getAssignedInspectorName()}
                         disabled
                       />
                     </FormControl>
@@ -877,3 +903,4 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     </Form>
   );
 }
+
