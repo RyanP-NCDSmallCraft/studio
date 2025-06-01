@@ -74,12 +74,11 @@ export default function EditOperatorLicensePage() {
     return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /> <p>Loading application data...</p></div>;
   }
 
-  if (!existingLicenseData && mode === "edit") {
+  // Note: `mode` was used here but not defined. Assuming it's always "edit" if licenseApplicationId exists.
+  if (!existingLicenseData && licenseApplicationId) { 
     return <div className="text-center text-red-500">License application not found.</div>;
   }
   
-  const mode = licenseApplicationId ? "edit" : "create";
-
 
   return (
     <div className="space-y-6">
@@ -100,5 +99,6 @@ export default function EditOperatorLicensePage() {
     </div>
   );
 }
+
 
     

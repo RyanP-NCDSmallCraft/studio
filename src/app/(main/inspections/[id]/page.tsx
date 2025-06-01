@@ -299,3 +299,5 @@ export default function InspectionDetailPage() {
     </div>
   );
 }
+
+    
