@@ -315,12 +315,14 @@ export default function RegistrationsPage() {
                     <h3 className="text-xl font-semibold">Permission Denied</h3>
                   </div>
                   <p>Could not load registrations due to missing Firestore permissions.</p>
-                  <p>
-                    Please check your Firebase console: ensure your
-                    Firestore Security Rules allow authenticated users (or the appropriate roles)
-                    to <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">read</code> from the <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">registrations</code> collection.
+                  <p className="font-medium mt-2">
+                    Your Firestore Security Rules currently allow reading registrations if `isUserActiveAndAuthenticated()` is true.
+                    This function checks if your user profile in Firestore (<code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">/users/{currentUser?.userId || 'YOUR_USER_ID'}</code>) exists AND has the field <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">isActive: true</code>.
                   </p>
-                   <p className="text-xs text-muted-foreground mt-1">Detailed error: {fetchError}</p>
+                  <p className="mt-1">
+                    Please ensure your user document in Firestore exists and has <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">isActive</code> set to <code className="bg-muted/50 px-1.5 py-0.5 rounded-sm text-sm text-destructive-foreground">true</code>.
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">Detailed error: {fetchError}</p>
                 </div>
               ) : (
                 <p className="text-destructive">{fetchError}</p>
