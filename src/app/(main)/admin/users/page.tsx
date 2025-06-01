@@ -19,7 +19,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"; // Removed AlertDialogTrigger as it's used via asChild
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useRouter } from "next/navigation";
 import { formatFirebaseTimestamp } from '@/lib/utils';
 import React, { useState, useEffect, useCallback } from 'react';
@@ -306,11 +307,11 @@ export default function UserManagementPage() {
                             <Edit className="h-4 w-4" />
                         </Button>
                         <AlertDialog>
-                            <AlertDialog.Trigger asChild>
+                            <AlertDialogTrigger asChild>
                                 <Button variant="ghost" size="icon" title={user.isActive ? "Deactivate User" : "Activate User"}>
                                     {user.isActive ? <ToggleRight className="h-4 w-4 text-green-500" /> : <ToggleLeft className="h-4 w-4 text-red-500" />}
                                 </Button>
-                            </AlertDialog.Trigger>
+                            </AlertDialogTrigger>
                             <AlertDialogContent>
                                 <AlertDialogHeader>
                                     <AlertDialogTitle>Confirm Status Change</AlertDialogTitle>
@@ -328,11 +329,11 @@ export default function UserManagementPage() {
                             </AlertDialogContent>
                         </AlertDialog>
                          <AlertDialog>
-                            <AlertDialog.Trigger asChild>
+                            <AlertDialogTrigger asChild>
                                 <Button variant="ghost" size="icon" title="Delete User Profile" onClick={() => handleOpenDeleteConfirmDialog(user)}>
                                     <Trash2 className="h-4 w-4 text-destructive" />
                                 </Button>
-                            </AlertDialog.Trigger>
+                            </AlertDialogTrigger>
                              {userToConfirmDelete && userToConfirmDelete.userId === user.userId && (
                                 <AlertDialogContent>
                                     <AlertDialogHeader>
@@ -353,12 +354,6 @@ export default function UserManagementPage() {
                         </AlertDialog>
                         </>
                      )}
-                     {/* Show if current user is THIS user (for future self-edit, if needed) */}
-                     {/* {currentUser?.userId === user.userId && (
-                        <Button variant="ghost" size="icon" disabled title="Edit My Profile (Not Implemented)">
-                            <Edit className="h-4 w-4" />
-                        </Button>
-                     )} */}
                   </TableCell>
                 </TableRow>
               )) : (
