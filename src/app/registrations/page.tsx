@@ -225,9 +225,8 @@ export default function RegistrationsPage() {
       case "Rejected":
       case "Expired":
       case "Revoked":
+      case "Suspended": // Changed to destructive
         return "destructive";
-      case "Suspended":
-        return "outline"; // Consider a specific color for suspended
       case "Draft":
       case "RequiresInfo":
         return "outline";

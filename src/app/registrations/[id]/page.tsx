@@ -232,9 +232,8 @@ export default function RegistrationDetailPage() {
     switch (status) {
       case "Approved": case "Passed": return "default";
       case "PendingReview": case "Submitted": case "Scheduled": return "secondary";
-      case "Rejected": case "Expired": case "Failed": case "Cancelled": case "Revoked": return "destructive";
+      case "Rejected": case "Expired": case "Failed": case "Cancelled": case "Revoked": case "Suspended": return "destructive";
       case "Draft": case "RequiresInfo": case "InProgress": return "outline";
-      case "Suspended": return "outline"; // Yellow/Orange or similar warning color would be good. For now outline.
       default: return "outline";
     }
   };
