@@ -10,5 +10,4 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
   // For /login, AppContent will render children directly.
   return <>{children}</>;
 }
-
     
