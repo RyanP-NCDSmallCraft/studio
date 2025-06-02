@@ -10,7 +10,8 @@ import {
   Users,
   Settings,
   FileSpreadsheet, 
-  Contact // Using Contact as a placeholder for Operator Licenses
+  Contact, 
+  AlertOctagon 
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
@@ -34,6 +35,7 @@ const navItems: NavItem[] = [
   { href: "/registrations", label: "Registrations", icon: Ship, roles: ["Admin", "Registrar", "Inspector", "Supervisor", "ReadOnly"] },
   { href: "/operator-licenses", label: "Operator Licenses", icon: Contact, roles: ["Admin", "Registrar", "Supervisor"] },
   { href: "/inspections", label: "Inspections", icon: ClipboardList, roles: ["Admin", "Registrar", "Inspector", "Supervisor", "ReadOnly"] },
+  { href: "/infringements", label: "Infringements", icon: AlertOctagon, roles: ["Admin", "Registrar", "Inspector", "Supervisor"] },
   { href: "/inspections/reports", label: "Reports", icon: FileSpreadsheet, roles: ["Admin", "Registrar"] },
   { href: "/admin/users", label: "User Management", icon: Users, roles: ["Admin", "Supervisor"] },
   // { href: "/settings", label: "Settings", icon: Settings, roles: ["Admin"] },

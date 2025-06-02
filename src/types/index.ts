@@ -7,11 +7,11 @@ export interface User {
   userId: string;
   email: string;
   displayName?: string;
-  fullname?: string; // Added fullname
+  fullname?: string;
   role: UserRole;
-  createdAt: Timestamp | Date | string; // Allow Date or string for client-side
+  createdAt: Timestamp | Date | string; 
   isActive: boolean;
-  lastUpdatedAt?: Timestamp | Date | string; // Added for consistency
+  lastUpdatedAt?: Timestamp | Date | string; 
 }
 
 export interface Owner {
@@ -19,14 +19,14 @@ export interface Owner {
   role: "Primary" | "CoOwner";
   surname: string;
   firstName: string;
-  dob: Timestamp | Date | string; // Allow Date or string
+  dob: Timestamp | Date | string; 
   sex: "Male" | "Female" | "Other";
   phone: string;
   fax?: string;
   email?: string;
   postalAddress: string;
   townDistrict: string;
-  llg: string; // Local Level Government
+  llg: string; 
   wardVillage: string;
 }
 
@@ -35,7 +35,7 @@ export interface ProofOfOwnershipDoc {
   description: string;
   fileName: string;
   fileUrl: string;
-  uploadedAt: Timestamp | Date | string; // Allow Date or string
+  uploadedAt: Timestamp | Date | string; 
 }
 
 export interface Registration {
@@ -75,7 +75,7 @@ export interface Registration {
   craftUseOtherDesc?: string;
   fuelType: "Electric" | "Petrol" | "Diesel" | "Other";
   fuelTypeOtherDesc?: string;
-  vesselType: "OpenBoat" | "CabinCruiser" | "Sailboat" | "PWC" | "Other"; // Personal Water Craft
+  vesselType: "OpenBoat" | "CabinCruiser" | "Sailboat" | "PWC" | "Other"; 
   vesselTypeOtherDesc?: string;
 
   engineHorsepower?: number;
@@ -85,9 +85,9 @@ export interface Registration {
   certificateGeneratedAt?: Timestamp | Date | string;
   certificateFileName?: string;
   certificateFileUrl?: string;
-  lastUpdatedByRef: string | DocumentReference<User>; // Should be User ref ID string or DocumentReference
+  lastUpdatedByRef: string | DocumentReference<User>; 
   lastUpdatedAt: Timestamp | Date | string;
-  createdByRef: string | DocumentReference<User>; // Should be User ref ID string or DocumentReference
+  createdByRef: string | DocumentReference<User>; 
   createdAt: Timestamp | Date | string;
 }
 
@@ -120,8 +120,8 @@ export interface Inspection {
   inspectionDate?: Timestamp | Date | string;
   status: "Scheduled" | "InProgress" | "PendingReview" | "Passed" | "Failed" | "Cancelled";
   overallResult?: "Pass" | "PassWithRecommendations" | "Fail" | "N/A";
-  findings?: string | null; // Allow null
-  correctiveActions?: string | null; // Allow null
+  findings?: string | null; 
+  correctiveActions?: string | null; 
   followUpRequired: boolean;
   checklistItems: ChecklistItemResult[];
   completedAt?: Timestamp | Date | string;
@@ -137,7 +137,7 @@ export interface ChecklistTemplateItem {
   itemId: string;
   itemDescription: string;
   category?: string;
-  order?: number; // Made optional as it might not always be used
+  order?: number; 
 }
 
 export interface ChecklistTemplate {
@@ -150,11 +150,10 @@ export interface ChecklistTemplate {
   createdByRef: DocumentReference<User> | string;
 }
 
-// For GenAI flow
+
 export type { SuggestChecklistItemsInput, SuggestChecklistItemsOutput } from '@/ai/flows/suggest-checklist-items';
 
 
-// --- Operator Licensing Module Types ---
 
 export interface Operator {
   operatorId: string; 
@@ -266,4 +265,50 @@ export interface CompetencyTest {
   answers?: CompetencyTestAnswer[]; 
   notes?: string; 
   createdAt: Timestamp | Date | string;
+}
+
+
+export interface InfringementItemDetail {
+  itemId: string; // e.g., "UNREG_CRAFT"
+  description: string; // e.g., "Operating an unregistered craft"
+  penaltyAmount?: number;
+  notes?: string;
+}
+
+export interface Infringement {
+  infringementId: string;
+  registrationRef: string | DocumentReference<Registration>;
+  registrationData?: {
+    id: string;
+    scaRegoNo?: string;
+    hullIdNumber?: string;
+    craftMake?: string;
+    craftModel?: string;
+    ownerName?: string; // Primary owner's name
+  };
+  issuedByRef: string | DocumentReference<User>;
+  issuedByData?: {
+    id: string;
+    displayName?: string;
+  };
+  issuedAt: Timestamp | Date | string;
+  locationDescription?: string; // e.g., "Koki Market Jetty"
+  infringementItems: InfringementItemDetail[];
+  totalPenaltyAmount?: number;
+  status: "Draft" | "Issued" | "PendingReview" | "Approved" | "Voided" | "Paid" | "Overdue";
+  officerNotes?: string;
+  paymentDetails?: {
+    receiptNumber?: string;
+    paymentDate?: Timestamp | Date | string;
+    paymentMethod?: "Cash" | "Card" | "BankDeposit" | "Other";
+    amountPaid?: number;
+  };
+  dueDate?: Timestamp | Date | string;
+  approvedByRef?: string | DocumentReference<User>;
+  approvedAt?: Timestamp | Date | string;
+  voidedReason?: string;
+  createdAt: Timestamp | Date | string;
+  createdByRef: string | DocumentReference<User>;
+  lastUpdatedAt?: Timestamp | Date | string;
+  lastUpdatedByRef?: string | DocumentReference<User>;
 }
