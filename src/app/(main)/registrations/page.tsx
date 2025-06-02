@@ -14,8 +14,9 @@ import type { BadgeProps } from "@/components/ui/badge";
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { collection, getDocs, Timestamp, DocumentReference } from 'firebase/firestore'; // Corrected import
+import { collection, getDocs, query, where, Timestamp, DocumentReference, QueryConstraint } from 'firebase/firestore'; // Corrected import
 import { db } from '@/lib/firebase';
+import { useSearchParams } from "next/navigation";
 
 // Helper function to safely convert Firestore Timestamps or other date forms to JS Date
 // This is moved here as it's now used directly in this client component
@@ -55,6 +56,7 @@ const ensureSerializableDate = (dateValue: any): Date | undefined => {
 export default function RegistrationsPage() {
   const { currentUser, isAdmin, isRegistrar, loading: authLoading } = useAuth();
   const { toast } = useToast();
+  const searchParams = useSearchParams();
   const [searchTerm, setSearchTerm] = useState("");
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -74,8 +76,21 @@ export default function RegistrationsPage() {
     setFetchError(null);
 
     try {
-      const registrationsCol = collection(db, "registrations");
-      const registrationSnapshot = await getDocs(registrationsCol);
+      const queryConstraints: QueryConstraint[] = [];
+      const statusFilterParam = searchParams.get('status');
+
+      if (statusFilterParam) {
+        const statusArray = statusFilterParam.split(',');
+        if (statusArray.length > 0) {
+          queryConstraints.push(where("status", "in", statusArray));
+          console.log("RegistrationsPage (Client): Applying status filter:", statusArray);
+        }
+      }
+
+      const registrationsColRef = collection(db, "registrations");
+      const q = query(registrationsColRef, ...queryConstraints);
+      
+      const registrationSnapshot = await getDocs(q);
       console.log(`RegistrationsPage (Client): Fetched ${registrationSnapshot.docs.length} documents from Firestore.`);
 
       const fetchedRegistrations = registrationSnapshot.docs.map(docSnapshot => {
@@ -178,7 +193,7 @@ export default function RegistrationsPage() {
       setIsLoading(false);
       console.log("RegistrationsPage (Client): Finished fetching. isLoading set to false.");
     }
-  }, [currentUser, toast]);
+  }, [currentUser, toast, searchParams]);
 
   useEffect(() => {
     if (authLoading) {
@@ -195,7 +210,7 @@ export default function RegistrationsPage() {
       setFetchError("Please log in to view registrations.");
       setRegistrations([]); // Clear any existing registrations
     }
-  }, [currentUser, authLoading, loadRegistrations]);
+  }, [currentUser, authLoading, loadRegistrations, searchParams]);
 
 
   const getStatusBadgeVariant = (status?: Registration["status"]): BadgeProps["variant"] => {
@@ -374,6 +389,7 @@ export default function RegistrationsPage() {
                     <TableCell colSpan={6} className="text-center text-muted-foreground">
                       {!isLoading && registrations.length === 0 && !fetchError ? "No registrations found." : ""}
                       {searchTerm && !isLoading && filteredRegistrations.length === 0 && registrations.length > 0 ? "No registrations match your search." : ""}
+                      {searchParams.get('status') && !isLoading && filteredRegistrations.length === 0 && "No registrations match the current filter."}
                     </TableCell>
                   </TableRow>
                 )}
@@ -385,4 +401,3 @@ export default function RegistrationsPage() {
     </div>
   );
 }
-

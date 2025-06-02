@@ -190,7 +190,7 @@ export default function DashboardPage() {
               <p className="text-xs text-muted-foreground">Crafts awaiting review or approval</p>
               {(isRegistrar || isAdmin) && (
                  <Button asChild size="sm" className="mt-4">
-                  <Link href="/registrations/new">New Registration <ArrowRight className="ml-2 h-4 w-4" /></Link>
+                  <Link href="/registrations?status=Submitted,PendingReview,RequiresInfo">View Pending <ArrowRight className="ml-2 h-4 w-4" /></Link>
                 </Button>
               )}
             </CardContent>
