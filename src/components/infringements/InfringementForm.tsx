@@ -63,15 +63,20 @@ interface RegistrationSelectItem {
 }
 
 const PREDEFINED_INFRINGEMENT_ITEMS: Omit<InfringementItemDetail, 'notes' | 'selected'>[] = [
-  { itemId: "UNREG_CRAFT", description: "Operating an unregistered craft", points: 30 },
-  { itemId: "NO_SAFETY_EQUIP", description: "Insufficient/no safety equipment on board", points: 20 },
-  { itemId: "OVERLOADING", description: "Overloading the craft (exceeding capacity)", points: 25 },
-  { itemId: "RECKLESS_OP", description: "Reckless operation of craft", points: 40 },
-  { itemId: "SPEEDING_ZONE", description: "Speeding in a restricted zone", points: 10 },
-  { itemId: "NO_LICENSE", description: "Operating without a valid license (if required)", points: 30 },
-  { itemId: "ENV_POLLUTION", description: "Discharging pollutants into water", points: 50 },
-  { itemId: "FAIL_COMPLY_DIRECTION", description: "Failing to comply with lawful direction", points: 15 },
-  { itemId: "IMPROPER_MARKINGS", description: "Improper craft markings/identification", points: 10 },
+  { itemId: "OP_WITHOUT_PERMIT", description: "Operating without permit (Reg. 4)", points: 50 },
+  { itemId: "UNREGISTERED_VESSEL", description: "Unregistered vessel (Reg. 5)", points: 10 },
+  { itemId: "NO_SAFETY_CERT", description: "No safety certificate (Reg. 6)", points: 20 },
+  { itemId: "FAIL_SHOW_CERTS", description: "Failure to show certificates (Reg. 7)", points: 2 },
+  { itemId: "VESSEL_ID_NOT_VISIBLE", description: "Vessel ID not visible (Reg. 8)", points: 2 },
+  { itemId: "OVERLOADING_PASSENGERS", description: "Overloading passengers (Reg. 9)", points: 20 },
+  { itemId: "SPEEDING_HARBOUR", description: "Speeding in harbour (Reg. 10)", points: 5 },
+  { itemId: "OPERATING_UNDER_INFLUENCE", description: "Operating under influence of alcohol (Reg. 11)", points: 100 },
+  { itemId: "FAIL_PAY_FARE", description: "Failure to pay fare (Reg. 12)", points: 5 },
+  { itemId: "FAIL_REPORT_VOYAGE", description: "Failure to report voyage (Reg. 13)", points: 10 },
+  { itemId: "FAIL_CARRY_MIN_SAFETY_GEAR", description: "Failure to carry minimum safety gear (Reg. 14)", points: 15 },
+  { itemId: "EXPIRED_NON_FUNCTIONAL_SAFETY_GEAR", description: "Expired or non-functional safety gear (Reg. 15)", points: 10 },
+  { itemId: "OPERATOR_LACKS_KNOWLEDGE", description: "Operator lacks knowledge of equipment (Reg. 16)", points: 5 },
+  { itemId: "OBSTRUCTING_OFFICERS", description: "Obstructing inspectors or police (Reg. 19)", points: 100 },
 ];
 
 
@@ -319,7 +324,7 @@ export function InfringementForm({ mode, infringementId, existingInfringementDat
                             render={({ field: notesField }) => (
                               <FormItem className="mt-2">
                                 <FormControl>
-                                  <Textarea placeholder="Add specific notes for this item..." {...notesField} rows={2} />
+                                  <Textarea placeholder="Add specific notes for this item (e.g., for Overloading, specify number of extra persons)" {...notesField} rows={2} />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
