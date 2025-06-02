@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
-import { PlusCircle, ClipboardList, Eye, Edit, Filter, Play, CheckSquare, CalendarDays, Loader2, AlertTriangle } from "lucide-react";
+import { PlusCircle, ClipboardList, Eye, Edit, Filter, Play, CheckSquare, CalendarDays, Loader2, AlertTriangle, PlayCircle } from "lucide-react";
 import type { Inspection, Registration, User } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
@@ -259,6 +259,10 @@ export default function InspectionListPage() {
       </div>
     );
   }
+  
+  const canManageInspections = isAdmin || isRegistrar || isSupervisor;
+  const canConductInspections = isInspector || canManageInspections;
+
 
   return (
     <div className="space-y-6">
@@ -267,14 +271,21 @@ export default function InspectionListPage() {
           <ClipboardList className="h-8 w-8 text-primary" />
           <h1 className="text-3xl font-bold">Craft Inspections</h1>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" disabled>
             <Filter className="mr-2 h-4 w-4" /> Filter
           </Button>
-          {(isRegistrar || isAdmin || isSupervisor) && (
+          {canConductInspections && (
+             <Button asChild variant="secondary">
+              <Link href="/inspections/conduct-new">
+                <PlayCircle className="mr-2 h-4 w-4" /> Start On-the-Spot
+              </Link>
+            </Button>
+          )}
+          {canManageInspections && (
             <Button asChild>
               <Link href="/inspections/new">
-                <PlusCircle className="mr-2 h-4 w-4" /> Schedule New Inspection
+                <PlusCircle className="mr-2 h-4 w-4" /> Schedule New
               </Link>
             </Button>
           )}
@@ -396,3 +407,5 @@ export default function InspectionListPage() {
     </div>
   );
 }
+
+    
