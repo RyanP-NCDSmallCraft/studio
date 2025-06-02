@@ -1,47 +1,44 @@
 
 "use client";
 import { RegistrationForm } from "@/components/registrations/RegistrationForm";
-import type { Registration } from "@/types";
-import { Ship, ArrowLeft } from "lucide-react";
+import type { Registration, Owner, ProofOfOwnershipDoc, User } from "@/types";
+import { Ship, ArrowLeft, Loader2, AlertTriangle } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import React, { useState, useEffect, useCallback } from "react";
+import { doc, getDoc, Timestamp, type DocumentReference } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useAuth } from "@/hooks/useAuth"; // Import useAuth
+import { isValid } from "date-fns";
 
-// Placeholder for fetching existing registration data
-const fetchRegistrationData = (id: string): Registration | null => {
-  console.log("Fetching registration data for ID:", id);
-  // Simulate API call
-  if (id === "REG001") { // Corresponds to an ID from placeholder data for detail view
-    return {
-      registrationId: "REG001",
-      scaRegoNo: "SCA123",
-      interimRegoNo: "INT789",
-      registrationType: "New",
-      status: "Approved", // This should be "Draft" or "RequiresInfo" if editable
-      submittedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000) as any,
-      owners: [
-        { ownerId: "owner1", role: "Primary", surname: "Smith", firstName: "John", dob: new Date(1980, 5, 15) as any, sex: "Male", phone: "555-0101", email: "john.smith@example.com", postalAddress: "P.O. Box 123", townDistrict: "Port Moresby", llg: "NCD", wardVillage: "Waigani" }
-      ],
-      proofOfOwnershipDocs: [
-        { docId: "doc1", description: "Bill of Sale", fileName: "bill_of_sale.pdf", fileUrl: "https://placehold.co/600x400.png?text=Bill+of+Sale", uploadedAt: new Date() as any }
-      ],
-      craftMake: "Yamaha",
-      craftModel: "FX Cruiser HO",
-      craftYear: 2022,
-      craftColor: "Blue/White",
-      hullIdNumber: "YAM12345X122",
-      craftLength: 3.56,
-      lengthUnits: "m",
-      propulsionType: "Inboard",
-      hullMaterial: "Fiberglass",
-      craftUse: "Pleasure",
-      fuelType: "Gasoline",
-      vesselType: "PWC",
-      lastUpdatedAt: new Date() as any,
-      createdByRef: {} as any,
-      createdAt: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000) as any,
-    };
+
+// Helper function to safely convert Firestore Timestamps or other date forms to JS Date objects
+const ensureDateObject = (dateValue: any): Date | undefined => {
+  if (!dateValue) return undefined;
+  if (dateValue instanceof Timestamp) {
+    return dateValue.toDate();
   }
-  return null;
+  if (dateValue instanceof Date) {
+    return dateValue;
+  }
+  // Handle Firestore-like {seconds, nanoseconds} objects
+  if (typeof dateValue === 'object' && dateValue !== null && typeof dateValue.seconds === 'number' && typeof dateValue.nanoseconds === 'number') {
+    try {
+      return new Timestamp(dateValue.seconds, dateValue.nanoseconds).toDate();
+    } catch (e) {
+      console.warn('Failed to convert object to Timestamp then to Date:', dateValue, e);
+      return undefined;
+    }
+  }
+  // Handle ISO strings or numbers (timestamps)
+  if (typeof dateValue === 'string' || typeof dateValue === 'number') {
+    const parsedDate = new Date(dateValue);
+    if (isValid(parsedDate)) {
+      return parsedDate;
+    }
+  }
+  console.warn(`EditRegistrationPage: Could not convert field to a serializable Date:`, dateValue);
+  return undefined;
 };
 
 
@@ -49,11 +46,145 @@ export default function EditRegistrationPage() {
   const params = useParams();
   const router = useRouter();
   const registrationId = params.id as string;
-  // In a real app, fetch existing data if registrationId is present
-  const existingRegistration = fetchRegistrationData(registrationId);
+  const { currentUser } = useAuth(); // Get current user for auth checks if needed by rules
+
+  const [existingRegistration, setExistingRegistration] = useState<Registration | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchRegistrationDetails = useCallback(async () => {
+    if (!registrationId) {
+      setError("Registration ID is missing.");
+      setLoading(false);
+      return;
+    }
+     if (!currentUser) { // Wait for currentUser to be determined
+      // setError("User authentication pending..."); // Or simply don't fetch yet
+      setLoading(false); // Or keep true if you want to wait for currentUser
+      return;
+    }
 
 
-  // For now, we pass the ID and the form component would fetch or receive data
+    setLoading(true);
+    setError(null);
+
+    try {
+      const regDocRef = doc(db, "registrations", registrationId);
+      const docSnap = await getDoc(regDocRef);
+
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        
+        const mapOwner = (ownerData: any): Owner => ({
+          ...ownerData,
+          ownerId: ownerData.ownerId || crypto.randomUUID(), // Ensure ID
+          dob: ensureDateObject(ownerData.dob) as Date, // Form expects Date
+        });
+
+        const mapProofDoc = (docData: any): ProofOfOwnershipDoc => ({
+          ...docData,
+          docId: docData.docId || crypto.randomUUID(), // Ensure ID
+          uploadedAt: ensureDateObject(docData.uploadedAt) as Date, // Form expects Date
+        });
+        
+        const processedData: Registration = {
+          registrationId: docSnap.id,
+          scaRegoNo: data.scaRegoNo,
+          interimRegoNo: data.interimRegoNo,
+          registrationType: data.registrationType || "New",
+          previousScaRegoNo: data.previousScaRegoNo,
+          status: data.status || "Draft",
+          submittedAt: ensureDateObject(data.submittedAt),
+          approvedAt: ensureDateObject(data.approvedAt),
+          effectiveDate: ensureDateObject(data.effectiveDate),
+          expiryDate: ensureDateObject(data.expiryDate),
+          paymentMethod: data.paymentMethod,
+          paymentReceiptNumber: data.paymentReceiptNumber,
+          bankStampRef: data.bankStampRef,
+          paymentAmount: data.paymentAmount,
+          paymentDate: ensureDateObject(data.paymentDate),
+          safetyCertNumber: data.safetyCertNumber,
+          safetyEquipIssued: data.safetyEquipIssued || false,
+          safetyEquipReceiptNumber: data.safetyEquipReceiptNumber,
+          owners: Array.isArray(data.owners) ? data.owners.map(mapOwner) : [],
+          proofOfOwnershipDocs: Array.isArray(data.proofOfOwnershipDocs) ? data.proofOfOwnershipDocs.map(mapProofDoc) : [],
+          craftMake: data.craftMake || "",
+          craftModel: data.craftModel || "",
+          craftYear: data.craftYear || new Date().getFullYear(),
+          craftColor: data.craftColor || "",
+          hullIdNumber: data.hullIdNumber || "",
+          craftLength: data.craftLength || 0,
+          lengthUnits: data.lengthUnits || "m",
+          distinguishingFeatures: data.distinguishingFeatures,
+          propulsionType: data.propulsionType || "Outboard",
+          propulsionOtherDesc: data.propulsionOtherDesc,
+          hullMaterial: data.hullMaterial || "Fiberglass",
+          hullMaterialOtherDesc: data.hullMaterialOtherDesc,
+          craftUse: data.craftUse || "Pleasure",
+          craftUseOtherDesc: data.craftUseOtherDesc,
+          fuelType: data.fuelType || "Petrol",
+          fuelTypeOtherDesc: data.fuelTypeOtherDesc,
+          vesselType: data.vesselType || "OpenBoat",
+          vesselTypeOtherDesc: data.vesselTypeOtherDesc,
+          engineHorsepower: data.engineHorsepower,
+          engineMake: data.engineMake,
+          engineSerialNumbers: data.engineSerialNumbers,
+          certificateGeneratedAt: ensureDateObject(data.certificateGeneratedAt),
+          certificateFileName: data.certificateFileName,
+          certificateFileUrl: data.certificateFileUrl,
+          suspensionReason: data.suspensionReason,
+          suspensionStartDate: ensureDateObject(data.suspensionStartDate),
+          suspensionEndDate: ensureDateObject(data.suspensionEndDate),
+          revocationReason: data.revocationReason,
+          revokedAt: ensureDateObject(data.revokedAt),
+          lastUpdatedByRef: (data.lastUpdatedByRef instanceof DocumentReference) ? data.lastUpdatedByRef.id : data.lastUpdatedByRef,
+          lastUpdatedAt: ensureDateObject(data.lastUpdatedAt) as Date, // Cast as Date
+          createdByRef: (data.createdByRef instanceof DocumentReference) ? data.createdByRef.id : data.createdByRef,
+          createdAt: ensureDateObject(data.createdAt) as Date, // Cast as Date
+        };
+        setExistingRegistration(processedData);
+      } else {
+        setError("Registration not found.");
+        setExistingRegistration(null);
+      }
+    } catch (err: any) {
+      console.error("Error fetching registration for edit:", err);
+      setError(err.message || "Failed to load registration data.");
+      setExistingRegistration(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [registrationId, currentUser]);
+
+  useEffect(() => {
+    if (currentUser !== undefined) { // Only fetch if currentUser state is determined
+        fetchRegistrationDetails();
+    }
+  }, [registrationId, currentUser, fetchRegistrationDetails]);
+
+
+  if (loading || currentUser === undefined) { // Added currentUser === undefined to loading condition
+    return (
+      <div className="flex h-64 justify-center items-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" /> 
+        <p className="ml-2">Loading registration data...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-10 text-red-500">
+        <AlertTriangle className="mx-auto h-10 w-10 mb-2" />
+        Error: {error}
+      </div>
+    );
+  }
+  
+  if (!existingRegistration && !loading) { // Only show if not loading and no data
+    return <div className="text-center py-10 text-muted-foreground">Registration not found.</div>;
+  }
+
   return (
     <div className="space-y-6">
        <div className="flex items-center gap-2 mb-4">
@@ -64,7 +195,9 @@ export default function EditRegistrationPage() {
         <Ship className="h-8 w-8 text-primary" />
         <h1 className="text-3xl font-bold">Edit Craft Registration</h1>
       </div>
-      <RegistrationForm mode="edit" registrationId={registrationId} existingRegistrationData={existingRegistration} />
+      {existingRegistration && (
+        <RegistrationForm mode="edit" registrationId={registrationId} existingRegistrationData={existingRegistration} />
+      )}
     </div>
   );
 }
