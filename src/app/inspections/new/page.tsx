@@ -1,4 +1,4 @@
-// src/app/inspections/new/page.tsx (MOVED FROM (main)/inspections/new/)
+
 "use client";
 import { InspectionForm } from "@/components/inspections/InspectionForm";
 import { ClipboardList, ArrowLeft } from "lucide-react";
@@ -28,3 +28,5 @@ export default function NewInspectionPage() {
     </div>
   );
 }
+
+    

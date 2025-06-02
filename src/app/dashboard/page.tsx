@@ -90,7 +90,7 @@ export default function DashboardPage() {
     }
   }, [authLoading, currentUser, fetchDashboardStats]);
 
-  if (authLoading || (!currentUser && !statsError)) {
+  if (authLoading || (!currentUser && !statsError && loadingStats)) { // Adjusted loading condition
     return (
       <div className="flex h-64 items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -99,28 +99,14 @@ export default function DashboardPage() {
     );
   }
   
-  if (!currentUser && statsError) { // Handles case where statsError is set due to no user
-     return (
-        <Card>
-            <CardHeader>
-                <CardTitle className="text-destructive">Access Denied</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <p>{statsError || "You must be logged in to view the dashboard."}</p>
-                <Button asChild className="mt-4"><Link href="/login">Login</Link></Button>
-            </CardContent>
-        </Card>
-     );
-  }
-  
-   if (!currentUser) { // Fallback for no user, if not caught by statsError
+   if (!currentUser) { 
      return (
         <Card>
             <CardHeader>
                 <CardTitle>Please Log In</CardTitle>
             </CardHeader>
             <CardContent>
-                <p>You need to be logged in to view the dashboard content.</p>
+                <p>{statsError || "You need to be logged in to view the dashboard content."}</p>
                 <Button asChild className="mt-4"><Link href="/login">Login</Link></Button>
             </CardContent>
         </Card>
@@ -156,7 +142,7 @@ export default function DashboardPage() {
         </CardHeader>
       </Card>
 
-      {statsError && (
+      {statsError && !loadingStats && ( // Show error only if not loading and error exists
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Error Loading Stats</AlertTitle>
@@ -197,7 +183,7 @@ export default function DashboardPage() {
           </Card>
         )}
 
-        {(isAdmin || isInspector || isSupervisor || isRegistrar) && ( // Registrar also sees general pending inspections
+        {(isAdmin || isInspector || isSupervisor || isRegistrar) && ( 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Pending Inspections (System-wide)</CardTitle>
@@ -264,3 +250,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    

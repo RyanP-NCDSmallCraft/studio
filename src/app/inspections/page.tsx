@@ -11,7 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
 import React, { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { collection, getDocs, query, where, doc, getDoc, Timestamp, DocumentReference } from 'firebase/firestore'; // Corrected import
+import { collection, getDocs, query, where, doc, getDoc, Timestamp, DocumentReference } from 'firebase/firestore'; 
 import { db, auth as firebaseAuth } from '@/lib/firebase';
 
 // Helper function to safely convert Firestore Timestamps or other date forms to JS Date objects
@@ -37,7 +37,7 @@ const ensureSerializableDate = (dateValue: any): Date | undefined => {
       return parsedDate;
     }
   }
-  console.warn(`InspectionsPage: Could not convert field to a serializable Date:`, dateValue);
+  console.warn('InspectionsPage: Could not convert field to a serializable Date:', dateValue);
   return undefined;
 };
 
@@ -96,7 +96,6 @@ export default function InspectionListPage() {
         let registrationData: Inspection['registrationData'] = undefined;
         let inspectorData: Inspection['inspectorData'] = undefined;
 
-        // Fetch related registration data
         if (data.registrationRef) {
           try {
             let regRef: DocumentReference<Registration>;
@@ -104,7 +103,7 @@ export default function InspectionListPage() {
               regRef = data.registrationRef as DocumentReference<Registration>;
             } else if (typeof data.registrationRef === 'string') {
               regRef = doc(db, "registrations", data.registrationRef) as DocumentReference<Registration>;
-            } else if (data.registrationRef.id && typeof data.registrationRef.id === 'string') { // Handle plain object with id
+            } else if (data.registrationRef.id && typeof data.registrationRef.id === 'string') { 
                 regRef = doc(db, "registrations", data.registrationRef.id) as DocumentReference<Registration>;
             } else {
                  console.warn(`InspectionsPage (Client): Malformed registrationRef for inspection ${docSnapshot.id}:`, data.registrationRef);
@@ -130,7 +129,6 @@ export default function InspectionListPage() {
           }
         }
 
-        // Fetch related inspector data
         if (data.inspectorRef) {
           try {
             let inspRef: DocumentReference<User>;
@@ -138,7 +136,7 @@ export default function InspectionListPage() {
               inspRef = data.inspectorRef as DocumentReference<User>;
             } else if (typeof data.inspectorRef === 'string') {
               inspRef = doc(db, "users", data.inspectorRef) as DocumentReference<User>;
-            } else if (data.inspectorRef.id && typeof data.inspectorRef.id === 'string') { // Handle plain object with id
+            } else if (data.inspectorRef.id && typeof data.inspectorRef.id === 'string') { 
                 inspRef = doc(db, "users", data.inspectorRef.id) as DocumentReference<User>;
             } else {
                 console.warn(`InspectionsPage (Client): Malformed inspectorRef for inspection ${docSnapshot.id}:`, data.inspectorRef);
@@ -162,7 +160,7 @@ export default function InspectionListPage() {
         const getRefId = (refField: any): string | undefined => {
             if (refField instanceof DocumentReference) return refField.id;
             if (typeof refField === 'string') return refField;
-            if (refField && typeof refField.id === 'string') return refField.id; // Handle plain object with id
+            if (refField && typeof refField.id === 'string') return refField.id; 
             return undefined;
         };
 
@@ -407,3 +405,5 @@ export default function InspectionListPage() {
     </div>
   );
 }
+
+    
