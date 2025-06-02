@@ -1,12 +1,14 @@
+
 "use client";
 import { InspectionForm } from "@/components/inspections/InspectionForm";
-import { ClipboardList, ArrowLeft } from "lucide-react";
-import { useSearchParams, useRouter } from 'next/navigation';
+import { PlayCircle, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
+import { useSearchParams } from 'next/navigation';
 
-export default function NewInspectionPage() {
-  const searchParams = useSearchParams();
+export default function ConductNewInspectionPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const registrationId = searchParams.get('registrationId');
 
   return (
@@ -16,12 +18,12 @@ export default function NewInspectionPage() {
             <ArrowLeft className="h-5 w-5" />
             <span className="sr-only">Back to Inspections</span>
         </Button>
-        <ClipboardList className="h-8 w-8 text-primary" />
-        <h1 className="text-3xl font-bold">Schedule New Inspection</h1>
+        <PlayCircle className="h-8 w-8 text-primary" />
+        <h1 className="text-3xl font-bold">Start On-the-Spot Inspection</h1>
       </div>
       <InspectionForm 
         mode="create" 
-        usageContext="schedule" 
+        usageContext="conduct"
         prefilledRegistrationId={registrationId || undefined} 
       />
     </div>

@@ -1,3 +1,4 @@
+
 "use client";
 import { RegistrationForm } from "@/components/registrations/RegistrationForm";
 import { Ship, ArrowLeft } from "lucide-react";

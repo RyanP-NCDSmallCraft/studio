@@ -1,3 +1,4 @@
+
 "use client";
 import { InspectionForm } from "@/components/inspections/InspectionForm";
 import { ClipboardList, ArrowLeft } from "lucide-react";
