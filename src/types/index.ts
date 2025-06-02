@@ -44,7 +44,7 @@ export interface Registration {
   interimRegoNo?: string;
   registrationType: "New" | "Renewal";
   previousScaRegoNo?: string;
-  status: "Draft" | "Submitted" | "PendingReview" | "Approved" | "Rejected" | "Expired" | "RequiresInfo";
+  status: "Draft" | "Submitted" | "PendingReview" | "Approved" | "Rejected" | "Expired" | "RequiresInfo" | "Suspended" | "Revoked";
   submittedAt?: Timestamp | Date | string;
   approvedAt?: Timestamp | Date | string;
   effectiveDate?: Timestamp | Date | string;
@@ -85,6 +85,13 @@ export interface Registration {
   certificateGeneratedAt?: Timestamp | Date | string;
   certificateFileName?: string;
   certificateFileUrl?: string;
+
+  suspensionReason?: string;
+  suspensionStartDate?: Timestamp | Date | string;
+  suspensionEndDate?: Timestamp | Date | string;
+  revocationReason?: string;
+  revokedAt?: Timestamp | Date | string;
+
   lastUpdatedByRef: string | DocumentReference<User>;
   lastUpdatedAt: Timestamp | Date | string;
   createdByRef: string | DocumentReference<User>;

@@ -24,11 +24,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { Save, Send } from "lucide-react"; 
 import React, { useState } from "react";
-import { Timestamp, addDoc, collection, doc, type DocumentReference } from "firebase/firestore";
+import { Timestamp, addDoc, collection, doc, type DocumentReference, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase"; 
 import { OwnerManager } from "./OwnerManager";
 import { FileUploadManager } from "./FileUploadManager";
-// Removed: import { createRegistration } from '@/actions/registrations';
 
 
 // Define Zod schema for validation
@@ -96,7 +95,7 @@ const registrationFormSchema = z.object({
   safetyCertNumber: z.string().optional().default(""),
   safetyEquipIssued: z.boolean().optional().default(false),
   safetyEquipReceiptNumber: z.string().optional().default(""),
-  status: z.enum(["Draft", "Submitted", "PendingReview", "Approved", "Rejected", "Expired", "RequiresInfo"]).optional(), 
+  status: z.enum(["Draft", "Submitted", "PendingReview", "Approved", "Rejected", "Expired", "RequiresInfo", "Suspended", "Revoked"]).optional(), 
 }).superRefine((data, ctx) => {
   if (data.registrationType === "Renewal" && !data.previousScaRegoNo) {
     ctx.addIssue({
@@ -262,7 +261,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
 
   const onSubmit = async (data: RegistrationFormValues, submissionStatus: "Draft" | "Submitted") => {
     if (!currentUser?.userId) {
-      toast({ title: "Authentication Error", description: "You must be logged in to create a registration.", variant: "destructive" });
+      toast({ title: "Authentication Error", description: "You must be logged in to create or edit a registration.", variant: "destructive" });
       return;
     }
     
@@ -299,12 +298,17 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       fuelType: data.fuelType,
       vesselType: data.vesselType,
       safetyEquipIssued: data.safetyEquipIssued || false,
-
-      createdByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
       lastUpdatedByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
-      createdAt: Timestamp.now(),
       lastUpdatedAt: Timestamp.now(),
     };
+
+    if (mode === "create") {
+      registrationDataForFirestore.createdByRef = doc(db, "users", currentUser.userId) as DocumentReference<User>;
+      registrationDataForFirestore.createdAt = Timestamp.now();
+    } else if (existingRegistrationData) {
+      registrationDataForFirestore.createdAt = existingRegistrationData.createdAt instanceof Timestamp ? existingRegistrationData.createdAt : Timestamp.fromDate(new Date(existingRegistrationData.createdAt as any));
+      registrationDataForFirestore.createdByRef = typeof existingRegistrationData.createdByRef === 'string' ? doc(db, "users", existingRegistrationData.createdByRef) : existingRegistrationData.createdByRef;
+    }
 
     // Add optional fields only if they have a value
     if (data.previousScaRegoNo) registrationDataForFirestore.previousScaRegoNo = data.previousScaRegoNo;
@@ -338,9 +342,9 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
         toast({ title: "Registration Saved", description: `Status: ${submissionStatus}. ID: ${docRef.id}` });
         router.push(`/registrations/${docRef.id}`);
       } else if (registrationId) {
-        // TODO: Implement update logic using setDoc or updateDoc with registrationId
-        console.log("Updating registration (placeholder):", registrationId, registrationDataForFirestore);
-        toast({ title: "Update (Simulated)", description: "Registration update successful (placeholder)." });
+        const regDocRef = doc(db, "registrations", registrationId);
+        await updateDoc(regDocRef, registrationDataForFirestore);
+        toast({ title: "Registration Updated", description: `Status: ${submissionStatus}.` });
         router.push(`/registrations/${registrationId}`); 
       }
     } catch (error: any) {
@@ -549,12 +553,10 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
             <Save className="mr-2 h-4 w-4" /> Save Draft
           </Button>
           <Button type="button" onClick={form.handleSubmit((data) => onSubmit(data, "Submitted"))} disabled={form.formState.isSubmitting}>
-            <Send className="mr-2 h-4 w-4" /> Submit for Review
+            <Send className="mr-2 h-4 w-4" /> {mode === 'create' ? 'Submit for Review' : 'Resubmit for Review'}
           </Button>
         </CardFooter>
       </form>
     </Form>
   );
 }
-
-    

@@ -120,7 +120,6 @@ export default function RegistrationsPage() {
           uploadedAt: ensureSerializableDate(docData.uploadedAt),
         });
         
-        // Handle DocumentReference fields by storing their ID
         const createdByRefId = data.createdByRef instanceof DocumentReference ? data.createdByRef.id : data.createdByRef;
         const lastUpdatedByRefId = data.lastUpdatedByRef instanceof DocumentReference ? data.lastUpdatedByRef.id : data.lastUpdatedByRef;
 
@@ -170,9 +169,14 @@ export default function RegistrationsPage() {
           certificateGeneratedAt: ensureSerializableDate(data.certificateGeneratedAt),
           certificateFileName: data.certificateFileName,
           certificateFileUrl: data.certificateFileUrl,
-          lastUpdatedByRef: lastUpdatedByRefId, // Store ID string
+          suspensionReason: data.suspensionReason,
+          suspensionStartDate: ensureSerializableDate(data.suspensionStartDate),
+          suspensionEndDate: ensureSerializableDate(data.suspensionEndDate),
+          revocationReason: data.revocationReason,
+          revokedAt: ensureSerializableDate(data.revokedAt),
+          lastUpdatedByRef: lastUpdatedByRefId, 
           lastUpdatedAt: ensureSerializableDate(data.lastUpdatedAt),
-          createdByRef: createdByRefId, // Store ID string
+          createdByRef: createdByRefId, 
           createdAt: ensureSerializableDate(data.createdAt),
         } as Registration;
       });
@@ -198,17 +202,15 @@ export default function RegistrationsPage() {
   useEffect(() => {
     if (authLoading) {
       console.log("RegistrationsPage (Client): Auth is still loading. Waiting...");
-      setIsLoading(true); // Keep loading if auth is loading
+      setIsLoading(true); 
       return;
     }
-    // Only call loadRegistrations if currentUser is available (logged in)
     if (currentUser) {
       loadRegistrations();
     } else {
-      // If not logged in and auth is not loading, set loading to false and show appropriate message
       setIsLoading(false);
       setFetchError("Please log in to view registrations.");
-      setRegistrations([]); // Clear any existing registrations
+      setRegistrations([]); 
     }
   }, [currentUser, authLoading, loadRegistrations, searchParams]);
 
@@ -222,7 +224,10 @@ export default function RegistrationsPage() {
         return "secondary";
       case "Rejected":
       case "Expired":
+      case "Revoked":
         return "destructive";
+      case "Suspended":
+        return "outline"; // Consider a specific color for suspended
       case "Draft":
       case "RequiresInfo":
         return "outline";
@@ -268,7 +273,7 @@ export default function RegistrationsPage() {
   };
 
 
-  if (authLoading && isLoading) { // Show main loading spinner if auth is loading AND we are still in loading state
+  if (authLoading && isLoading) { 
     return (
       <div className="flex h-64 justify-center items-center py-10">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -316,7 +321,7 @@ export default function RegistrationsPage() {
           <CardDescription>Manage and track all craft registrations.</CardDescription>
         </CardHeader>
         <CardContent>
-          {isLoading && !fetchError ? ( // Show table loading if isLoading is true AND no error yet
+          {isLoading && !fetchError ? ( 
              <div className="flex h-40 justify-center items-center">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 <p className="ml-2">Fetching registrations...</p>
@@ -369,7 +374,7 @@ export default function RegistrationsPage() {
                       <Badge variant={getStatusBadgeVariant(reg.status)}>{reg.status || "N/A"}</Badge>
                     </TableCell>
                     <TableCell>
-                      {reg.status === "Approved" && reg.expiryDate
+                      {(reg.status === "Approved" || reg.status === "Suspended") && reg.expiryDate
                         ? formatFirebaseTimestamp(reg.expiryDate, "PP")
                         : "N/A"}
                     </TableCell>

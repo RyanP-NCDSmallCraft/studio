@@ -6,7 +6,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
 import type { Registration, Owner, ProofOfOwnershipDoc, Inspection, User } from "@/types";
-import { Ship, User as UserIconLucide, FileText, ClipboardCheck, CalendarDays, DollarSign, Edit, CheckCircle, XCircle, Info, FileSpreadsheet, ListChecks, AlertTriangle, Loader2, ArrowLeft } from "lucide-react";
+import { Ship, User as UserIconLucide, FileText, ClipboardCheck, CalendarDays, DollarSign, Edit, CheckCircle, XCircle, Info, FileSpreadsheet, ListChecks, AlertTriangle, Loader2, ArrowLeft, Ban, AlertCircle, CalendarClock } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { formatFirebaseTimestamp } from '@/lib/utils';
@@ -26,9 +26,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import React, { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { format, parseISO, isValid } from "date-fns";
+import { format, parseISO, isValid, addDays } from "date-fns";
 import { doc, getDoc, updateDoc, Timestamp, collection, query, where, getDocs, DocumentReference } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { Textarea } from "@/components/ui/textarea";
 
 
 // Helper to convert Firestore Timestamps or other date forms to JS Date for client state
@@ -73,7 +74,14 @@ export default function RegistrationDetailPage() {
   const [approveModalOpen, setApproveModalOpen] = useState(false);
   const [scaRegoNo, setScaRegoNo] = useState("");
   const [effectiveDate, setEffectiveDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [expiryDate, setExpiryDate] = useState(format(new Date(new Date().setFullYear(new Date().getFullYear() + 1)), "yyyy-MM-dd"));
+  const [expiryDate, setExpiryDate] = useState(format(addDays(new Date(), 365), "yyyy-MM-dd"));
+
+  const [suspendModalOpen, setSuspendModalOpen] = useState(false);
+  const [suspensionReason, setSuspensionReason] = useState("");
+  const [suspensionEndDate, setSuspensionEndDate] = useState("");
+
+  const [revokeModalOpen, setRevokeModalOpen] = useState(false);
+  const [revocationReason, setRevocationReason] = useState("");
 
   const fetchRegistrationDetails = useCallback(async () => {
     if (!registrationId) {
@@ -82,7 +90,6 @@ export default function RegistrationDetailPage() {
       return;
     }
     if (!currentUser) {
-      // Waiting for auth context
       return;
     }
 
@@ -142,6 +149,11 @@ export default function RegistrationDetailPage() {
           certificateGeneratedAt: ensureDateObject(data.certificateGeneratedAt),
           certificateFileName: data.certificateFileName,
           certificateFileUrl: data.certificateFileUrl,
+          suspensionReason: data.suspensionReason,
+          suspensionStartDate: ensureDateObject(data.suspensionStartDate),
+          suspensionEndDate: ensureDateObject(data.suspensionEndDate),
+          revocationReason: data.revocationReason,
+          revokedAt: ensureDateObject(data.revokedAt),
           lastUpdatedByRef: (data.lastUpdatedByRef instanceof DocumentReference) ? data.lastUpdatedByRef.id : data.lastUpdatedByRef,
           lastUpdatedAt: ensureDateObject(data.lastUpdatedAt),
           createdByRef: (data.createdByRef instanceof DocumentReference) ? data.createdByRef.id : data.createdByRef,
@@ -152,7 +164,6 @@ export default function RegistrationDetailPage() {
         if (processedData.effectiveDate) setEffectiveDate(format(new Date(processedData.effectiveDate as Date), "yyyy-MM-dd"));
         if (processedData.expiryDate) setExpiryDate(format(new Date(processedData.expiryDate as Date), "yyyy-MM-dd"));
 
-        // Fetch linked inspections
         try {
           const inspectionsQuery = query(
             collection(db, "inspections"),
@@ -221,8 +232,9 @@ export default function RegistrationDetailPage() {
     switch (status) {
       case "Approved": case "Passed": return "default";
       case "PendingReview": case "Submitted": case "Scheduled": return "secondary";
-      case "Rejected": case "Expired": case "Failed": case "Cancelled": return "destructive";
+      case "Rejected": case "Expired": case "Failed": case "Cancelled": case "Revoked": return "destructive";
       case "Draft": case "RequiresInfo": case "InProgress": return "outline";
+      case "Suspended": return "outline"; // Yellow/Orange or similar warning color would be good. For now outline.
       default: return "outline";
     }
   };
@@ -257,16 +269,7 @@ export default function RegistrationDetailPage() {
       await updateDoc(registrationDocRef, updatePayload as any); 
       toast({ title: "Registration Approved", description: `SCA Rego No: ${scaRegoNo} assigned.` });
       setApproveModalOpen(false);
-      setRegistration(prev => prev ? ({
-        ...prev,
-        status: "Approved",
-        scaRegoNo: scaRegoNo,
-        effectiveDate: parseISO(effectiveDate),
-        expiryDate: parseISO(expiryDate),
-        approvedAt: new Date(),
-        lastUpdatedAt: new Date(),
-        lastUpdatedByRef: currentUser.userId, 
-      }) : null);
+      fetchRegistrationDetails(); // Re-fetch to update state
     } catch (e: any) {
       console.error("Error approving registration:", e);
       toast({ title: "Approval Failed", description: e.message || "Could not update registration.", variant: "destructive" });
@@ -283,7 +286,7 @@ export default function RegistrationDetailPage() {
         lastUpdatedByRef: doc(db, "users", currentUser.userId)
       });
       toast({ title: "Registration Rejected", variant: "destructive" });
-      setRegistration(prev => prev ? ({ ...prev, status: "Rejected", lastUpdatedAt: new Date() }) : null);
+      fetchRegistrationDetails();
     } catch (e: any) {
        toast({ title: "Rejection Failed", description: e.message || "Could not update registration.", variant: "destructive" });
     }
@@ -299,15 +302,91 @@ export default function RegistrationDetailPage() {
         lastUpdatedByRef: doc(db, "users", currentUser.userId)
       });
       toast({ title: "Information Requested", description: "Owner will be notified." });
-      setRegistration(prev => prev ? ({ ...prev, status: "RequiresInfo", lastUpdatedAt: new Date() }) : null);
+      fetchRegistrationDetails();
     } catch (e: any) {
        toast({ title: "Action Failed", description: e.message || "Could not update registration.", variant: "destructive" });
+    }
+  };
+
+  const handleSuspend = async () => {
+    if (!currentUser?.userId || !registration || !suspensionReason.trim()) {
+      toast({ title: "Error", description: "User, registration, or suspension reason missing.", variant: "destructive" });
+      return;
+    }
+    if (suspensionEndDate && !isValid(parseISO(suspensionEndDate))) {
+        toast({ title: "Validation Error", description: "Suspension End Date is invalid.", variant: "destructive" });
+        return;
+    }
+    const registrationDocRef = doc(db, "registrations", registration.registrationId);
+    const updatePayload: Partial<Registration> = {
+      status: "Suspended",
+      suspensionReason: suspensionReason,
+      suspensionStartDate: Timestamp.now(),
+      suspensionEndDate: suspensionEndDate ? Timestamp.fromDate(parseISO(suspensionEndDate)) : undefined,
+      lastUpdatedAt: Timestamp.now(),
+      lastUpdatedByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
+    };
+    try {
+      await updateDoc(registrationDocRef, updatePayload as any);
+      toast({ title: "Registration Suspended", description: `Reason: ${suspensionReason}` });
+      setSuspendModalOpen(false);
+      setSuspensionReason("");
+      setSuspensionEndDate("");
+      fetchRegistrationDetails();
+    } catch (e: any) {
+      toast({ title: "Suspension Failed", description: e.message || "Could not update registration.", variant: "destructive" });
+    }
+  };
+
+  const handleRevoke = async () => {
+    if (!currentUser?.userId || !registration || !revocationReason.trim()) {
+      toast({ title: "Error", description: "User, registration, or revocation reason missing.", variant: "destructive" });
+      return;
+    }
+    const registrationDocRef = doc(db, "registrations", registration.registrationId);
+    const updatePayload: Partial<Registration> = {
+      status: "Revoked",
+      revocationReason: revocationReason,
+      revokedAt: Timestamp.now(),
+      lastUpdatedAt: Timestamp.now(),
+      lastUpdatedByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
+    };
+    try {
+      await updateDoc(registrationDocRef, updatePayload as any);
+      toast({ title: "Registration Revoked", description: `Reason: ${revocationReason}`, variant: "destructive" });
+      setRevokeModalOpen(false);
+      setRevocationReason("");
+      fetchRegistrationDetails();
+    } catch (e: any) {
+      toast({ title: "Revocation Failed", description: e.message || "Could not update registration.", variant: "destructive" });
+    }
+  };
+
+  const handleUnsuspend = async () => {
+    if (!currentUser?.userId || !registration) return;
+    const registrationDocRef = doc(db, "registrations", registration.registrationId);
+    const updatePayload: Partial<Registration> = {
+      status: "Approved", // Or "PendingReview" if it needs re-evaluation
+      suspensionReason: undefined, // Clear suspension fields
+      suspensionStartDate: undefined,
+      suspensionEndDate: undefined,
+      lastUpdatedAt: Timestamp.now(),
+      lastUpdatedByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
+    };
+     try {
+      await updateDoc(registrationDocRef, updatePayload as any);
+      toast({ title: "Registration Unsuspended", description: "The registration is now active again." });
+      fetchRegistrationDetails();
+    } catch (e: any) {
+       toast({ title: "Unsuspension Failed", description: e.message || "Could not update registration.", variant: "destructive" });
     }
   };
 
 
   const canEdit = (isRegistrar || isAdmin) && (registration.status === "Submitted" || registration.status === "RequiresInfo" || registration.status === "Draft");
   const canApproveReject = (isRegistrar || isAdmin) && (registration.status === "Submitted" || registration.status === "RequiresInfo" || registration.status === "PendingReview");
+  const canSuspendRevoke = (isRegistrar || isAdmin) && (registration.status === "Approved" || registration.status === "Expired" || registration.status === "Suspended");
+  const canUnsuspend = (isRegistrar || isAdmin) && registration.status === "Suspended";
   const canScheduleInspection = (isAdmin || isSupervisor || isRegistrar);
   const canGenerateCertificate = (isRegistrar || isAdmin) && registration.status === "Approved";
 
@@ -335,7 +414,7 @@ export default function RegistrationDetailPage() {
         </div>
       </div>
 
-      {(canApproveReject || canScheduleInspection || canGenerateCertificate) && (
+      {(canApproveReject || canScheduleInspection || canGenerateCertificate || canSuspendRevoke) && (
         <Card>
           <CardHeader><CardTitle>Actions</CardTitle></CardHeader>
           <CardContent className="flex flex-wrap gap-2">
@@ -401,6 +480,40 @@ export default function RegistrationDetailPage() {
                     </Button>
                 )
             )}
+            {canSuspendRevoke && registration.status !== "Suspended" && (
+              <AlertDialog open={suspendModalOpen} onOpenChange={setSuspendModalOpen}>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" className="text-orange-600 border-orange-500 hover:bg-orange-100 hover:text-orange-700"><CalendarClock className="mr-2 h-4 w-4" /> Suspend</Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader><AlertDialogTitle>Suspend Registration</AlertDialogTitle><AlertDialogDescription>Provide a reason for suspension and an optional end date.</AlertDialogDescription></AlertDialogHeader>
+                  <div className="space-y-4 py-2">
+                    <div><Label htmlFor="suspensionReason">Reason for Suspension *</Label><Textarea id="suspensionReason" value={suspensionReason} onChange={(e) => setSuspensionReason(e.target.value)} placeholder="Enter reason" /></div>
+                    <div><Label htmlFor="suspensionEndDate">Suspension End Date (Optional)</Label><Input id="suspensionEndDate" type="date" value={suspensionEndDate} onChange={(e) => setSuspensionEndDate(e.target.value)} /></div>
+                  </div>
+                  <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleSuspend}>Confirm Suspension</AlertDialogAction></AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+            {canUnsuspend && (
+                <Button variant="outline" className="text-green-600 border-green-500 hover:bg-green-100 hover:text-green-700" onClick={handleUnsuspend}>
+                    <CheckCircle className="mr-2 h-4 w-4" /> Unsuspend
+                </Button>
+            )}
+            {canSuspendRevoke && (
+              <AlertDialog open={revokeModalOpen} onOpenChange={setRevokeModalOpen}>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive"><Ban className="mr-2 h-4 w-4" /> Revoke</Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader><AlertDialogTitle>Revoke Registration</AlertDialogTitle><AlertDialogDescription>This action is permanent. Provide a reason for revocation.</AlertDialogDescription></AlertDialogHeader>
+                  <div className="space-y-4 py-2">
+                    <div><Label htmlFor="revocationReason">Reason for Revocation *</Label><Textarea id="revocationReason" value={revocationReason} onChange={(e) => setRevocationReason(e.target.value)} placeholder="Enter reason" /></div>
+                  </div>
+                  <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleRevoke} className="bg-destructive hover:bg-destructive/90">Confirm Revocation</AlertDialogAction></AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
           </CardContent>
         </Card>
       )}
@@ -426,6 +539,33 @@ export default function RegistrationDetailPage() {
           </CardContent>
         </Card>
       )}
+
+      {registration.status === "Suspended" && (
+        <Card className="border-orange-500 bg-orange-500/10">
+          <CardHeader>
+            <CardTitle className="text-orange-700 flex items-center gap-2"><CalendarClock /> Registration Suspended</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-orange-700 space-y-1">
+            <p><strong>Reason:</strong> {registration.suspensionReason || "Not specified"}</p>
+            {registration.suspensionStartDate && <p><strong>Suspended From:</strong> {formatFirebaseTimestamp(registration.suspensionStartDate, "PP")}</p>}
+            {registration.suspensionEndDate && <p><strong>Suspended Until:</strong> {formatFirebaseTimestamp(registration.suspensionEndDate, "PP")}</p>}
+            {!registration.suspensionEndDate && <p>Suspended indefinitely or until further notice.</p>}
+          </CardContent>
+        </Card>
+      )}
+
+      {registration.status === "Revoked" && (
+        <Card className="border-red-700 bg-red-700/10">
+          <CardHeader>
+            <CardTitle className="text-red-800 flex items-center gap-2"><Ban /> Registration Revoked</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-red-800 space-y-1">
+            <p><strong>Reason:</strong> {registration.revocationReason || "Not specified"}</p>
+            {registration.revokedAt && <p><strong>Revoked On:</strong> {formatFirebaseTimestamp(registration.revokedAt, "PP")}</p>}
+          </CardContent>
+        </Card>
+      )}
+
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
