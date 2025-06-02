@@ -1,3 +1,4 @@
+
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { format as dateFnsFormat, isValid } from 'date-fns';
@@ -44,5 +45,55 @@ export function formatFirebaseTimestamp(
   } catch (error) {
     console.error("Error formatting date:", error);
     return "Formatting Error";
+  }
+}
+
+// CSV Utility Functions
+
+function escapeCSVValue(value: any): string {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  let stringValue = String(value);
+  // If the value contains a comma, a double quote, or a newline, wrap it in double quotes
+  // and escape any existing double quotes by doubling them (e.g., " becomes "").
+  if (/[",\n\r]/.test(stringValue)) {
+    stringValue = `"${stringValue.replace(/"/g, '""')}"`;
+  }
+  return stringValue;
+}
+
+export function convertToCSV(data: any[], columns?: string[]): string {
+  if (!data || data.length === 0) {
+    return "";
+  }
+
+  const headers = columns || Object.keys(data[0]);
+  const csvRows = [];
+
+  // Add header row
+  csvRows.push(headers.map(escapeCSVValue).join(','));
+
+  // Add data rows
+  for (const row of data) {
+    const values = headers.map(header => escapeCSVValue(row[header]));
+    csvRows.push(values.join(','));
+  }
+
+  return csvRows.join('\n');
+}
+
+export function downloadCSV(csvString: string, filename: string): void {
+  const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  if (link.download !== undefined) {
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename.endsWith('.csv') ? filename : `${filename}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   }
 }
