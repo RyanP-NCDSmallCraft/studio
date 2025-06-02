@@ -15,19 +15,30 @@ import { useToast } from "@/hooks/use-toast";
 import { collection, getDocs, query, where, doc, getDoc, Timestamp, DocumentReference } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Input } from "@/components/ui/input";
-import { useRouter } // Added for back button
+import { useRouter }
 from "next/navigation";
-
+import { isValid } from 'date-fns'; // Ensure isValid is imported
 
 // Helper to ensure date serialization
 const ensureSerializableDate = (dateValue: any): Date | undefined => {
   if (!dateValue) return undefined;
   if (dateValue instanceof Timestamp) return dateValue.toDate();
   if (dateValue instanceof Date) return dateValue;
-  try {
-    const parsed = new Date(dateValue);
-    if (isValid(parsed)) return parsed;
-  } catch (e) { /* ignore */ }
+  if (typeof dateValue === 'object' && dateValue !== null && typeof dateValue.seconds === 'number' && typeof dateValue.nanoseconds === 'number') {
+    try {
+      return new Timestamp(dateValue.seconds, dateValue.nanoseconds).toDate();
+    } catch (e) {
+      console.warn('Failed to convert object to Timestamp then to Date:', dateValue, e);
+      return undefined;
+    }
+  }
+  if (typeof dateValue === 'string' || typeof dateValue === 'number') {
+    const parsedDate = new Date(dateValue);
+    if (isValid(parsedDate)) { // Use isValid from date-fns
+      return parsedDate;
+    }
+  }
+  console.warn(`InfringementListPage: Could not convert field to a serializable Date:`, dateValue);
   return undefined;
 };
 
@@ -52,7 +63,7 @@ export default function InfringementListPage() {
 
     try {
       let infringementsQuery = query(collection(db, "infringements"));
-      // Add role-based filtering if needed, e.g., inspectors see only their own
+      // Example role-based filtering (can be expanded)
       // if (isInspector && !isAdmin && !isRegistrar && !isSupervisor) {
       //   infringementsQuery = query(collection(db, "infringements"), where("issuedByRef", "==", doc(db, "users", currentUser.userId)));
       // }
@@ -98,13 +109,13 @@ export default function InfringementListPage() {
     switch (status) {
       case "Issued": case "PendingReview": return "secondary";
       case "Approved": return "default";
-      case "Paid": return "default"; // Consider a green variant for 'Paid'
+      case "Paid": return "default";
       case "Voided": case "Overdue": return "destructive";
       case "Draft": return "outline";
       default: return "outline";
     }
   };
-  
+
   const filteredInfringements = infringements.filter(inf => {
     const searchLower = searchTerm.toLowerCase();
     return (
@@ -112,7 +123,7 @@ export default function InfringementListPage() {
         (inf.registrationData?.scaRegoNo && inf.registrationData.scaRegoNo.toLowerCase().includes(searchLower)) ||
         (inf.registrationData?.ownerName && inf.registrationData.ownerName.toLowerCase().includes(searchLower)) ||
         (inf.issuedByData?.displayName && inf.issuedByData.displayName.toLowerCase().includes(searchLower)) ||
-        inf.status.toLowerCase().includes(searchLower)
+        (inf.status && inf.status.toLowerCase().includes(searchLower))
     );
   });
 
@@ -120,7 +131,7 @@ export default function InfringementListPage() {
   if (authLoading || (!currentUser && isLoading)) {
     return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
-  
+
   const canCreate = isAdmin || isRegistrar || isInspector || isSupervisor;
 
 
@@ -180,7 +191,7 @@ export default function InfringementListPage() {
                   <TableHead>Owner</TableHead>
                   <TableHead>Issued By</TableHead>
                   <TableHead>Date Issued</TableHead>
-                  <TableHead>Total Penalty</TableHead>
+                  <TableHead>Total Points</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -195,7 +206,7 @@ export default function InfringementListPage() {
                     <TableCell>{inf.registrationData?.ownerName || "N/A"}</TableCell>
                     <TableCell>{inf.issuedByData?.displayName || inf.issuedByRef as string || "N/A"}</TableCell>
                     <TableCell>{formatFirebaseTimestamp(inf.issuedAt, "PP")}</TableCell>
-                    <TableCell>K{inf.totalPenaltyAmount?.toFixed(2) || "0.00"}</TableCell>
+                    <TableCell>{inf.totalPoints || 0} points</TableCell>
                     <TableCell>
                       <Badge variant={getStatusBadgeVariant(inf.status)}>{inf.status}</Badge>
                     </TableCell>
@@ -203,7 +214,6 @@ export default function InfringementListPage() {
                       <Button variant="ghost" size="icon" asChild title="View Details">
                         <Link href={`/infringements/${inf.infringementId}`}><Eye className="h-4 w-4" /></Link>
                       </Button>
-                      {/* Add Edit/Approve actions based on role and status */}
                     </TableCell>
                   </TableRow>
                 )) : (

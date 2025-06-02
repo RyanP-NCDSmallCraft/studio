@@ -27,7 +27,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { Save, Send, Ship, CalendarDays, DollarSign, PlusCircle, Trash2, ChevronsUpDown, Check } from "lucide-react";
 import React, { useState, useEffect, useCallback } from "react";
-import { Timestamp, addDoc, collection, doc, getDocs, DocumentReference, getDoc } from "firebase/firestore";
+import { Timestamp, addDoc, collection, doc, getDocs, DocumentReference, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { format, parseISO, isValid } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -36,7 +36,7 @@ import Link from "next/link";
 const infringementItemDetailSchema = z.object({
   itemId: z.string(),
   description: z.string(),
-  penaltyAmount: z.number().optional(),
+  points: z.number().optional(),
   notes: z.string().optional(),
   selected: z.boolean().default(false), // To track selection in the form
 });
@@ -48,7 +48,7 @@ const infringementFormSchema = z.object({
   infringementItems: z.array(infringementItemDetailSchema).min(1, "At least one infringement item must be selected.")
     .refine(items => items.some(item => item.selected), {
       message: "At least one infringement item must be selected.",
-      path: ["infringementItems"], 
+      path: ["infringementItems"],
     }),
   officerNotes: z.string().optional(),
 });
@@ -56,22 +56,22 @@ const infringementFormSchema = z.object({
 type InfringementFormValues = z.infer<typeof infringementFormSchema>;
 
 interface RegistrationSelectItem {
-  value: string; 
-  label: string; 
+  value: string;
+  label: string;
   scaRegoNo?: string;
   craftDetails?: string;
 }
 
 const PREDEFINED_INFRINGEMENT_ITEMS: Omit<InfringementItemDetail, 'notes' | 'selected'>[] = [
-  { itemId: "UNREG_CRAFT", description: "Operating an unregistered craft", penaltyAmount: 200 },
-  { itemId: "NO_SAFETY_EQUIP", description: "Insufficient/no safety equipment on board", penaltyAmount: 150 },
-  { itemId: "OVERLOADING", description: "Overloading the craft (exceeding capacity)", penaltyAmount: 250 },
-  { itemId: "RECKLESS_OP", description: "Reckless operation of craft", penaltyAmount: 300 },
-  { itemId: "SPEEDING_ZONE", description: "Speeding in a restricted zone", penaltyAmount: 100 },
-  { itemId: "NO_LICENSE", description: "Operating without a valid license (if required)", penaltyAmount: 200 },
-  { itemId: "ENV_POLLUTION", description: "Discharging pollutants into water", penaltyAmount: 500 },
-  { itemId: "FAIL_COMPLY_DIRECTION", description: "Failing to comply with lawful direction", penaltyAmount: 180 },
-  { itemId: "IMPROPER_MARKINGS", description: "Improper craft markings/identification", penaltyAmount: 90 },
+  { itemId: "UNREG_CRAFT", description: "Operating an unregistered craft", points: 30 },
+  { itemId: "NO_SAFETY_EQUIP", description: "Insufficient/no safety equipment on board", points: 20 },
+  { itemId: "OVERLOADING", description: "Overloading the craft (exceeding capacity)", points: 25 },
+  { itemId: "RECKLESS_OP", description: "Reckless operation of craft", points: 40 },
+  { itemId: "SPEEDING_ZONE", description: "Speeding in a restricted zone", points: 10 },
+  { itemId: "NO_LICENSE", description: "Operating without a valid license (if required)", points: 30 },
+  { itemId: "ENV_POLLUTION", description: "Discharging pollutants into water", points: 50 },
+  { itemId: "FAIL_COMPLY_DIRECTION", description: "Failing to comply with lawful direction", points: 15 },
+  { itemId: "IMPROPER_MARKINGS", description: "Improper craft markings/identification", points: 10 },
 ];
 
 
@@ -106,7 +106,7 @@ export function InfringementForm({ mode, infringementId, existingInfringementDat
     control: form.control,
     name: "infringementItems",
   });
-  
+
   const watchRegistrationRefId = form.watch("registrationRefId");
 
   useEffect(() => {
@@ -145,8 +145,8 @@ export function InfringementForm({ mode, infringementId, existingInfringementDat
         form.setError("infringementItems", { message: "At least one infringement item must be selected." });
         return;
     }
-    
-    const totalPenaltyAmount = selectedItems.reduce((sum, item) => sum + (item.penaltyAmount || 0), 0);
+
+    const totalPoints = selectedItems.reduce((sum, item) => sum + (item.points || 0), 0);
 
     let registrationDataForInfringement: Infringement['registrationData'] = undefined;
     if (data.registrationRefId) {
@@ -166,7 +166,7 @@ export function InfringementForm({ mode, infringementId, existingInfringementDat
     }
 
 
-    const infringementPayload: Omit<Infringement, "infringementId" | "createdAt" | "createdByRef"> = {
+    const infringementPayload: Partial<Infringement> = {
       registrationRef: doc(db, "registrations", data.registrationRefId) as DocumentReference<Registration>,
       registrationData: registrationDataForInfringement,
       issuedByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
@@ -174,7 +174,7 @@ export function InfringementForm({ mode, infringementId, existingInfringementDat
       issuedAt: Timestamp.fromDate(data.issuedAt),
       locationDescription: data.locationDescription,
       infringementItems: selectedItems,
-      totalPenaltyAmount,
+      totalPoints,
       status,
       officerNotes: data.officerNotes,
       lastUpdatedAt: Timestamp.now(),
@@ -192,7 +192,6 @@ export function InfringementForm({ mode, infringementId, existingInfringementDat
         toast({ title: `Infringement ${status}`, description: `Infringement ID: ${docRef.id} created.` });
         router.push(`/infringements/${docRef.id}`);
       } else if (infringementId) {
-        // Update logic here
         await updateDoc(doc(db, "infringements", infringementId), infringementPayload);
         toast({ title: "Infringement Updated", description: `Status: ${status}` });
         router.push(`/infringements/${infringementId}`);
@@ -203,7 +202,7 @@ export function InfringementForm({ mode, infringementId, existingInfringementDat
       toast({ title: "Save Failed", description: error.message || "Could not save infringement.", variant: "destructive" });
     }
   };
-  
+
   const selectedRegistrationDisplay = registrationsForSelect.find(
     (reg) => reg.value === watchRegistrationRefId
   );
@@ -261,7 +260,7 @@ export function InfringementForm({ mode, infringementId, existingInfringementDat
                       </Command>
                     </PopoverContent>
                   </Popover>
-                  {field.value && 
+                  {field.value &&
                     <FormDescription>
                       <Link href={`/registrations/${field.value}`} target="_blank" className="text-xs text-primary hover:underline">
                         View selected registration <Ship className="inline h-3 w-3 ml-1"/>
@@ -311,7 +310,7 @@ export function InfringementForm({ mode, infringementId, existingInfringementDat
                       </FormControl>
                       <div className="space-y-1 leading-none w-full">
                         <FormLabel className={cn("font-normal", field.value && "font-semibold")}>
-                          {item.description} (Penalty: K{item.penaltyAmount || 0})
+                          {item.description} (Points: {item.points || 0})
                         </FormLabel>
                         {field.value && (
                           <FormField

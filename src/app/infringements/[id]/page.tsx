@@ -4,34 +4,46 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import type { Infringement } from "@/types";
+import type { Infringement, User } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
-import { useParams, useRouter } // Added useRouter
+import { useParams, useRouter }
 from "next/navigation";
 import Link from "next/link";
-import { AlertOctagon, Ship, User, CalendarDays, DollarSign, Edit, CheckCircle, XCircle, Printer, Loader2, ArrowLeft } from "lucide-react";
+import { AlertOctagon, Ship, User as UserIcon, CalendarDays, DollarSign, Edit, CheckCircle, XCircle, Printer, Loader2, ArrowLeft } from "lucide-react";
 import React, { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { doc, getDoc, Timestamp, updateDoc, DocumentReference } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { isValid } from 'date-fns'; // Ensure isValid is imported
 
 // Helper to ensure date serialization
 const ensureSerializableDate = (dateValue: any): Date | undefined => {
   if (!dateValue) return undefined;
   if (dateValue instanceof Timestamp) return dateValue.toDate();
   if (dateValue instanceof Date) return dateValue;
-  try {
-    const parsed = new Date(dateValue);
-    if (isValid(parsed)) return parsed;
-  } catch (e) { /* ignore */ }
+  if (typeof dateValue === 'object' && dateValue !== null && typeof dateValue.seconds === 'number' && typeof dateValue.nanoseconds === 'number') {
+    try {
+      return new Timestamp(dateValue.seconds, dateValue.nanoseconds).toDate();
+    } catch (e) {
+      console.warn('Failed to convert object to Timestamp then to Date:', dateValue, e);
+      return undefined;
+    }
+  }
+  if (typeof dateValue === 'string' || typeof dateValue === 'number') {
+    const parsedDate = new Date(dateValue);
+    if (isValid(parsedDate)) { // Use isValid from date-fns
+      return parsedDate;
+    }
+  }
+  console.warn(`InfringementDetailPage: Could not convert field to a serializable Date:`, dateValue);
   return undefined;
 };
 
 export default function InfringementDetailPage() {
   const params = useParams();
   const infringementId = params.id as string;
-  const { currentUser, isAdmin, isRegistrar, isSupervisor } = useAuth();
+  const { currentUser, isAdmin, isRegistrar, isSupervisor, isInspector } = useAuth(); // Added isInspector
   const router = useRouter();
   const { toast } = useToast();
 
@@ -84,7 +96,6 @@ export default function InfringementDetailPage() {
   }, [fetchInfringementDetails]);
 
   const getStatusBadgeVariant = (status?: Infringement["status"]) => {
-    // Same as list page
     switch (status) {
       case "Issued": case "PendingReview": return "secondary";
       case "Approved": return "default";
@@ -94,16 +105,16 @@ export default function InfringementDetailPage() {
       default: return "outline";
     }
   };
-  
+
   const handleApprove = async () => {
     if (!infringement || !currentUser) return;
     try {
         await updateDoc(doc(db, "infringements", infringement.infringementId), {
             status: "Approved",
             approvedAt: Timestamp.now(),
-            approvedByRef: doc(db, "users", currentUser.userId),
+            approvedByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>, // Ensure correct type
             lastUpdatedAt: Timestamp.now(),
-            lastUpdatedByRef: doc(db, "users", currentUser.userId),
+            lastUpdatedByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>, // Ensure correct type
         });
         toast({title: "Infringement Approved"});
         fetchInfringementDetails(); // Refresh data
@@ -112,13 +123,11 @@ export default function InfringementDetailPage() {
     }
   };
 
-  // Placeholder for other actions like Mark Paid, Void, etc.
-
   if (loading) return <div className="flex h-64 justify-center items-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /> <p>Loading infringement details...</p></div>;
   if (error) return <p className="text-red-500 text-center">Error: {error}</p>;
   if (!infringement) return <p className="text-center">Infringement not found.</p>;
 
-  const canApprove = (isAdmin || isRegistrar) && (infringement.status === "Issued" || infringement.status === "PendingReview");
+  const canApprove = (isAdmin || isRegistrar || isSupervisor) && (infringement.status === "Issued" || infringement.status === "PendingReview");
   const canEdit = (isAdmin || isRegistrar || isInspector || isSupervisor) && infringement.status === "Draft";
 
 
@@ -158,9 +167,9 @@ export default function InfringementDetailPage() {
           <div><strong>Issued By:</strong> {infringement.issuedByData?.displayName || infringement.issuedByRef as string || "N/A"}</div>
           <div><strong>Date Issued:</strong> {formatFirebaseTimestamp(infringement.issuedAt, "PPpp")}</div>
           <div><strong>Location:</strong> {infringement.locationDescription}</div>
-          <div><strong>Total Penalty:</strong> K{infringement.totalPenaltyAmount?.toFixed(2) || "0.00"}</div>
+          <div><strong>Total Points:</strong> {infringement.totalPoints || 0} points</div>
           {infringement.approvedAt && <div><strong>Approved At:</strong> {formatFirebaseTimestamp(infringement.approvedAt, "PPpp")}</div>}
-          {infringement.approvedByRef && <div><strong>Approved By:</strong> {(infringement.approvedByRef as any)?.displayName || infringement.approvedByRef as string}</div>}
+          {infringement.approvedByRef && <div><strong>Approved By:</strong> {(typeof infringement.approvedByRef === 'object' && 'displayName' in infringement.approvedByRef ? (infringement.approvedByRef as any).displayName : infringement.approvedByRef as string) || infringement.approvedByRef as string}</div>}
         </CardContent>
       </Card>
 
@@ -171,14 +180,14 @@ export default function InfringementDetailPage() {
             <Card key={item.itemId + index} className="p-3">
               <div className="flex justify-between">
                 <p className="font-medium">{item.description}</p>
-                <p className="font-semibold">K{item.penaltyAmount?.toFixed(2) || "0.00"}</p>
+                <p className="font-semibold">{item.points || 0} points</p>
               </div>
               {item.notes && <p className="text-xs text-muted-foreground mt-1">Notes: {item.notes}</p>}
             </Card>
           ))}
         </CardContent>
       </Card>
-      
+
       {infringement.officerNotes && (
         <Card>
           <CardHeader><CardTitle>Officer Notes</CardTitle></CardHeader>
@@ -186,14 +195,15 @@ export default function InfringementDetailPage() {
         </Card>
       )}
 
-      {infringement.paymentDetails && (
+      {infringement.paymentDetails && ( // This section might need to be re-evaluated for a points system
          <Card>
-          <CardHeader><CardTitle>Payment Information</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Resolution Details (Placeholder)</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            {/* This section may need adjustment if points don't involve monetary payment */}
             <div><strong>Receipt Number:</strong> {infringement.paymentDetails.receiptNumber}</div>
-            <div><strong>Payment Date:</strong> {formatFirebaseTimestamp(infringement.paymentDetails.paymentDate, "PP")}</div>
+            <div><strong>Resolution Date:</strong> {formatFirebaseTimestamp(infringement.paymentDetails.paymentDate, "PP")}</div>
             <div><strong>Method:</strong> {infringement.paymentDetails.paymentMethod}</div>
-            <div><strong>Amount Paid:</strong> K{infringement.paymentDetails.amountPaid?.toFixed(2)}</div>
+             {infringement.paymentDetails.amountPaid && <div><strong>Amount Paid:</strong> K{infringement.paymentDetails.amountPaid?.toFixed(2)}</div>}
           </CardContent>
         </Card>
       )}

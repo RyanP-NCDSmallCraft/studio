@@ -9,9 +9,9 @@ export interface User {
   displayName?: string;
   fullname?: string;
   role: UserRole;
-  createdAt: Timestamp | Date | string; 
+  createdAt: Timestamp | Date | string;
   isActive: boolean;
-  lastUpdatedAt?: Timestamp | Date | string; 
+  lastUpdatedAt?: Timestamp | Date | string;
 }
 
 export interface Owner {
@@ -19,14 +19,14 @@ export interface Owner {
   role: "Primary" | "CoOwner";
   surname: string;
   firstName: string;
-  dob: Timestamp | Date | string; 
+  dob: Timestamp | Date | string;
   sex: "Male" | "Female" | "Other";
   phone: string;
   fax?: string;
   email?: string;
   postalAddress: string;
   townDistrict: string;
-  llg: string; 
+  llg: string;
   wardVillage: string;
 }
 
@@ -35,7 +35,7 @@ export interface ProofOfOwnershipDoc {
   description: string;
   fileName: string;
   fileUrl: string;
-  uploadedAt: Timestamp | Date | string; 
+  uploadedAt: Timestamp | Date | string;
 }
 
 export interface Registration {
@@ -75,7 +75,7 @@ export interface Registration {
   craftUseOtherDesc?: string;
   fuelType: "Electric" | "Petrol" | "Diesel" | "Other";
   fuelTypeOtherDesc?: string;
-  vesselType: "OpenBoat" | "CabinCruiser" | "Sailboat" | "PWC" | "Other"; 
+  vesselType: "OpenBoat" | "CabinCruiser" | "Sailboat" | "PWC" | "Other";
   vesselTypeOtherDesc?: string;
 
   engineHorsepower?: number;
@@ -85,9 +85,9 @@ export interface Registration {
   certificateGeneratedAt?: Timestamp | Date | string;
   certificateFileName?: string;
   certificateFileUrl?: string;
-  lastUpdatedByRef: string | DocumentReference<User>; 
+  lastUpdatedByRef: string | DocumentReference<User>;
   lastUpdatedAt: Timestamp | Date | string;
-  createdByRef: string | DocumentReference<User>; 
+  createdByRef: string | DocumentReference<User>;
   createdAt: Timestamp | Date | string;
 }
 
@@ -101,8 +101,8 @@ export interface ChecklistItemResult {
 
 export interface Inspection {
   inspectionId: string;
-  registrationRef: string | DocumentReference<Registration>; 
-  registrationData?: { 
+  registrationRef: string | DocumentReference<Registration>;
+  registrationData?: {
     id: string;
     scaRegoNo?: string;
     hullIdNumber?: string;
@@ -110,8 +110,8 @@ export interface Inspection {
     craftMake?: string;
     craftModel?: string;
   };
-  inspectorRef?: string | DocumentReference<User>; 
-  inspectorData?: { 
+  inspectorRef?: string | DocumentReference<User>;
+  inspectorData?: {
     id: string;
     displayName?: string;
   };
@@ -120,24 +120,24 @@ export interface Inspection {
   inspectionDate?: Timestamp | Date | string;
   status: "Scheduled" | "InProgress" | "PendingReview" | "Passed" | "Failed" | "Cancelled";
   overallResult?: "Pass" | "PassWithRecommendations" | "Fail" | "N/A";
-  findings?: string | null; 
-  correctiveActions?: string | null; 
+  findings?: string | null;
+  correctiveActions?: string | null;
   followUpRequired: boolean;
   checklistItems: ChecklistItemResult[];
   completedAt?: Timestamp | Date | string;
   reviewedAt?: Timestamp | Date | string;
-  reviewedByRef?: string | DocumentReference<User>; 
+  reviewedByRef?: string | DocumentReference<User>;
   createdAt: Timestamp | Date | string;
-  createdByRef: string | DocumentReference<User>; 
+  createdByRef: string | DocumentReference<User>;
   lastUpdatedAt?: Timestamp | Date | string;
-  lastUpdatedByRef?: string | DocumentReference<User>; 
+  lastUpdatedByRef?: string | DocumentReference<User>;
 }
 
 export interface ChecklistTemplateItem {
   itemId: string;
   itemDescription: string;
   category?: string;
-  order?: number; 
+  order?: number;
 }
 
 export interface ChecklistTemplate {
@@ -156,11 +156,11 @@ export type { SuggestChecklistItemsInput, SuggestChecklistItemsOutput } from '@/
 
 
 export interface Operator {
-  operatorId: string; 
+  operatorId: string;
   surname: string;
   firstName: string;
-  dob: Timestamp | Date | string; 
-  age?: number; 
+  dob: Timestamp | Date | string;
+  age?: number;
   sex: "Male" | "Female" | "Other";
   placeOfOriginTown: string;
   placeOfOriginDistrict: string;
@@ -174,19 +174,19 @@ export interface Operator {
   skinColor?: string;
   hairColor?: string;
   weightKg?: number;
-  bodyMarks?: string; 
-  idSizePhotoUrl?: string; 
+  bodyMarks?: string;
+  idSizePhotoUrl?: string;
   createdAt: Timestamp | Date | string;
   updatedAt: Timestamp | Date | string;
-  createdByRef?: DocumentReference<User> | string; 
+  createdByRef?: DocumentReference<User> | string;
 }
 
 export interface OperatorLicenseAttachedDoc {
-  docId: string; 
+  docId: string;
   docType: "PoliceClearance" | "PreviousLicenseCopy" | "BirthCertificateCopy" | "NIDCardCopy" | "IDPhoto" | "Other";
-  docOtherDescription?: string; 
+  docOtherDescription?: string;
   fileName: string;
-  fileUrl: string; 
+  fileUrl: string;
   uploadedAt: Timestamp | Date | string;
   verifiedStatus: "Pending" | "Verified" | "Rejected" | "NotRequired";
   verifiedAt?: Timestamp | Date | string;
@@ -195,18 +195,18 @@ export interface OperatorLicenseAttachedDoc {
 }
 
 export interface OperatorLicense {
-  licenseApplicationId: string; 
+  licenseApplicationId: string;
   operatorRef: DocumentReference<Operator> | string;
-  operatorData?: Partial<Operator>; 
+  operatorData?: Partial<Operator>;
   applicationType: "New" | "Renewal";
-  previousLicenseNumber?: string; 
+  previousLicenseNumber?: string;
   status: "Draft" | "Submitted" | "PendingReview" | "RequiresInfo" | "AwaitingTest" | "TestScheduled" | "TestPassed" | "TestFailed" | "Approved" | "Rejected" | "Expired" | "Revoked";
   submittedAt?: Timestamp | Date | string;
   approvedAt?: Timestamp | Date | string;
   issuedAt?: Timestamp | Date | string;
   expiryDate?: Timestamp | Date | string;
-  
-  assignedLicenseNumber?: string; 
+
+  assignedLicenseNumber?: string;
   receiptNo?: string;
   placeIssued?: string;
   methodOfPayment?: "Cash" | "Card" | "BankDeposit" | "Other";
@@ -215,7 +215,7 @@ export interface OperatorLicense {
   paymentAmount?: number;
   attachedDocuments: OperatorLicenseAttachedDoc[];
   competencyTestRef?: DocumentReference<CompetencyTest> | string;
-  notes?: string; 
+  notes?: string;
   createdByUserRef: DocumentReference<User> | string;
   lastUpdatedByRef?: DocumentReference<User> | string;
   createdAt: Timestamp | Date | string;
@@ -226,16 +226,16 @@ export interface CompetencyTestTemplateQuestion {
   questionId: string;
   questionText: string;
   questionType: "MultipleChoice" | "TrueFalse" | "ShortAnswer";
-  options?: string[]; 
-  correctAnswer?: string | boolean; 
+  options?: string[];
+  correctAnswer?: string | boolean;
   points?: number;
 }
 
 export interface CompetencyTestTemplate {
-  templateId: string; 
+  templateId: string;
   templateName: string;
   description?: string;
-  applicableLicenseType: string; 
+  applicableLicenseType: string;
   questions: CompetencyTestTemplateQuestion[];
   passingScorePercentage: number;
   isActive: boolean;
@@ -247,23 +247,23 @@ export interface CompetencyTestTemplate {
 export interface CompetencyTestAnswer {
   questionId: string;
   answerGiven: string | boolean;
-  isCorrect?: boolean; 
+  isCorrect?: boolean;
   scoreAwarded?: number;
 }
 
 export interface CompetencyTest {
-  testId: string; 
+  testId: string;
   licenseApplicationRef: DocumentReference<OperatorLicense> | string;
   operatorRef: DocumentReference<Operator> | string;
   testTemplateRef: DocumentReference<CompetencyTestTemplate> | string;
-  testTemplateVersion?: number; 
+  testTemplateVersion?: number;
   testDate: Timestamp | Date | string;
-  examinerRef: DocumentReference<User> | string; 
+  examinerRef: DocumentReference<User> | string;
   scoreAchieved?: number;
   percentageAchieved?: number;
   result: "Pass" | "Fail" | "PendingGrading";
-  answers?: CompetencyTestAnswer[]; 
-  notes?: string; 
+  answers?: CompetencyTestAnswer[];
+  notes?: string;
   createdAt: Timestamp | Date | string;
 }
 
@@ -271,7 +271,7 @@ export interface CompetencyTest {
 export interface InfringementItemDetail {
   itemId: string; // e.g., "UNREG_CRAFT"
   description: string; // e.g., "Operating an unregistered craft"
-  penaltyAmount?: number;
+  points?: number;
   notes?: string;
 }
 
@@ -294,14 +294,14 @@ export interface Infringement {
   issuedAt: Timestamp | Date | string;
   locationDescription?: string; // e.g., "Koki Market Jetty"
   infringementItems: InfringementItemDetail[];
-  totalPenaltyAmount?: number;
-  status: "Draft" | "Issued" | "PendingReview" | "Approved" | "Voided" | "Paid" | "Overdue";
+  totalPoints?: number;
+  status: "Draft" | "Issued" | "PendingReview" | "Approved" | "Voided" | "Paid" | "Overdue"; // 'Paid' might change to 'Resolved' or similar
   officerNotes?: string;
-  paymentDetails?: {
+  paymentDetails?: { // This might become 'resolutionDetails' if not monetary
     receiptNumber?: string;
     paymentDate?: Timestamp | Date | string;
     paymentMethod?: "Cash" | "Card" | "BankDeposit" | "Other";
-    amountPaid?: number;
+    amountPaid?: number; // May be deprecated if not monetary
   };
   dueDate?: Timestamp | Date | string;
   approvedByRef?: string | DocumentReference<User>;
