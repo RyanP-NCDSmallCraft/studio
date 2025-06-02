@@ -1,4 +1,4 @@
-
+// src/app/inspections/conduct-new/page.tsx (MOVED FROM (main)/inspections/conduct-new/)
 "use client";
 import { InspectionForm } from "@/components/inspections/InspectionForm";
 import { PlayCircle, ArrowLeft } from "lucide-react";
