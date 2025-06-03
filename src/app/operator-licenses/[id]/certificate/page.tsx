@@ -226,6 +226,10 @@ export default function OperatorLicenseCertificatePage() {
                   <UserCircle2 className="h-12 w-12 text-muted-foreground" />
                 </div>
               )}
+              <div className="mt-1 text-center">
+                <div className="h-5 border-b border-muted-foreground w-full"></div>
+                <p className="text-[0.6rem] text-muted-foreground leading-tight">Operator's Signature</p>
+              </div>
             </div>
 
             <div className="col-span-2 space-y-0.5 text-xs">
