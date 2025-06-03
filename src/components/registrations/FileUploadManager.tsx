@@ -25,7 +25,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Timestamp } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
+import { formatFirebaseTimestamp } from '@/lib/utils'; // Updated import
 // import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { storage } from "@/lib/firebase"; // Assuming storage is exported from ts
 
@@ -161,7 +161,7 @@ export function FileUploadManager({ title, docs, setDocs, storagePath, form: mai
               <li key={doc.docId || index} className="flex items-center justify-between p-3 border rounded-md bg-background">
                 <div>
                   <p className="font-medium">{doc.description}</p>
-                  <p className="text-xs text-muted-foreground">{doc.fileName} (Uploaded: {format(doc.uploadedAt.toDate(), "PPp")})</p>
+                  <p className="text-xs text-muted-foreground">{doc.fileName} (Uploaded: {formatFirebaseTimestamp(doc.uploadedAt, "PPp")})</p>
                 </div>
                 <div className="flex gap-1">
                   <Button type="button" variant="ghost" size="icon" asChild title="Download Document">
