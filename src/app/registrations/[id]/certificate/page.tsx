@@ -7,6 +7,7 @@ import { FileSpreadsheet, Download, Sailboat, ArrowLeft } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { formatFirebaseTimestamp } from '@/lib/utils';
 import { useToast } from "@/hooks/use-toast";
+import { Separator } from "@/components/ui/separator"; // Added import
 
 // Placeholder data
 const placeholderRegistration: Registration = {
