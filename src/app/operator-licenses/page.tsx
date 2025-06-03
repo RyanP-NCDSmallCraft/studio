@@ -17,6 +17,7 @@ import { Timestamp, collection, getDocs, query, where, doc, getDoc, DocumentRefe
 import { db } from '@/lib/firebase';
 import { useRouter, useSearchParams } from "next/navigation";
 import { isValid } from 'date-fns';
+import { useToast } from "@/hooks/use-toast"; // Added import
 
 
 // Helper to ensure date serialization
@@ -91,7 +92,7 @@ export default function OperatorLicenseListPage() {
           ...data,
           licenseApplicationId: docSnap.id,
           operatorData: operatorData, // Assign fetched or existing denormalized data
-          // Ensure all date fields are JS Date for client-side state
+          // Ensure all date fields are JS Dates for client-side state
           submittedAt: ensureSerializableDate(data.submittedAt),
           approvedAt: ensureSerializableDate(data.approvedAt),
           issuedAt: ensureSerializableDate(data.issuedAt),
