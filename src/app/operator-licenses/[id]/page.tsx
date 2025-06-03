@@ -3,14 +3,15 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Badge, type BadgeProps } from "@/components/ui/badge"; // Import BadgeProps
-import type { OperatorLicense, Operator, OperatorLicenseAttachedDoc } from "@/types";
+import { Badge, type BadgeProps } from "@/components/ui/badge";
+import type { OperatorLicense, Operator, OperatorLicenseAttachedDoc, User } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Timestamp } from "firebase/firestore";
-import { Edit, FileText, UserCircle, ListChecks, ShieldCheck, ShieldX, Info, Loader2, ArrowLeft } from "lucide-react";
+import { Timestamp, doc, getDoc, updateDoc, DocumentReference } from "firebase/firestore";
+import { db } from '@/lib/firebase';
+import { Edit, FileText, UserCircle, ListChecks, ShieldCheck, ShieldX, Info, Loader2, ArrowLeft, BookUser, FileImage } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,105 +21,215 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FormItem } from "@/components/ui/form"; // Added import
-import React, { useState, useEffect } from "react";
+import { FormItem } from "@/components/ui/form";
+import React, { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { format, parseISO, isValid, addYears } from 'date-fns';
+import Image from "next/image";
 
-// Placeholder Data - adjust as needed
-const placeholderOperator: Operator = {
-  operatorId: "OP001",
-  surname: "Pini",
-  firstName: "Ryan",
-  dob: Timestamp.fromDate(new Date(1985, 5, 10)),
-  age: 38,
-  sex: "Male",
-  placeOfOriginTown: "Port Moresby",
-  placeOfOriginDistrict: "NCD",
-  placeOfOriginLLG: "NCD",
-  placeOfOriginVillage: "Hanuabada",
-  phoneMobile: "70000001",
-  email: "ryan.pini@example.com",
-  postalAddress: "PO Box 123, Waigani",
-  heightCm: 180,
-  eyeColor: "Brown",
-  skinColor: "Brown",
-  hairColor: "Black",
-  weightKg: 75,
-  bodyMarks: "Tattoo on left arm",
-  idSizePhotoUrl: "https://placehold.co/150x150.png?text=ID",
-  createdAt: Timestamp.now(),
-  updatedAt: Timestamp.now(),
-};
 
-const placeholderLicenseApplication: OperatorLicense = {
-  licenseApplicationId: "LICAPP001",
-  operatorRef: { id: "OP001" } as any,
-  operatorData: placeholderOperator,
-  applicationType: "New",
-  status: "PendingReview", // Example status
-  submittedAt: Timestamp.fromDate(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)),
-  attachedDocuments: [
-    { docId: "doc1", docType: "PoliceClearance", fileName: "police_clearance.pdf", fileUrl: "#", uploadedAt: Timestamp.now(), verifiedStatus: "Pending" },
-    { docId: "doc2", docType: "BirthCertificateCopy", fileName: "birth_cert.pdf", fileUrl: "#", uploadedAt: Timestamp.now(), verifiedStatus: "Pending" },
-    { docId: "doc3", docType: "IDPhoto", fileName: "id_photo.jpg", fileUrl: placeholderOperator.idSizePhotoUrl!, uploadedAt: Timestamp.now(), verifiedStatus: "Verified" },
-  ],
-  createdByUserRef: {} as any,
-  createdAt: Timestamp.now(),
-  lastUpdatedAt: Timestamp.now(),
+// Helper to convert Firestore Timestamps or other date forms to JS Date for client state
+const ensureDateObject = (dateValue: any): Date | undefined => {
+  if (!dateValue) return undefined;
+  if (dateValue instanceof Timestamp) return dateValue.toDate();
+  if (dateValue instanceof Date) return dateValue;
+  if (typeof dateValue === 'object' && dateValue !== null && typeof dateValue.seconds === 'number' && typeof dateValue.nanoseconds === 'number') {
+    try { return new Timestamp(dateValue.seconds, dateValue.nanoseconds).toDate(); } catch (e) { return undefined; }
+  }
+  if (typeof dateValue === 'string' || typeof dateValue === 'number') {
+    const parsed = new Date(dateValue);
+    if (!isNaN(parsed.getTime())) return parsed;
+  }
+  return undefined;
 };
 
 
 export default function OperatorLicenseDetailPage() {
   const params = useParams();
   const licenseApplicationId = params.id as string;
-  const { currentUser, isAdmin, isRegistrar, isSupervisor } // Assuming isSupervisor can also manage licenses
-    = useAuth(); 
+  const { currentUser, isAdmin, isRegistrar, isSupervisor } = useAuth(); 
   const router = useRouter();
   const { toast } = useToast();
 
-  // In a real app, fetch data from Firestore by licenseApplicationId
-  const [application, setApplication] = useState<OperatorLicense | null>(placeholderLicenseApplication);
-  const [operator, setOperator] = useState<Operator | null>(placeholderOperator);
+  const [application, setApplication] = useState<OperatorLicense | null>(null);
+  const [operator, setOperator] = useState<Operator | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // Office Use Only state
-  const [officeLicenseNumber, setOfficeLicenseNumber] = useState(application?.assignedLicenseNumber || "");
-  const [officeReceiptNo, setOfficeReceiptNo] = useState(application?.receiptNo || "");
-  // Add other office use fields similarly
+  // State for Office Use Only modal/fields
+  const [officeUseModalOpen, setOfficeUseModalOpen] = useState(false);
+  const [officeLicenseNumber, setOfficeLicenseNumber] = useState("");
+  const [officeReceiptNo, setOfficeReceiptNo] = useState("");
+  const [officePlaceIssued, setOfficePlaceIssued] = useState("");
+  const [officePaymentMethod, setOfficePaymentMethod] = useState<OperatorLicense["methodOfPayment"]>(undefined);
+  const [officePaymentBy, setOfficePaymentBy] = useState("");
+  const [officePaymentDate, setOfficePaymentDate] = useState("");
+  const [officePaymentAmount, setOfficePaymentAmount] = useState<number | string>("");
+  const [officeIssuedAt, setOfficeIssuedAt] = useState("");
+  const [officeExpiryDate, setOfficeExpiryDate] = useState("");
+  const [officeLicenseClass, setOfficeLicenseClass] = useState("");
+  const [officeRestrictions, setOfficeRestrictions] = useState("");
+
+
+  const fetchApplicationData = useCallback(async () => {
+    if (!currentUser || !licenseApplicationId) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const licenseDocRef = doc(db, "operatorLicenseApplications", licenseApplicationId);
+      const licenseSnap = await getDoc(licenseDocRef);
+
+      if (!licenseSnap.exists()) {
+        setError("License application not found.");
+        setApplication(null);
+        setOperator(null);
+        setLoading(false);
+        return;
+      }
+      
+      const licenseDataRaw = licenseSnap.data() as Omit<OperatorLicense, 'operatorRef'> & { operatorRef: DocumentReference<Operator> | string };
+      const appData: OperatorLicense = {
+        ...licenseDataRaw,
+        licenseApplicationId: licenseSnap.id,
+        operatorRef: licenseDataRaw.operatorRef, // Keep as is for updates
+        submittedAt: ensureDateObject(licenseDataRaw.submittedAt),
+        approvedAt: ensureDateObject(licenseDataRaw.approvedAt),
+        issuedAt: ensureDateObject(licenseDataRaw.issuedAt),
+        expiryDate: ensureDateObject(licenseDataRaw.expiryDate),
+        paymentDate: ensureDateObject(licenseDataRaw.paymentDate),
+        createdAt: ensureDateObject(licenseDataRaw.createdAt) as Date,
+        lastUpdatedAt: ensureDateObject(licenseDataRaw.lastUpdatedAt) as Date,
+        attachedDocuments: (licenseDataRaw.attachedDocuments || []).map(d => ({
+            ...d,
+            uploadedAt: ensureDateObject(d.uploadedAt) as Date,
+            verifiedAt: ensureDateObject(d.verifiedAt)
+        })),
+      };
+      setApplication(appData);
+
+      // Set office use fields from fetched data
+      setOfficeLicenseNumber(appData.assignedLicenseNumber || "");
+      setOfficeReceiptNo(appData.receiptNo || "");
+      setOfficePlaceIssued(appData.placeIssued || "");
+      setOfficePaymentMethod(appData.methodOfPayment);
+      setOfficePaymentBy(appData.paymentBy || "");
+      setOfficePaymentDate(appData.paymentDate ? format(appData.paymentDate as Date, "yyyy-MM-dd") : "");
+      setOfficePaymentAmount(appData.paymentAmount !== undefined && appData.paymentAmount !== null ? String(appData.paymentAmount) : "");
+      setOfficeIssuedAt(appData.issuedAt ? format(appData.issuedAt as Date, "yyyy-MM-dd") : "");
+      setOfficeExpiryDate(appData.expiryDate ? format(appData.expiryDate as Date, "yyyy-MM-dd") : "");
+      setOfficeLicenseClass(appData.licenseClass || "");
+      setOfficeRestrictions(appData.restrictions || "");
+
+
+      if (licenseDataRaw.operatorRef) {
+        let operatorRef: DocumentReference<Operator>;
+        if (typeof licenseDataRaw.operatorRef === 'string') {
+          operatorRef = doc(db, licenseDataRaw.operatorRef) as DocumentReference<Operator>;
+        } else {
+          operatorRef = licenseDataRaw.operatorRef as DocumentReference<Operator>;
+        }
+        
+        const operatorSnap = await getDoc(operatorRef);
+        if (operatorSnap.exists()) {
+          const opDataRaw = operatorSnap.data() as Operator;
+          setOperator({
+            ...opDataRaw,
+            operatorId: operatorSnap.id,
+            dob: ensureDateObject(opDataRaw.dob) as Date,
+            createdAt: ensureDateObject(opDataRaw.createdAt) as Date,
+            updatedAt: ensureDateObject(opDataRaw.updatedAt) as Date,
+          });
+        } else {
+          setError("Linked operator not found.");
+          setOperator(null);
+        }
+      } else {
+        setError("Operator reference missing in application.");
+        setOperator(null);
+      }
+
+    } catch (err: any) {
+      console.error("Error fetching application data:", err);
+      setError(err.message || "Failed to load data.");
+    } finally {
+      setLoading(false);
+    }
+  }, [licenseApplicationId, currentUser]);
 
   useEffect(() => {
-    // Simulate fetching linked operator data if not already denormalized
-    if (application && !application.operatorData && application.operatorRef) {
-      // const fetchOp = async () => setOperator(placeholderOperator); // fetch by application.operatorRef.id
-      // fetchOp();
-    } else if (application?.operatorData) {
-      setOperator(application.operatorData as Operator);
-    }
-  }, [application]);
-
-  if (!application || !operator) {
-    return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /> <p>Loading license details...</p></div>;
-  }
-
-  const canEditApplication = (isAdmin || isRegistrar || isSupervisor) && (application.status === "Draft" || application.status === "RequiresInfo");
-  const canManageApplication = isAdmin || isRegistrar || isSupervisor; // Broader permissions for status changes, etc.
+    fetchApplicationData();
+  }, [fetchApplicationData]);
 
   const handleStatusUpdate = async (newStatus: OperatorLicense["status"], extraData?: Partial<OperatorLicense>) => {
+    if (!currentUser?.userId || !application) return;
     setIsUpdating(true);
-    console.log("Updating status to:", newStatus, "with data:", extraData);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setApplication(prev => prev ? ({ ...prev, status: newStatus, ...extraData, lastUpdatedAt: Timestamp.now() }) : null);
-    toast({ title: "Status Updated", description: `Application status changed to ${newStatus}.` });
-    setIsUpdating(false);
+    try {
+        const licenseDocRef = doc(db, "operatorLicenseApplications", application.licenseApplicationId);
+        await updateDoc(licenseDocRef, {
+            status: newStatus,
+            ...extraData,
+            lastUpdatedAt: Timestamp.now(),
+            lastUpdatedByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
+        });
+        toast({ title: "Status Updated", description: `Application status changed to ${newStatus}.` });
+        fetchApplicationData(); // Refresh data
+    } catch (e: any) {
+        toast({title: "Status Update Failed", description: e.message, variant: "destructive"});
+    } finally {
+        setIsUpdating(false);
+    }
   };
   
-  const getStatusBadgeVariant = (status: OperatorLicense["status"]): BadgeProps["variant"] => {
-    // Copied from list page, keep consistent
+  const handleSaveOfficeUse = async () => {
+    if (!currentUser?.userId || !application) return;
+    setIsUpdating(true);
+    try {
+        const licenseDocRef = doc(db, "operatorLicenseApplications", application.licenseApplicationId);
+        const updatePayload: Partial<OperatorLicense> = {
+            assignedLicenseNumber: officeLicenseNumber || undefined,
+            receiptNo: officeReceiptNo || undefined,
+            placeIssued: officePlaceIssued || undefined,
+            methodOfPayment: officePaymentMethod || undefined,
+            paymentBy: officePaymentBy || undefined,
+            paymentDate: officePaymentDate ? Timestamp.fromDate(parseISO(officePaymentDate)) : undefined,
+            paymentAmount: officePaymentAmount !== "" ? parseFloat(String(officePaymentAmount)) : undefined,
+            issuedAt: officeIssuedAt ? Timestamp.fromDate(parseISO(officeIssuedAt)) : undefined,
+            expiryDate: officeExpiryDate ? Timestamp.fromDate(parseISO(officeExpiryDate)) : undefined,
+            licenseClass: officeLicenseClass || undefined,
+            restrictions: officeRestrictions || undefined,
+            lastUpdatedAt: Timestamp.now(),
+            lastUpdatedByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
+        };
+        
+        if (application.status === "Approved" && !updatePayload.issuedAt) {
+            updatePayload.issuedAt = Timestamp.now();
+        }
+        if (application.status === "Approved" && !updatePayload.expiryDate && updatePayload.issuedAt) {
+            updatePayload.expiryDate = Timestamp.fromDate(addYears( (updatePayload.issuedAt as Timestamp).toDate(), 3));
+        }
+
+
+        await updateDoc(licenseDocRef, updatePayload as any); // Cast as any due to complex partial type
+        toast({ title: "Office Details Saved", description: "Office use information has been updated."});
+        setOfficeUseModalOpen(false);
+        fetchApplicationData(); // Refresh
+    } catch (e: any) {
+        console.error("Error saving office use data:", e);
+        toast({title: "Save Failed", description: e.message || "Could not save office details.", variant: "destructive"});
+    } finally {
+        setIsUpdating(false);
+    }
+  };
+
+  const getStatusBadgeVariant = (status?: OperatorLicense["status"]): BadgeProps["variant"] => {
+    if (!status) return "outline";
     switch (status) {
       case "Approved": return "default";
       case "Submitted": case "PendingReview": case "AwaitingTest": case "TestScheduled": case "TestPassed": return "secondary";
@@ -128,6 +239,15 @@ export default function OperatorLicenseDetailPage() {
     }
   };
 
+  if (loading) {
+    return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /> <p className="ml-2">Loading license details...</p></div>;
+  }
+  if (error) return <div className="text-center py-10 text-destructive"><AlertTriangle className="mx-auto h-10 w-10 mb-2"/>Error: {error}</div>;
+  if (!application || !operator) return <div className="text-center py-10 text-muted-foreground">License application or operator details not found.</div>;
+
+  const canEditApplication = (isAdmin || isRegistrar || isSupervisor) && (application.status === "Draft" || application.status === "RequiresInfo");
+  const canManageApplication = isAdmin || isRegistrar || isSupervisor;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -136,7 +256,7 @@ export default function OperatorLicenseDetailPage() {
             <ArrowLeft className="h-5 w-5" />
             <span className="sr-only">Back to Operator Licenses</span>
           </Button>
-          <UserCircle className="h-10 w-10 text-primary" />
+          <BookUser className="h-10 w-10 text-primary" />
           <div>
             <h1 className="text-3xl font-bold">License: {application.assignedLicenseNumber || application.licenseApplicationId}</h1>
             <Badge variant={getStatusBadgeVariant(application.status)} className="mt-1">{application.status}</Badge>
@@ -148,10 +268,17 @@ export default function OperatorLicenseDetailPage() {
               <Link href={`/operator-licenses/${licenseApplicationId}/edit`}><Edit className="mr-2 h-4 w-4" /> Edit Application</Link>
             </Button>
           )}
+          {canManageApplication && (
+            <Button onClick={() => setOfficeUseModalOpen(true)} variant="outline">Manage Office Details</Button>
+          )}
+          {application.status === "Approved" && canManageApplication && (
+            <Button asChild>
+                <Link href={`/operator-licenses/${licenseApplicationId}/certificate`}><FileImage className="mr-2 h-4 w-4"/> View License Card</Link>
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Action Buttons for different statuses by authorized roles */}
       {canManageApplication && (
         <Card>
             <CardHeader><CardTitle>Management Actions</CardTitle></CardHeader>
@@ -166,7 +293,8 @@ export default function OperatorLicenseDetailPage() {
                     </Button>
                     </>
                 )}
-                 {(application.status === "TestPassed") && ( // Simplified approval flow
+                {/* Simplified Approval - directly from PendingReview or if TestPassed */}
+                 {(application.status === "PendingReview" || application.status === "TestPassed") && (
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
                             <Button variant="default" disabled={isUpdating}>
@@ -176,10 +304,9 @@ export default function OperatorLicenseDetailPage() {
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                             <AlertDialogHeader><AlertDialogTitle>Approve License Application?</AlertDialogTitle>
-                            <AlertDialogDescription>This will mark the application as 'Approved' and allow setting license details. This action should be final after all checks.</AlertDialogDescription></AlertDialogHeader>
-                            {/* TODO: Add fields for office use here - License No, Issue Date, Expiry Date */}
+                            <AlertDialogDescription>This will mark the application as 'Approved'. Ensure all office details are correct before proceeding. This action should be final.</AlertDialogDescription></AlertDialogHeader>
                             <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleStatusUpdate("Approved", { approvedAt: Timestamp.now(), issuedAt: Timestamp.now(), expiryDate: Timestamp.fromDate(new Date(new Date().setFullYear(new Date().getFullYear() + 3))) /* Example expiry */ } )}>
+                            <AlertDialogAction onClick={() => handleStatusUpdate("Approved", { approvedAt: Timestamp.now() } )}>
                                 Confirm Approve
                             </AlertDialogAction></AlertDialogFooter>
                         </AlertDialogContent>
@@ -195,7 +322,7 @@ export default function OperatorLicenseDetailPage() {
                         </AlertDialogTrigger>
                          <AlertDialogContent>
                             <AlertDialogHeader><AlertDialogTitle>Reject Application?</AlertDialogTitle>
-                            <AlertDialogDescription>This action will mark the application as 'Rejected'. Please provide a reason (in notes section, placeholder).</AlertDialogDescription></AlertDialogHeader>
+                            <AlertDialogDescription>This action will mark the application as 'Rejected'.</AlertDialogDescription></AlertDialogHeader>
                             <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleStatusUpdate("Rejected")}>Confirm Reject</AlertDialogAction></AlertDialogFooter>
                         </AlertDialogContent>
                     </AlertDialog>
@@ -203,7 +330,6 @@ export default function OperatorLicenseDetailPage() {
             </CardContent>
         </Card>
       )}
-
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
@@ -231,7 +357,7 @@ export default function OperatorLicenseDetailPage() {
           <Card>
             <CardHeader><CardTitle>Attached Documents</CardTitle></CardHeader>
             <CardContent>
-              {application.attachedDocuments.length > 0 ? (
+              {application.attachedDocuments && application.attachedDocuments.length > 0 ? (
                 <ul className="space-y-2">
                   {application.attachedDocuments.map((doc: OperatorLicenseAttachedDoc) => (
                     <li key={doc.docId || doc.fileName} className="flex items-center justify-between p-2 border rounded-md">
@@ -246,9 +372,6 @@ export default function OperatorLicenseDetailPage() {
                         <Button variant="outline" size="sm" asChild>
                             <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer" data-ai-hint="document attachment">View</a>
                         </Button>
-                        {canManageApplication && doc.verifiedStatus === "Pending" && (
-                            <Button size="sm" onClick={() => console.log("Verify doc (placeholder):", doc.docId)} disabled>Verify</Button>
-                        )}
                       </div>
                     </li>
                   ))}
@@ -269,6 +392,7 @@ export default function OperatorLicenseDetailPage() {
               {application.applicationType === "Renewal" && <p><strong>Previous License:</strong> {application.previousLicenseNumber}</p>}
               <div><strong>Status:</strong> <Badge variant={getStatusBadgeVariant(application.status)}>{application.status}</Badge></div>
               <p><strong>Submitted:</strong> {formatFirebaseTimestamp(application.submittedAt, "PPpp")}</p>
+              <p><strong>Last Updated:</strong> {formatFirebaseTimestamp(application.lastUpdatedAt, "PPpp")}</p>
             </CardContent>
           </Card>
 
@@ -276,34 +400,67 @@ export default function OperatorLicenseDetailPage() {
             <Card>
                 <CardHeader><CardTitle>Applicant ID Photo</CardTitle></CardHeader>
                 <CardContent>
-                    <img src={operator.idSizePhotoUrl} alt={`${operator.firstName} ${operator.surname} ID Photo`} className="rounded-md w-full aspect-[3/4] object-cover" data-ai-hint="person portrait"/>
+                    <Image src={operator.idSizePhotoUrl} alt={`${operator.firstName} ${operator.surname} ID Photo`} className="rounded-md w-full aspect-[3/4] object-cover" data-ai-hint="person portrait" width={150} height={200}/>
                 </CardContent>
             </Card>
           )}
 
           <Card>
-            <CardHeader><CardTitle>Office Use Only</CardTitle></CardHeader>
-            <CardContent className="space-y-3 text-sm">
-                <FormItem>
-                    <Label htmlFor="officeLicenseNumber">License Number</Label>
-                    <Input id="officeLicenseNumber" value={officeLicenseNumber} onChange={e => setOfficeLicenseNumber(e.target.value)} disabled={!canManageApplication || application.status === "Approved"} />
-                </FormItem>
-                 <FormItem>
-                    <Label htmlFor="officeReceiptNo">Receipt No.</Label>
-                    <Input id="officeReceiptNo" value={officeReceiptNo} onChange={e => setOfficeReceiptNo(e.target.value)} disabled={!canManageApplication} />
-                </FormItem>
-                {/* Add other office use fields here, e.g., Place Issued, Payment Details, Issue Date, Expiry Date */}
-                 <p><strong>Issued At:</strong> {formatFirebaseTimestamp(application.issuedAt, "PP")}</p>
-                 <p><strong>Expires At:</strong> {formatFirebaseTimestamp(application.expiryDate, "PP")}</p>
+            <CardHeader><CardTitle>Office Use Information</CardTitle></CardHeader>
+            <CardContent className="space-y-2 text-sm">
+                <p><strong>Assigned License No:</strong> {application.assignedLicenseNumber || "N/A"}</p>
+                <p><strong>Receipt No:</strong> {application.receiptNo || "N/A"}</p>
+                <p><strong>Place Issued:</strong> {application.placeIssued || "N/A"}</p>
+                <p><strong>Payment Method:</strong> {application.methodOfPayment || "N/A"}</p>
+                <p><strong>Payment By:</strong> {application.paymentBy || "N/A"}</p>
+                <p><strong>Payment Date:</strong> {formatFirebaseTimestamp(application.paymentDate, "PP")}</p>
+                <p><strong>Payment Amount:</strong> {application.paymentAmount !== undefined && application.paymentAmount !== null ? `K${application.paymentAmount.toFixed(2)}` : "N/A"}</p>
+                <p><strong>Date Issued:</strong> {formatFirebaseTimestamp(application.issuedAt, "PP")}</p>
+                <p><strong>Expiry Date:</strong> {formatFirebaseTimestamp(application.expiryDate, "PP")}</p>
+                <p><strong>License Class:</strong> {application.licenseClass || "N/A"}</p>
+                <p><strong>Restrictions:</strong> {application.restrictions || "None"}</p>
             </CardContent>
-            {canManageApplication && application.status !== "Approved" && (
-                <CardFooter>
-                    <Button onClick={() => console.log("Save Office Use details (placeholder)")} disabled={isUpdating}>Save Office Details</Button>
-                </CardFooter>
-            )}
           </Card>
         </div>
       </div>
+
+      {/* Office Use Modal */}
+      <AlertDialog open={officeUseModalOpen} onOpenChange={setOfficeUseModalOpen}>
+        <AlertDialogContent className="sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Update Office Use Details</AlertDialogTitle>
+            <AlertDialogDescription>
+              Modify official license information. This is typically done by authorized personnel.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-4 py-2 max-h-[60vh] overflow-y-auto pr-2">
+            <FormItem><Label htmlFor="officeLicenseNumber">Assigned License No.</Label><Input id="officeLicenseNumber" value={officeLicenseNumber} onChange={e => setOfficeLicenseNumber(e.target.value)} /></FormItem>
+            <FormItem><Label htmlFor="officeReceiptNo">Receipt No.</Label><Input id="officeReceiptNo" value={officeReceiptNo} onChange={e => setOfficeReceiptNo(e.target.value)} /></FormItem>
+            <FormItem><Label htmlFor="officePlaceIssued">Place Issued</Label><Input id="officePlaceIssued" value={officePlaceIssued} onChange={e => setOfficePlaceIssued(e.target.value)} /></FormItem>
+            <FormItem><Label htmlFor="officePaymentMethod">Payment Method</Label>
+                <Select onValueChange={(value) => setOfficePaymentMethod(value as OperatorLicense["methodOfPayment"])} value={officePaymentMethod}>
+                    <SelectTrigger><SelectValue placeholder="Select method..."/></SelectTrigger>
+                    <SelectContent>{["Cash", "Card", "BankDeposit", "Other"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                </Select>
+            </FormItem>
+            <FormItem><Label htmlFor="officePaymentBy">Payment By</Label><Input id="officePaymentBy" value={officePaymentBy} onChange={e => setOfficePaymentBy(e.target.value)} /></FormItem>
+            <FormItem><Label htmlFor="officePaymentDate">Payment Date</Label><Input id="officePaymentDate" type="date" value={officePaymentDate} onChange={e => setOfficePaymentDate(e.target.value)} /></FormItem>
+            <FormItem><Label htmlFor="officePaymentAmount">Payment Amount (K)</Label><Input id="officePaymentAmount" type="number" value={officePaymentAmount} onChange={e => setOfficePaymentAmount(e.target.value)} /></FormItem>
+            <FormItem><Label htmlFor="officeIssuedAt">Date Issued</Label><Input id="officeIssuedAt" type="date" value={officeIssuedAt} onChange={e => setOfficeIssuedAt(e.target.value)} /></FormItem>
+            <FormItem><Label htmlFor="officeExpiryDate">Expiry Date</Label><Input id="officeExpiryDate" type="date" value={officeExpiryDate} onChange={e => setOfficeExpiryDate(e.target.value)} /></FormItem>
+            <FormItem><Label htmlFor="officeLicenseClass">License Class</Label><Input id="officeLicenseClass" value={officeLicenseClass} onChange={e => setOfficeLicenseClass(e.target.value)} /></FormItem>
+            <FormItem><Label htmlFor="officeRestrictions">Restrictions</Label><Textarea id="officeRestrictions" value={officeRestrictions} onChange={e => setOfficeRestrictions(e.target.value)} /></FormItem>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isUpdating}>Cancel</AlertDialogCancel>
+            <Button onClick={handleSaveOfficeUse} disabled={isUpdating}>
+                {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : "Save Office Details"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
+
+    

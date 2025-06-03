@@ -170,13 +170,12 @@ export interface ChecklistTemplate {
 export type { SuggestChecklistItemsInput, SuggestChecklistItemsOutput } from '@/ai/flows/suggest-checklist-items';
 
 
-
 export interface Operator {
-  operatorId: string;
+  operatorId: string; // Firestore document ID
   surname: string;
   firstName: string;
-  dob: Timestamp | Date | string;
-  age?: number;
+  dob: Timestamp | Date | string; // Store as Timestamp in Firestore
+  age?: number; // Calculated, not stored
   sex: "Male" | "Female" | "Other";
   placeOfOriginTown: string;
   placeOfOriginDistrict: string;
@@ -191,18 +190,19 @@ export interface Operator {
   hairColor?: string;
   weightKg?: number;
   bodyMarks?: string;
-  idSizePhotoUrl?: string;
+  idSizePhotoUrl?: string; // URL to photo in Firebase Storage
   createdAt: Timestamp | Date | string;
   updatedAt: Timestamp | Date | string;
   createdByRef?: DocumentReference<User> | string;
+  lastUpdatedByRef?: DocumentReference<User> | string;
 }
 
 export interface OperatorLicenseAttachedDoc {
-  docId: string;
+  docId: string; // Auto-generated or from a predefined list
   docType: "PoliceClearance" | "PreviousLicenseCopy" | "BirthCertificateCopy" | "NIDCardCopy" | "IDPhoto" | "Other";
   docOtherDescription?: string;
   fileName: string;
-  fileUrl: string;
+  fileUrl: string; // URL to file in Firebase Storage
   uploadedAt: Timestamp | Date | string;
   verifiedStatus: "Pending" | "Verified" | "Rejected" | "NotRequired";
   verifiedAt?: Timestamp | Date | string;
@@ -211,9 +211,9 @@ export interface OperatorLicenseAttachedDoc {
 }
 
 export interface OperatorLicense {
-  licenseApplicationId: string;
-  operatorRef: DocumentReference<Operator> | string;
-  operatorData?: Partial<Operator>;
+  licenseApplicationId: string; // Firestore document ID
+  operatorRef: DocumentReference<Operator> | string; // Reference to Operator document
+  operatorData?: Partial<Operator>; // Denormalized operator data for quick display
   applicationType: "New" | "Renewal";
   previousLicenseNumber?: string;
   status: "Draft" | "Submitted" | "PendingReview" | "RequiresInfo" | "AwaitingTest" | "TestScheduled" | "TestPassed" | "TestFailed" | "Approved" | "Rejected" | "Expired" | "Revoked";
@@ -226,16 +226,18 @@ export interface OperatorLicense {
   receiptNo?: string;
   placeIssued?: string;
   methodOfPayment?: "Cash" | "Card" | "BankDeposit" | "Other";
-  paymentBy?: string;
+  paymentBy?: string; // Name of person who paid
   paymentDate?: Timestamp | Date | string;
   paymentAmount?: number;
-  attachedDocuments: OperatorLicenseAttachedDoc[];
-  competencyTestRef?: DocumentReference<CompetencyTest> | string;
-  notes?: string;
+  attachedDocuments: OperatorLicenseAttachedDoc[]; // Array of document details
+  competencyTestRef?: DocumentReference<CompetencyTest> | string; // Ref to test result
+  notes?: string; // General notes about the application
   createdByUserRef: DocumentReference<User> | string;
   lastUpdatedByRef?: DocumentReference<User> | string;
   createdAt: Timestamp | Date | string;
   lastUpdatedAt: Timestamp | Date | string;
+  licenseClass?: string; // e.g., "Class 1 Dinghy", "Class 2 Banana Boat" - new field
+  restrictions?: string; // e.g., "Daylight hours only" - new field
 }
 
 export interface CompetencyTestTemplateQuestion {
@@ -251,7 +253,7 @@ export interface CompetencyTestTemplate {
   templateId: string;
   templateName: string;
   description?: string;
-  applicableLicenseType: string;
+  applicableLicenseType: string; // Could link to licenseClass
   questions: CompetencyTestTemplateQuestion[];
   passingScorePercentage: number;
   isActive: boolean;

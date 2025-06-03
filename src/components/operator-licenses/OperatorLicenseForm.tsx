@@ -2,7 +2,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, useFieldArray } from "react-hook-form"; // Added useFieldArray
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,34 +18,35 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import type { Operator, OperatorLicense, OperatorLicenseAttachedDoc } from "@/types";
+import type { Operator, OperatorLicense, OperatorLicenseAttachedDoc, User } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
-import { Save, Send, UserCircle, FileText, UploadCloud } from "lucide-react";
+import { Save, Send, UserCircle, FileText, UploadCloud, PlusCircle, Trash2 } from "lucide-react"; // Added icons
 import React, { useState, useEffect } from "react";
-import { Timestamp } from "firebase/firestore";
+import { Timestamp, doc, setDoc, addDoc, collection, DocumentReference, serverTimestamp, updateDoc } from "firebase/firestore"; // Added Firestore functions
+import { db } from "@/lib/firebase"; // Import db
 import { format, parseISO, isValid } from 'date-fns';
 
 const attachedDocSchema = z.object({
-  docId: z.string().optional(),
+  docId: z.string().optional(), // Will be auto-generated if new
   docType: z.enum(["PoliceClearance", "PreviousLicenseCopy", "BirthCertificateCopy", "NIDCardCopy", "IDPhoto", "Other"]),
   docOtherDescription: z.string().optional(),
-  fileName: z.string().optional(), // Optional as file might not be uploaded yet
-  fileUrl: z.string().url().optional(),
-  uploadedAt: z.custom<Timestamp>().optional(),
-  file: z.any().optional(), // For the HTML file input
+  fileName: z.string().min(1, "File name is required for uploaded documents."), // To be filled after mock upload
+  fileUrl: z.string().url("Valid URL required.").min(1, "File URL is required."), // To be filled after mock upload
+  uploadedAt: z.custom<Timestamp>().default(() => Timestamp.now()), // Default to now
+  // file: z.any().optional(), // Removed, handle file objects transiently
 });
 
 const operatorLicenseFormSchema = z.object({
   applicationType: z.enum(["New", "Renewal"]),
   previousLicenseNumber: z.string().optional(),
 
-  // Operator details
+  // Operator details (will be part of a sub-object for saving to 'operators' collection)
+  operatorId: z.string().optional(), // To store existing operator ID during edit
   surname: z.string().min(1, "Surname is required"),
   firstName: z.string().min(1, "First name is required"),
   dobString: z.string().min(1, "Date of birth is required").refine(val => isValid(parseISO(val)), { message: "Invalid date format. Use YYYY-MM-DD."}),
-  age: z.number().optional(), // Consider making this derived or optional
   sex: z.enum(["Male", "Female", "Other"]),
   placeOfOriginTown: z.string().min(1, "Town is required"),
   placeOfOriginDistrict: z.string().min(1, "District is required"),
@@ -54,31 +55,30 @@ const operatorLicenseFormSchema = z.object({
   phoneMobile: z.string().min(1, "Mobile phone is required"),
   email: z.string().email("Invalid email address").optional().or(z.literal("")),
   postalAddress: z.string().min(1, "Postal address is required"),
-  heightCm: z.number().positive("Height must be positive").optional(),
+  heightCm: z.number().positive("Height must be positive").optional().nullable(),
   eyeColor: z.string().optional(),
   skinColor: z.string().optional(),
   hairColor: z.string().optional(),
-  weightKg: z.number().positive("Weight must be positive").optional(),
+  weightKg: z.number().positive("Weight must be positive").optional().nullable(),
   bodyMarks: z.string().optional(),
+  idSizePhotoUrl: z.string().url("Valid URL for photo required").optional().or(z.literal("")), // Store URL
   
-  idSizePhoto: z.any().refine(file => file instanceof File || typeof file === 'string', "ID Photo is required for new applications or if changing photo.").optional(), // File or existing URL
+  attachedDocuments: z.array(attachedDocSchema).optional().default([]),
 
-  // Attached Documents (simplified for now)
-  docPoliceClearance: z.any().optional(),
-  docPreviousLicenseCopy: z.any().optional(),
-  docBirthCertificateCopy: z.any().optional(),
-  docNIDCardCopy: z.any().optional(),
+  // Office Use Only - fields for the license itself
+  assignedLicenseNumber: z.string().optional(),
+  receiptNo: z.string().optional(),
+  placeIssued: z.string().optional(),
+  methodOfPayment: z.enum(["Cash", "Card", "BankDeposit", "Other"]).optional(),
+  paymentBy: z.string().optional(),
+  paymentDateString: z.string().optional().refine(val => !val || isValid(parseISO(val)), { message: "Invalid date format for payment date." }),
+  paymentAmount: z.number().positive("Payment amount must be positive").optional().nullable(),
+  issuedAtString: z.string().optional().refine(val => !val || isValid(parseISO(val)), { message: "Invalid date format for issue date." }),
+  expiryDateString: z.string().optional().refine(val => !val || isValid(parseISO(val)), { message: "Invalid date format for expiry date." }),
+  licenseClass: z.string().optional(),
+  restrictions: z.string().optional(),
+  notes: z.string().optional(),
 
-  // Office Use Only - these will be disabled for applicants
-  // assignedLicenseNumber: z.string().optional(),
-  // receiptNo: z.string().optional(),
-  // placeIssued: z.string().optional(),
-  // methodOfPayment: z.enum(["Cash", "Card", "BankDeposit", "Other"]).optional(),
-  // paymentBy: z.string().optional(),
-  // paymentDateString: z.string().optional().refine(val => !val || isValid(parseISO(val)), { message: "Invalid date format." }),
-  // paymentAmount: z.number().positive().optional(),
-  // issuedAtString: z.string().optional().refine(val => !val || isValid(parseISO(val)), { message: "Invalid date format." }),
-  // expiryDateString: z.string().optional().refine(val => !val || isValid(parseISO(val)), { message: "Invalid date format." }),
 }).superRefine((data, ctx) => {
   if (data.applicationType === "Renewal" && !data.previousLicenseNumber) {
     ctx.addIssue({
@@ -87,6 +87,16 @@ const operatorLicenseFormSchema = z.object({
       message: "Previous License No. is required for renewals.",
     });
   }
+  // Refine idSizePhotoUrl for new applications
+  if (data.applicationType === "New" && (!data.idSizePhotoUrl || data.idSizePhotoUrl.trim() === "")) {
+     // For now, making it optional as file upload is not implemented.
+     // In a real scenario with file upload, this would be required.
+    // ctx.addIssue({
+    //   code: z.ZodIssueCode.custom,
+    //   path: ["idSizePhotoUrl"],
+    //   message: "ID Photo URL is required for new applications.",
+    // });
+  }
 });
 
 type OperatorLicenseFormValues = z.infer<typeof operatorLicenseFormSchema>;
@@ -94,7 +104,7 @@ type OperatorLicenseFormValues = z.infer<typeof operatorLicenseFormSchema>;
 interface OperatorLicenseFormProps {
   mode: "create" | "edit";
   licenseApplicationId?: string;
-  existingLicenseData?: Partial<OperatorLicense>; // Includes operatorData potentially
+  existingLicenseData?: Partial<OperatorLicense>;
   existingOperatorData?: Partial<Operator>;
 }
 
@@ -108,16 +118,15 @@ export function OperatorLicenseForm({
   const { toast } = useToast();
   const router = useRouter();
 
-  // Combine existing data for default values
   const combinedData = { ...existingOperatorData, ...existingLicenseData };
 
   const defaultValues: Partial<OperatorLicenseFormValues> = {
+    operatorId: existingOperatorData?.operatorId || undefined,
     applicationType: combinedData?.applicationType || "New",
     previousLicenseNumber: combinedData?.previousLicenseNumber || "",
     surname: combinedData?.surname || "",
     firstName: combinedData?.firstName || "",
-    dobString: combinedData?.dob ? format(combinedData.dob.toDate(), "yyyy-MM-dd") : "",
-    age: combinedData?.age || undefined,
+    dobString: combinedData?.dob ? format( (combinedData.dob as Timestamp).toDate(), "yyyy-MM-dd") : "",
     sex: combinedData?.sex || "Male",
     placeOfOriginTown: combinedData?.placeOfOriginTown || "",
     placeOfOriginDistrict: combinedData?.placeOfOriginDistrict || "",
@@ -126,18 +135,29 @@ export function OperatorLicenseForm({
     phoneMobile: combinedData?.phoneMobile || "",
     email: combinedData?.email || "",
     postalAddress: combinedData?.postalAddress || "",
-    heightCm: combinedData?.heightCm || undefined,
+    heightCm: combinedData?.heightCm || null,
     eyeColor: combinedData?.eyeColor || "",
     skinColor: combinedData?.skinColor || "",
     hairColor: combinedData?.hairColor || "",
-    weightKg: combinedData?.weightKg || undefined,
+    weightKg: combinedData?.weightKg || null,
     bodyMarks: combinedData?.bodyMarks || "",
-    idSizePhoto: combinedData?.idSizePhotoUrl || undefined, // For displaying existing photo URL or handling new file
-    // Simplified document placeholders
-    docPoliceClearance: undefined, 
-    docPreviousLicenseCopy: undefined,
-    docBirthCertificateCopy: undefined,
-    docNIDCardCopy: undefined,
+    idSizePhotoUrl: combinedData?.idSizePhotoUrl || "",
+    attachedDocuments: (combinedData?.attachedDocuments || []).map(doc => ({
+        ...doc,
+        uploadedAt: doc.uploadedAt instanceof Timestamp ? doc.uploadedAt : Timestamp.fromDate(new Date(doc.uploadedAt as string)),
+    })),
+    assignedLicenseNumber: combinedData?.assignedLicenseNumber || "",
+    receiptNo: combinedData?.receiptNo || "",
+    placeIssued: combinedData?.placeIssued || "",
+    methodOfPayment: combinedData?.methodOfPayment || undefined,
+    paymentBy: combinedData?.paymentBy || "",
+    paymentDateString: combinedData?.paymentDate ? format((combinedData.paymentDate as Timestamp).toDate(), "yyyy-MM-dd") : "",
+    paymentAmount: combinedData?.paymentAmount || null,
+    issuedAtString: combinedData?.issuedAt ? format((combinedData.issuedAt as Timestamp).toDate(), "yyyy-MM-dd") : "",
+    expiryDateString: combinedData?.expiryDate ? format((combinedData.expiryDate as Timestamp).toDate(), "yyyy-MM-dd") : "",
+    licenseClass: combinedData?.licenseClass || "",
+    restrictions: combinedData?.restrictions || "",
+    notes: combinedData?.notes || "",
   };
 
   const form = useForm<OperatorLicenseFormValues>({
@@ -146,43 +166,117 @@ export function OperatorLicenseForm({
     mode: "onChange",
   });
 
+  const { fields, append, remove, update } = useFieldArray({
+    control: form.control,
+    name: "attachedDocuments",
+  });
+
+
   const watchApplicationType = form.watch("applicationType");
 
-  const onSubmit = async (data: OperatorLicenseFormValues, status: OperatorLicense["status"]) => {
-    if (!currentUser) {
+  const onSubmit = async (data: OperatorLicenseFormValues, submissionStatus: OperatorLicense["status"]) => {
+    if (!currentUser?.userId) {
       toast({ title: "Error", description: "You must be logged in.", variant: "destructive" });
       return;
     }
     
-    // Basic placeholder submission logic
-    console.log("Form Data:", data);
-    console.log("Submission Status:", status);
-    
-    // In a real app:
-    // 1. Handle file uploads for idSizePhoto and attachedDocuments (upload to Firebase Storage, get URLs)
-    // 2. Create/Update Operator document in 'operators' collection
-    // 3. Create/Update OperatorLicense document in 'operatorLicenses' collection
+    try {
+      // 1. Prepare Operator Data
+      let operatorId = data.operatorId || (mode === 'edit' && existingOperatorData?.operatorId ? existingOperatorData.operatorId : undefined);
+      const operatorDocData: Omit<Operator, 'operatorId' | 'createdAt' | 'updatedAt' | 'createdByRef' | 'lastUpdatedByRef'> & { createdAt?: Timestamp, updatedAt?: Timestamp, createdByRef?: DocumentReference<User>, lastUpdatedByRef?: DocumentReference<User> } = {
+        surname: data.surname,
+        firstName: data.firstName,
+        dob: Timestamp.fromDate(parseISO(data.dobString)),
+        sex: data.sex,
+        placeOfOriginTown: data.placeOfOriginTown,
+        placeOfOriginDistrict: data.placeOfOriginDistrict,
+        placeOfOriginLLG: data.placeOfOriginLLG,
+        placeOfOriginVillage: data.placeOfOriginVillage,
+        phoneMobile: data.phoneMobile,
+        email: data.email || undefined,
+        postalAddress: data.postalAddress,
+        heightCm: data.heightCm || undefined,
+        eyeColor: data.eyeColor || undefined,
+        skinColor: data.skinColor || undefined,
+        hairColor: data.hairColor || undefined,
+        weightKg: data.weightKg || undefined,
+        bodyMarks: data.bodyMarks || undefined,
+        idSizePhotoUrl: data.idSizePhotoUrl || undefined, // Placeholder
+      };
 
-    toast({
-      title: mode === "create" ? "Application Saved (Simulated)" : "Application Updated (Simulated)",
-      description: `Status: ${status}`,
-    });
+      if (mode === 'create' || !operatorId) {
+        operatorDocData.createdAt = Timestamp.now();
+        operatorDocData.createdByRef = doc(db, "users", currentUser.userId) as DocumentReference<User>;
+        const operatorColRef = collection(db, "operators");
+        const newOperatorDocRef = await addDoc(operatorColRef, operatorDocData);
+        operatorId = newOperatorDocRef.id;
+        form.setValue("operatorId", operatorId); // Update form state if needed
+      } else {
+        operatorDocData.updatedAt = Timestamp.now();
+        operatorDocData.lastUpdatedByRef = doc(db, "users", currentUser.userId) as DocumentReference<User>;
+        const operatorDocRef = doc(db, "operators", operatorId!);
+        await updateDoc(operatorDocRef, operatorDocData);
+      }
+      const finalOperatorRef = doc(db, "operators", operatorId!) as DocumentReference<Operator>;
 
-    if (status === "Submitted") {
-      router.push("/operator-licenses"); // Redirect to list after submission
-    } else if (mode === "edit" && licenseApplicationId) {
-      router.push(`/operator-licenses/${licenseApplicationId}`); // Redirect to detail view after saving draft
+      // 2. Prepare License Application Data
+      const licenseDocData: Omit<OperatorLicense, 'licenseApplicationId' | 'createdAt' | 'lastUpdatedAt' | 'createdByUserRef' | 'lastUpdatedByRef' | 'operatorData'> = {
+        operatorRef: finalOperatorRef,
+        applicationType: data.applicationType,
+        previousLicenseNumber: data.previousLicenseNumber || undefined,
+        status: submissionStatus,
+        submittedAt: submissionStatus === "Submitted" ? Timestamp.now() : (existingLicenseData?.submittedAt || undefined),
+        approvedAt: existingLicenseData?.approvedAt || undefined, // Keep existing if not changing status here
+        issuedAt: data.issuedAtString ? Timestamp.fromDate(parseISO(data.issuedAtString)) : (existingLicenseData?.issuedAt || undefined),
+        expiryDate: data.expiryDateString ? Timestamp.fromDate(parseISO(data.expiryDateString)) : (existingLicenseData?.expiryDate || undefined),
+        assignedLicenseNumber: data.assignedLicenseNumber || undefined,
+        receiptNo: data.receiptNo || undefined,
+        placeIssued: data.placeIssued || undefined,
+        methodOfPayment: data.methodOfPayment || undefined,
+        paymentBy: data.paymentBy || undefined,
+        paymentDate: data.paymentDateString ? Timestamp.fromDate(parseISO(data.paymentDateString)) : (existingLicenseData?.paymentDate || undefined),
+        paymentAmount: data.paymentAmount || undefined,
+        attachedDocuments: data.attachedDocuments.map(d => ({...d, uploadedAt: Timestamp.now()})), // Placeholder URLs
+        notes: data.notes || undefined,
+        licenseClass: data.licenseClass || undefined,
+        restrictions: data.restrictions || undefined,
+      };
+      
+      let finalLicenseApplicationId = licenseApplicationId;
+
+      if (mode === 'create') {
+        const licenseColRef = collection(db, "operatorLicenseApplications");
+        const finalLicenseData = {
+            ...licenseDocData,
+            createdAt: Timestamp.now(),
+            createdByUserRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
+            lastUpdatedAt: Timestamp.now(),
+            lastUpdatedByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
+        };
+        const newLicenseDocRef = await addDoc(licenseColRef, finalLicenseData);
+        finalLicenseApplicationId = newLicenseDocRef.id;
+        toast({ title: "Application Saved", description: `Status: ${submissionStatus}. ID: ${finalLicenseApplicationId}` });
+        router.push(`/operator-licenses/${finalLicenseApplicationId}`);
+      } else if (finalLicenseApplicationId) {
+        const licenseDocRef = doc(db, "operatorLicenseApplications", finalLicenseApplicationId);
+        const finalLicenseData = {
+            ...licenseDocData,
+            lastUpdatedAt: Timestamp.now(),
+            lastUpdatedByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
+        };
+        await updateDoc(licenseDocRef, finalLicenseData);
+        toast({ title: "Application Updated", description: `Status: ${submissionStatus}.` });
+        router.push(`/operator-licenses/${finalLicenseApplicationId}`);
+      }
+      router.refresh();
+
+    } catch (error: any) {
+      console.error("Error saving operator license:", error);
+      toast({ title: "Save Failed", description: error.message || "Could not save operator license.", variant: "destructive" });
     }
-     router.refresh();
   };
   
-  const documentTypes: Array<{ key: keyof OperatorLicenseFormValues; label: string; required?: boolean; forRenewalOnly?: boolean }> = [
-    { key: "docPoliceClearance", label: "Police Clearance", required: true },
-    { key: "docPreviousLicenseCopy", label: "Copy of Operator's License", forRenewalOnly: true },
-    { key: "docBirthCertificateCopy", label: "Copy of Birth Certificate / NID Card", required: true },
-    // { key: "docNIDCardCopy", label: "Copy of NID Card", required: true }, // Merged with birth cert for simplicity
-  ];
-
+  const documentTypes: Array<OperatorLicenseAttachedDoc['docType']> = ["PoliceClearance", "PreviousLicenseCopy", "BirthCertificateCopy", "NIDCardCopy", "IDPhoto", "Other"];
 
   return (
     <Form {...form}>
@@ -196,7 +290,7 @@ export function OperatorLicenseForm({
               render={({ field }) => (
                 <FormItem className="space-y-3">
                   <FormControl>
-                     <Select onValueChange={field.onChange} defaultValue={field.value}>
+                     <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                         <SelectContent>
                           <SelectItem value="New">New Application</SelectItem>
@@ -230,7 +324,7 @@ export function OperatorLicenseForm({
             <FormField control={form.control} name="surname" render={({ field }) => (<FormItem><FormLabel>Surname *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="firstName" render={({ field }) => (<FormItem><FormLabel>First Name *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="dobString" render={({ field }) => (<FormItem><FormLabel>Date of Birth *</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="sex" render={({ field }) => (<FormItem><FormLabel>Sex *</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{["Male", "Female", "Other"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="sex" render={({ field }) => (<FormItem><FormLabel>Sex *</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{["Male", "Female", "Other"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="placeOfOriginTown" render={({ field }) => (<FormItem><FormLabel>Place of Origin: Town *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="placeOfOriginDistrict" render={({ field }) => (<FormItem><FormLabel>District *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="placeOfOriginLLG" render={({ field }) => (<FormItem><FormLabel>LLG *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
@@ -244,28 +338,28 @@ export function OperatorLicenseForm({
         <Card>
           <CardHeader><CardTitle>Physical Characteristics</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <FormField control={form.control} name="heightCm" render={({ field }) => (<FormItem><FormLabel>Height (cm)</FormLabel><FormControl><Input type="number" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || undefined)} /></FormControl><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="heightCm" render={({ field }) => (<FormItem><FormLabel>Height (cm)</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? null : parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="eyeColor" render={({ field }) => (<FormItem><FormLabel>Colour of Eyes</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="skinColor" render={({ field }) => (<FormItem><FormLabel>Colour of Skin</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="hairColor" render={({ field }) => (<FormItem><FormLabel>Colour of Hair</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="weightKg" render={({ field }) => (<FormItem><FormLabel>Weight (kg)</FormLabel><FormControl><Input type="number" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || undefined)} /></FormControl><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="weightKg" render={({ field }) => (<FormItem><FormLabel>Weight (kg)</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? null : parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="bodyMarks" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Any body marks (e.g., tattoo, scar)</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>ID Photo Upload</CardTitle></CardHeader>
+          <CardHeader><CardTitle>ID Photo</CardTitle></CardHeader>
           <CardContent>
              <FormField
                 control={form.control}
-                name="idSizePhoto"
-                render={({ field: { onChange, value, ...rest } }) => (
+                name="idSizePhotoUrl"
+                render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Passport-size Photo *</FormLabel>
+                    <FormLabel>Passport-size Photo URL</FormLabel>
                     <FormControl>
-                      <Input type="file" accept="image/*" onChange={(e) => onChange(e.target.files ? e.target.files[0] : null)} {...rest} />
+                      <Input type="url" placeholder="https://example.com/photo.jpg (placeholder for upload)" {...field} />
                     </FormControl>
-                    {typeof value === 'string' && value && <FormDescription>Current photo: <a href={value} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">View Photo</a>. Upload a new one to replace it.</FormDescription>}
+                     <FormDescription>Enter the URL of the applicant's photo. Actual file upload will be added later.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -276,31 +370,56 @@ export function OperatorLicenseForm({
         <Card>
           <CardHeader><CardTitle>Document Attachments</CardTitle></CardHeader>
           <CardContent className="space-y-4">
-            {documentTypes.map((docType) => {
-              if (docType.forRenewalOnly && watchApplicationType !== "Renewal") {
-                return null;
-              }
-              return (
+            {fields.map((item, index) => (
+              <div key={item.id} className="p-4 border rounded-md space-y-3">
                 <FormField
-                  key={docType.key}
                   control={form.control}
-                  name={docType.key as any} /* Casting as any for dynamic name */
-                  render={({ field: { onChange, value, ...rest } }) => (
+                  name={`attachedDocuments.${index}.docType`}
+                  render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{docType.label} {docType.required ? "*" : ""}</FormLabel>
-                      <FormControl>
-                        <Input type="file" onChange={(e) => onChange(e.target.files ? e.target.files[0] : null)} {...rest} />
-                      </FormControl>
-                      {/* Placeholder for showing existing uploaded file */}
-                      {typeof value === 'string' && value && <FormDescription>Current file: {value}</FormDescription>}
+                      <FormLabel>Document Type *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                        <SelectContent>
+                          {documentTypes.map(type => <SelectItem key={type} value={type}>{type.replace(/([A-Z])/g, ' $1').trim()}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-              );
-            })}
+                {form.watch(`attachedDocuments.${index}.docType`) === "Other" && (
+                  <FormField control={form.control} name={`attachedDocuments.${index}.docOtherDescription`} render={({ field }) => (<FormItem><FormLabel>Other Description *</FormLabel><FormControl><Input placeholder="Specify document type" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                )}
+                <FormField control={form.control} name={`attachedDocuments.${index}.fileName`} render={({ field }) => (<FormItem><FormLabel>File Name *</FormLabel><FormControl><Input placeholder="document.pdf" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name={`attachedDocuments.${index}.fileUrl`} render={({ field }) => (<FormItem><FormLabel>File URL *</FormLabel><FormControl><Input type="url" placeholder="https://example.com/doc.pdf" {...field} /></FormControl><FormDescription>Placeholder for actual file upload.</FormDescription><FormMessage /></FormItem>)} />
+                <Button type="button" variant="destructive" size="sm" onClick={() => remove(index)}><Trash2 className="mr-2 h-4 w-4" /> Remove Document</Button>
+              </div>
+            ))}
+            <Button type="button" variant="outline" size="sm" onClick={() => append({ docId: crypto.randomUUID(), docType: "Other", fileName: "", fileUrl: "https://placehold.co/100x100.png?text=DOC", uploadedAt: Timestamp.now() })}>
+              <PlusCircle className="mr-2 h-4 w-4" /> Add Document
+            </Button>
           </CardContent>
         </Card>
+
+        <Card>
+            <CardHeader><CardTitle>Office Use Only</CardTitle></CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                 <FormField control={form.control} name="assignedLicenseNumber" render={({ field }) => (<FormItem><FormLabel>Assigned License No.</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                 <FormField control={form.control} name="receiptNo" render={({ field }) => (<FormItem><FormLabel>Receipt No.</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                 <FormField control={form.control} name="placeIssued" render={({ field }) => (<FormItem><FormLabel>Place Issued</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                 <FormField control={form.control} name="methodOfPayment" render={({ field }) => (<FormItem><FormLabel>Method of Payment</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger></FormControl><SelectContent>{["Cash", "Card", "BankDeposit", "Other"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                 <FormField control={form.control} name="paymentBy" render={({ field }) => (<FormItem><FormLabel>Payment By</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                 <FormField control={form.control} name="paymentDateString" render={({ field }) => (<FormItem><FormLabel>Payment Date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                 <FormField control={form.control} name="paymentAmount" render={({ field }) => (<FormItem><FormLabel>Payment Amount</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? null : parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
+                 <FormField control={form.control} name="issuedAtString" render={({ field }) => (<FormItem><FormLabel>Date Issued</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                 <FormField control={form.control} name="expiryDateString" render={({ field }) => (<FormItem><FormLabel>Expiry Date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                 <FormField control={form.control} name="licenseClass" render={({ field }) => (<FormItem><FormLabel>License Class</FormLabel><FormControl><Input placeholder="e.g., Class 1 - Dinghy" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                 <FormField control={form.control} name="restrictions" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Restrictions</FormLabel><FormControl><Textarea placeholder="e.g., Daylight hours only" {...field} /></FormControl><FormMessage /></FormItem>)} />
+            </CardContent>
+        </Card>
+        
+        <FormField control={form.control} name="notes" render={({ field }) => (<FormItem><FormLabel>General Notes</FormLabel><FormControl><Textarea placeholder="Any other relevant notes for this application" {...field} /></FormControl><FormMessage /></FormItem>)} />
 
 
         <CardFooter className="flex justify-end gap-4 p-0 pt-8">
@@ -308,7 +427,7 @@ export function OperatorLicenseForm({
             <Save className="mr-2 h-4 w-4" /> Save Draft
           </Button>
           <Button type="button" onClick={form.handleSubmit(data => onSubmit(data, "Submitted"))} disabled={form.formState.isSubmitting}>
-            <Send className="mr-2 h-4 w-4" /> Submit Application
+            <Send className="mr-2 h-4 w-4" /> {mode === "create" ? "Submit Application" : "Update & Submit"}
           </Button>
         </CardFooter>
       </form>

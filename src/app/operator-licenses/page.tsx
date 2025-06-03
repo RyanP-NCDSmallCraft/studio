@@ -6,73 +6,124 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
-import { PlusCircle, Eye, Filter, Search, Contact, ArrowLeft } from "lucide-react";
-import type { OperatorLicense, Operator } from "@/types";
+import { PlusCircle, Eye, Filter, Search, Contact, ArrowLeft, Loader2, AlertTriangle } from "lucide-react";
+import type { OperatorLicense, Operator, User } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
 import type { BadgeProps } from "@/components/ui/badge";
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { Input } from "@/components/ui/input";
-import { Timestamp } from "firebase/firestore";
-import { useRouter } from "next/navigation";
+import { Timestamp, collection, getDocs, query, where, doc, getDoc, DocumentReference, QueryConstraint } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useRouter, useSearchParams } from "next/navigation";
+import { isValid } from 'date-fns';
 
 
-// Placeholder data
-const placeholderOperators: Operator[] = [
-  { operatorId: "OP001", surname: "Pini", firstName: "Ryan", dob: Timestamp.fromDate(new Date(1985, 5, 10)), sex: "Male", placeOfOriginTown: "Port Moresby", placeOfOriginDistrict: "NCD", placeOfOriginLLG: "NCD", placeOfOriginVillage: "Hanuabada", phoneMobile: "70000001", email: "ryan.pini@example.com", postalAddress: "PO Box 123", createdAt: Timestamp.now(), updatedAt: Timestamp.now() },
-  { operatorId: "OP002", surname: "Toua", firstName: "Dika", dob: Timestamp.fromDate(new Date(1990, 2, 22)), sex: "Female", placeOfOriginTown: "Lae", placeOfOriginDistrict: "Morobe", placeOfOriginLLG: "Lae Urban", placeOfOriginVillage: "Voco Point", phoneMobile: "70000002", email: "dika.toua@example.com", postalAddress: "PO Box 456", createdAt: Timestamp.now(), updatedAt: Timestamp.now() },
-];
+// Helper to ensure date serialization
+const ensureSerializableDate = (dateValue: any): Date | undefined => {
+  if (!dateValue) return undefined;
+  if (dateValue instanceof Timestamp) return dateValue.toDate();
+  if (dateValue instanceof Date) return dateValue;
+  if (typeof dateValue === 'object' && dateValue !== null && typeof dateValue.seconds === 'number' && typeof dateValue.nanoseconds === 'number') {
+    try { return new Timestamp(dateValue.seconds, dateValue.nanoseconds).toDate(); } catch (e) { return undefined; }
+  }
+  if (typeof dateValue === 'string' || typeof dateValue === 'number') {
+    const parsedDate = new Date(dateValue);
+    if (isValid(parsedDate)) return parsedDate;
+  }
+  return undefined;
+};
 
-const placeholderLicenses: OperatorLicense[] = [
-  {
-    licenseApplicationId: "LICAPP001",
-    operatorRef: { id: "OP001" } as any,
-    operatorData: placeholderOperators[0],
-    applicationType: "New",
-    status: "Approved",
-    assignedLicenseNumber: "OL001",
-    submittedAt: Timestamp.fromDate(new Date(Date.now() - 20 * 24 * 60 * 60 * 1000)),
-    approvedAt: Timestamp.fromDate(new Date(Date.now() - 5 * 24 * 60 * 60 * 1000)),
-    issuedAt: Timestamp.fromDate(new Date(Date.now() - 5 * 24 * 60 * 60 * 1000)),
-    expiryDate: Timestamp.fromDate(new Date(new Date().setFullYear(new Date().getFullYear() + 2))),
-    attachedDocuments: [],
-    createdByUserRef: {} as any,
-    createdAt: Timestamp.now(),
-    lastUpdatedAt: Timestamp.now(),
-  },
-  {
-    licenseApplicationId: "LICAPP002",
-    operatorRef: { id: "OP002" } as any,
-    operatorData: placeholderOperators[1],
-    applicationType: "Renewal",
-    previousLicenseNumber: "OLPREV789",
-    status: "PendingReview",
-    submittedAt: Timestamp.fromDate(new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)),
-    attachedDocuments: [],
-    createdByUserRef: {} as any,
-    createdAt: Timestamp.now(),
-    lastUpdatedAt: Timestamp.now(),
-  },
-  {
-    licenseApplicationId: "LICAPP003",
-    operatorRef: { id: "OP001" } as any,
-    operatorData: placeholderOperators[0],
-    applicationType: "New",
-    status: "Draft",
-    attachedDocuments: [],
-    createdByUserRef: {} as any,
-    createdAt: Timestamp.now(),
-    lastUpdatedAt: Timestamp.now(),
-  },
-];
 
 export default function OperatorLicenseListPage() {
-  const { currentUser, isAdmin, isRegistrar, isSupervisor } = useAuth();
-  const [searchTerm, setSearchTerm] = useState("");
-  const licenses = placeholderLicenses; // In real app, fetch from Firestore
+  const { currentUser, isAdmin, isRegistrar, isSupervisor, loading: authLoading } = useAuth();
+  const { toast } = useToast(); // Assuming useToast is available
   const router = useRouter();
+  const searchParamsHook = useSearchParams(); // Renamed to avoid conflict
 
-  const getStatusBadgeVariant = (status: OperatorLicense["status"]): BadgeProps["variant"] => {
+  const [licenses, setLicenses] = useState<OperatorLicense[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const loadLicenses = useCallback(async () => {
+    if (!currentUser) {
+      setFetchError("Please log in to view operator licenses.");
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
+    setFetchError(null);
+
+    try {
+      const queryConstraints: QueryConstraint[] = [];
+      // Example filter: const statusFilter = searchParamsHook.get('status');
+      // if (statusFilter) queryConstraints.push(where("status", "==", statusFilter));
+
+      const licensesQuery = query(collection(db, "operatorLicenseApplications"), ...queryConstraints);
+      const snapshot = await getDocs(licensesQuery);
+      
+      const fetchedLicensesPromises = snapshot.docs.map(async docSnap => {
+        const data = docSnap.data() as Omit<OperatorLicense, 'operatorRef'> & { operatorRef: DocumentReference<Operator> | string };
+        
+        let operatorData: Partial<Operator> | undefined = data.operatorData; // Use denormalized first
+        if (!operatorData && data.operatorRef) { // If not denormalized, fetch
+            let opRef: DocumentReference<Operator>;
+            if (typeof data.operatorRef === 'string') {
+                // Assuming the string is a full path, otherwise adjust
+                opRef = doc(db, data.operatorRef) as DocumentReference<Operator>; 
+            } else {
+                opRef = data.operatorRef;
+            }
+            const operatorDocSnap = await getDoc(opRef);
+            if (operatorDocSnap.exists()) {
+                const opRaw = operatorDocSnap.data() as Operator;
+                operatorData = {
+                    operatorId: operatorDocSnap.id,
+                    firstName: opRaw.firstName,
+                    surname: opRaw.surname,
+                    // Add other key fields you need for display
+                };
+            }
+        }
+
+        return {
+          ...data,
+          licenseApplicationId: docSnap.id,
+          operatorData: operatorData, // Assign fetched or existing denormalized data
+          // Ensure all date fields are JS Date for client-side state
+          submittedAt: ensureSerializableDate(data.submittedAt),
+          approvedAt: ensureSerializableDate(data.approvedAt),
+          issuedAt: ensureSerializableDate(data.issuedAt),
+          expiryDate: ensureSerializableDate(data.expiryDate),
+          paymentDate: ensureSerializableDate(data.paymentDate),
+          createdAt: ensureSerializableDate(data.createdAt) as Date,
+          lastUpdatedAt: ensureSerializableDate(data.lastUpdatedAt) as Date,
+          attachedDocuments: (data.attachedDocuments || []).map(d => ({
+            ...d,
+            uploadedAt: ensureSerializableDate(d.uploadedAt) as Date,
+            verifiedAt: ensureSerializableDate(d.verifiedAt)
+          })),
+        } as OperatorLicense;
+      });
+      const fetchedLicenses = await Promise.all(fetchedLicensesPromises);
+      setLicenses(fetchedLicenses);
+    } catch (error: any) {
+      console.error("Error fetching operator licenses:", error);
+      setFetchError(error.message || "Failed to load licenses.");
+      if (toast) toast({ title: "Error", description: error.message, variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentUser, toast, searchParamsHook]);
+
+  useEffect(() => {
+    if (!authLoading) {
+      loadLicenses();
+    }
+  }, [authLoading, loadLicenses]);
+
+  const getStatusBadgeVariant = (status?: OperatorLicense["status"]): BadgeProps["variant"] => {
     switch (status) {
       case "Approved": return "default";
       case "Submitted": case "PendingReview": case "AwaitingTest": case "TestScheduled": case "TestPassed": return "secondary";
@@ -83,7 +134,7 @@ export default function OperatorLicenseListPage() {
   };
 
   const getApplicantName = (license: OperatorLicense): string => {
-    return license.operatorData ? `${license.operatorData.firstName} ${license.operatorData.surname}` : "N/A";
+    return license.operatorData ? `${license.operatorData.firstName || ''} ${license.operatorData.surname || ''}`.trim() : "N/A";
   };
   
   const canAddNew = isAdmin || isRegistrar || isSupervisor;
@@ -94,13 +145,17 @@ export default function OperatorLicenseListPage() {
     return licenses.filter((lic) => {
       const applicantName = getApplicantName(lic);
       return (
-        (lic.assignedLicenseNumber || "").toLowerCase().includes(lowercasedFilter) ||
+        (lic.assignedLicenseNumber || lic.licenseApplicationId).toLowerCase().includes(lowercasedFilter) ||
         applicantName.toLowerCase().includes(lowercasedFilter) ||
-        lic.status.toLowerCase().includes(lowercasedFilter) ||
-        lic.applicationType.toLowerCase().includes(lowercasedFilter)
+        (lic.status && lic.status.toLowerCase().includes(lowercasedFilter)) ||
+        (lic.applicationType && lic.applicationType.toLowerCase().includes(lowercasedFilter))
       );
     });
   }, [searchTerm, licenses]);
+  
+  if (authLoading || (!currentUser && isLoading)) {
+    return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -143,46 +198,61 @@ export default function OperatorLicenseListPage() {
           <CardDescription>Manage and track all operator license applications and issued licenses.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>License No.</TableHead>
-                <TableHead>Applicant Name</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Submitted</TableHead>
-                <TableHead>Expires</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredLicenses.map((lic) => (
-                <TableRow key={lic.licenseApplicationId}>
-                  <TableCell className="font-medium">{lic.assignedLicenseNumber || lic.licenseApplicationId}</TableCell>
-                  <TableCell>{getApplicantName(lic)}</TableCell>
-                  <TableCell>{lic.applicationType}</TableCell>
-                  <TableCell>
-                    <Badge variant={getStatusBadgeVariant(lic.status)}>{lic.status}</Badge>
-                  </TableCell>
-                  <TableCell>{formatFirebaseTimestamp(lic.submittedAt, "PP")}</TableCell>
-                  <TableCell>{formatFirebaseTimestamp(lic.expiryDate, "PP")}</TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" asChild title="View Details">
-                      <Link href={`/operator-licenses/${lic.licenseApplicationId}`}><Eye className="h-4 w-4" /></Link>
-                    </Button>
-                    {/* Add Edit button here if applicable based on status/role */}
-                  </TableCell>
+           {isLoading ? (
+            <div className="flex h-40 justify-center items-center">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="ml-2">Loading licenses...</p>
+            </div>
+          ) : fetchError ? (
+             <div className="text-center py-10 text-destructive">
+                <AlertTriangle className="mx-auto h-10 w-10 mb-2" />
+                <p>{fetchError}</p>
+                <Button onClick={loadLicenses} className="mt-4">Retry</Button>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>License No. / App ID</TableHead>
+                  <TableHead>Applicant Name</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Submitted</TableHead>
+                  <TableHead>Expires</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          {filteredLicenses.length === 0 && (
-             <p className="pt-4 text-center text-muted-foreground">
-                {searchTerm ? "No licenses match your search." : "No licenses found."}
-            </p>
+              </TableHeader>
+              <TableBody>
+                {filteredLicenses.length > 0 ? filteredLicenses.map((lic) => (
+                  <TableRow key={lic.licenseApplicationId}>
+                    <TableCell className="font-medium">{lic.assignedLicenseNumber || lic.licenseApplicationId}</TableCell>
+                    <TableCell>{getApplicantName(lic)}</TableCell>
+                    <TableCell>{lic.applicationType}</TableCell>
+                    <TableCell>
+                      <Badge variant={getStatusBadgeVariant(lic.status)}>{lic.status}</Badge>
+                    </TableCell>
+                    <TableCell>{formatFirebaseTimestamp(lic.submittedAt, "PP")}</TableCell>
+                    <TableCell>{formatFirebaseTimestamp(lic.expiryDate, "PP")}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" asChild title="View Details">
+                        <Link href={`/operator-licenses/${lic.licenseApplicationId}`}><Eye className="h-4 w-4" /></Link>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                )) : (
+                   <TableRow>
+                    <TableCell colSpan={7} className="text-center text-muted-foreground">
+                      No licenses found.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>
     </div>
   );
 }
+
+    
