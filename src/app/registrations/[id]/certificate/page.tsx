@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
 import Image from "next/image";
 import React, { useState, useEffect, useCallback } from "react";
-import { doc, getDoc, Timestamp, DocumentReference } from 'firebase/firestore'; // Added DocumentReference
+import { doc, getDoc, Timestamp, DocumentReference } from 'firebase/firestore'; 
 import { db } from '@/lib/firebase';
 import { isValid } from "date-fns";
 
@@ -255,6 +255,7 @@ export default function CertificatePreviewPage() {
               <p><strong>Color:</strong> {registration.craftColor}</p>
               <p><strong>Vessel Type:</strong> {registration.vesselType} {registration.vesselTypeOtherDesc && `(${registration.vesselTypeOtherDesc})`}</p>
               <p><strong>Propulsion:</strong> {registration.propulsionType} {registration.propulsionOtherDesc && `(${registration.propulsionOtherDesc})`}</p>
+              <p><strong>Use:</strong> {registration.craftUse} {registration.craftUseOtherDesc && `(${registration.craftUseOtherDesc})`}</p>
             </div>
 
             <Separator className="my-6" />
@@ -272,8 +273,8 @@ export default function CertificatePreviewPage() {
             
             <div className="mt-10 text-center">
                 <p className="text-sm text-muted-foreground">Official Stamp / Signature Area</p>
-                <div className="h-20 w-40 border border-dashed border-muted-foreground mx-auto mt-2 rounded-md flex items-center justify-center text-muted-foreground">
-                    [Stamp Here]
+                <div className="h-24 w-24 border-2 border-dashed border-muted-foreground mx-auto mt-2 rounded-full flex items-center justify-center text-muted-foreground">
+                    [Seal Here]
                 </div>
             </div>
           </CardContent>
