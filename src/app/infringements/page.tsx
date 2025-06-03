@@ -12,7 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
 import React, { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { collection, getDocs, query, where, doc, getDoc, Timestamp, DocumentReference } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, getDoc, Timestamp, DocumentReference, QueryConstraint } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Input } from "@/components/ui/input";
 import { useRouter }
@@ -62,12 +62,16 @@ export default function InfringementListPage() {
     setFetchError(null);
 
     try {
-      let infringementsQuery = query(collection(db, "infringements"));
-      // Example role-based filtering (can be expanded)
-      // if (isInspector && !isAdmin && !isRegistrar && !isSupervisor) {
-      //   infringementsQuery = query(collection(db, "infringements"), where("issuedByRef", "==", doc(db, "users", currentUser.userId)));
-      // }
+      const queryConstraints: QueryConstraint[] = [];
 
+      // If the user is ONLY an Inspector (not Admin, Registrar, or Supervisor),
+      // then filter infringements to only those they issued.
+      if (isInspector && !isAdmin && !isRegistrar && !isSupervisor) {
+        queryConstraints.push(where("issuedByRef", "==", doc(db, "users", currentUser.userId)));
+      }
+
+      const infringementsQuery = query(collection(db, "infringements"), ...queryConstraints);
+      
       const snapshot = await getDocs(infringementsQuery);
       const fetchedInfringements = snapshot.docs.map(docSnap => {
         const data = docSnap.data();
