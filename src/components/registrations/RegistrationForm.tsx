@@ -22,18 +22,21 @@ import type { Registration, Owner, ProofOfOwnershipDoc, User, EngineDetail } fro
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
-import { Save, Send, Trash2, PlusCircle } from "lucide-react"; 
-import React, { useState } from "react";
+import { Save, Send, Trash2, PlusCircle, UploadCloud } from "lucide-react";
+import React, { useState, useEffect } from "react";
 import { Timestamp, addDoc, collection, doc, type DocumentReference, updateDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase"; 
+import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL } from "firebase/storage";
+import { db, storage } from "@/lib/firebase";
 import { OwnerManager } from "./OwnerManager";
 import { FileUploadManager } from "./FileUploadManager";
 import { Separator } from "@/components/ui/separator";
+import Image from "next/image";
+import { Progress } from "@/components/ui/progress";
 
 
 // Define Zod schema for validation
 const ownerSchema = z.object({
-  ownerId: z.string().uuid().optional(), 
+  ownerId: z.string().uuid().optional(),
   role: z.enum(["Primary", "CoOwner"]),
   surname: z.string().min(1, "Surname is required"),
   firstName: z.string().min(1, "First name is required"),
@@ -66,7 +69,7 @@ const engineDetailSchema = z.object({
 const registrationFormSchema = z.object({
   registrationType: z.enum(["New", "Renewal"]),
   previousScaRegoNo: z.string().optional().default(""),
-  
+
   owners: z.array(ownerSchema).min(1, "At least one owner is required").max(5, "Maximum of 5 owners"),
   proofOfOwnershipDocs: z.array(proofOfOwnershipDocSchema).min(1, "At least one proof of ownership document is required"),
 
@@ -79,7 +82,8 @@ const registrationFormSchema = z.object({
   lengthUnits: z.enum(["m", "ft"]),
   passengerCapacity: z.number({invalid_type_error: "Capacity must be a number"}).int().positive("Passenger capacity must be a positive number").optional(),
   distinguishingFeatures: z.string().optional().default(""),
-  
+  craftImageUrl: z.string().url().optional(),
+
   engines: z.array(engineDetailSchema).optional().default([]),
 
   propulsionType: z.enum(["Inboard", "Outboard", "Both", "Sail", "Other"]),
@@ -88,7 +92,7 @@ const registrationFormSchema = z.object({
   hullMaterialOtherDesc: z.string().optional().default(""),
   craftUse: z.enum(["Pleasure", "Passenger", "Fishing", "Cargo", "Mixed Use", "Other"]),
   craftUseOtherDesc: z.string().optional().default(""),
-  fuelType: z.enum(["Electric", "Petrol", "Diesel", "Other"]), 
+  fuelType: z.enum(["Electric", "Petrol", "Diesel", "Other"]),
   fuelTypeOtherDesc: z.string().optional().default(""),
   vesselType: z.enum(["OpenBoat", "CabinCruiser", "Sailboat", "PWC", "Other"]),
   vesselTypeOtherDesc: z.string().optional().default(""),
@@ -102,7 +106,7 @@ const registrationFormSchema = z.object({
   safetyCertNumber: z.string().optional().default(""),
   safetyEquipIssued: z.boolean().optional().default(false),
   safetyEquipReceiptNumber: z.string().optional().default(""),
-  status: z.enum(["Draft", "Submitted", "PendingReview", "Approved", "Rejected", "Expired", "RequiresInfo", "Suspended", "Revoked"]).optional(), 
+  status: z.enum(["Draft", "Submitted", "PendingReview", "Approved", "Rejected", "Expired", "RequiresInfo", "Suspended", "Revoked"]).optional(),
 }).superRefine((data, ctx) => {
   if (data.registrationType === "Renewal" && !data.previousScaRegoNo) {
     ctx.addIssue({
@@ -141,8 +145,13 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
   const { toast } = useToast();
   const router = useRouter();
 
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(existingRegistrationData?.craftImageUrl || null);
+  const [imageUploadProgress, setImageUploadProgress] = useState<number | null>(null);
+
+
   const defaultValues: Partial<RegistrationFormValues> = existingRegistrationData
-  ? { 
+  ? {
       registrationType: existingRegistrationData.registrationType || "New",
       previousScaRegoNo: existingRegistrationData.previousScaRegoNo || "",
       owners: (existingRegistrationData.owners || []).map(o => ({
@@ -178,6 +187,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       lengthUnits: existingRegistrationData.lengthUnits || "m",
       passengerCapacity: existingRegistrationData.passengerCapacity || undefined,
       distinguishingFeatures: existingRegistrationData.distinguishingFeatures || "",
+      craftImageUrl: existingRegistrationData.craftImageUrl || undefined,
       engines: (existingRegistrationData.engines || []).map(e => ({
         engineId: e.engineId || crypto.randomUUID(),
         make: e.make || "",
@@ -204,7 +214,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       safetyEquipReceiptNumber: existingRegistrationData.safetyEquipReceiptNumber || "",
       status: existingRegistrationData.status || "Draft",
     }
-  : { 
+  : {
       registrationType: "New",
       previousScaRegoNo: "",
       owners: [],
@@ -214,10 +224,11 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       craftYear: new Date().getFullYear(),
       craftColor: "",
       hullIdNumber: "",
-      craftLength: 0, 
+      craftLength: 0,
       lengthUnits: "m",
       passengerCapacity: undefined,
       distinguishingFeatures: "",
+      craftImageUrl: undefined,
       engines: [],
       propulsionType: "Outboard",
       propulsionOtherDesc: "",
@@ -225,24 +236,24 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       hullMaterialOtherDesc: "",
       craftUse: "Pleasure",
       craftUseOtherDesc: "",
-      fuelType: "Petrol", 
+      fuelType: "Petrol",
       fuelTypeOtherDesc: "",
       vesselType: "OpenBoat",
       vesselTypeOtherDesc: "",
-      paymentMethod: undefined, 
+      paymentMethod: undefined,
       paymentReceiptNumber: "",
       bankStampRef: "",
-      paymentAmount: undefined, 
-      paymentDate: undefined, 
+      paymentAmount: undefined,
+      paymentDate: undefined,
       safetyCertNumber: "",
-      safetyEquipIssued: false, 
+      safetyEquipIssued: false,
       safetyEquipReceiptNumber: "",
       status: "Draft",
     };
 
   const form = useForm<RegistrationFormValues>({
     resolver: zodResolver(registrationFormSchema),
-    defaultValues, 
+    defaultValues,
     mode: "onChange",
   });
 
@@ -252,14 +263,14 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
   });
 
 
-  const [ownersData, setOwnersData] = useState<Owner[]>(() => 
+  const [ownersData, setOwnersData] = useState<Owner[]>(() =>
     (defaultValues.owners || []).map(o => ({
       ...o,
       dob: o.dob instanceof Timestamp ? o.dob.toDate() : (o.dob ? new Date(o.dob as any) : new Date()),
     })) as Owner[]
   );
-  
-  const [proofDocsData, setProofDocsData] = useState<ProofOfOwnershipDoc[]>(() => 
+
+  const [proofDocsData, setProofDocsData] = useState<ProofOfOwnershipDoc[]>(() =>
     (defaultValues.proofOfOwnershipDocs || []).map(d => ({
       ...d,
       uploadedAt: d.uploadedAt instanceof Timestamp ? d.uploadedAt : (d.uploadedAt ? ( (d.uploadedAt as any) instanceof Date ? d.uploadedAt : new Date(d.uploadedAt as string)) : Timestamp.now() )
@@ -267,21 +278,76 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
   );
 
 
-  React.useEffect(() => {
-    form.setValue("owners", ownersData as any); 
+  useEffect(() => {
+    form.setValue("owners", ownersData as any);
   }, [ownersData, form]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     form.setValue("proofOfOwnershipDocs", proofDocsData as any);
   }, [proofDocsData, form]);
+
+  const handleImageFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreviewUrl(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setSelectedImageFile(null);
+      setImagePreviewUrl(existingRegistrationData?.craftImageUrl || null);
+    }
+  };
+
 
   const onSubmit = async (data: RegistrationFormValues, submissionStatus: "Draft" | "Submitted") => {
     if (!currentUser?.userId) {
       toast({ title: "Authentication Error", description: "You must be logged in to create or edit a registration.", variant: "destructive" });
       return;
     }
-    
-    form.clearErrors(); 
+
+    form.clearErrors();
+    setImageUploadProgress(null);
+
+    let finalCraftImageUrl = data.craftImageUrl; // Use URL from form if already set (e.g. during edit and image not changed)
+
+    if (selectedImageFile) {
+      toast({ title: "Uploading Image...", description: "Please wait." });
+      setImageUploadProgress(0);
+      const imageFileName = `${Date.now()}_${selectedImageFile.name}`;
+      const imagePath = `craft_images/${registrationId || Date.now()}/${imageFileName}`;
+      const imageStorageRef = storageRef(storage, imagePath);
+
+      try {
+        const uploadTask = uploadBytesResumable(imageStorageRef, selectedImageFile);
+        await new Promise<void>((resolve, reject) => {
+          uploadTask.on('state_changed',
+            (snapshot) => {
+              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+              setImageUploadProgress(progress);
+            },
+            (error) => {
+              console.error("Image upload error:", error);
+              reject(error);
+            },
+            async () => {
+              finalCraftImageUrl = await getDownloadURL(uploadTask.snapshot.ref);
+              form.setValue("craftImageUrl", finalCraftImageUrl); // Update form value
+              resolve();
+            }
+          );
+        });
+        toast({ title: "Image Upload Successful", description: "Craft image has been uploaded." });
+        setImageUploadProgress(100);
+      } catch (error) {
+        toast({ title: "Image Upload Failed", description: "Could not upload the craft image. Please try again.", variant: "destructive" });
+        setImageUploadProgress(null);
+        return; // Stop submission if image upload fails
+      }
+    }
+
 
     const registrationDataForFirestore: { [key: string]: any } = {
       registrationType: data.registrationType,
@@ -309,8 +375,9 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       craftLength: data.craftLength,
       lengthUnits: data.lengthUnits,
       passengerCapacity: data.passengerCapacity,
-      engines: (data.engines || []).map(engine => ({ 
-        make: engine.make || null, 
+      craftImageUrl: finalCraftImageUrl || null,
+      engines: (data.engines || []).map(engine => ({
+        make: engine.make || null,
         horsepower: engine.horsepower || null,
         serialNumber: engine.serialNumber || null,
       })),
@@ -342,13 +409,13 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
     if (data.safetyCertNumber) registrationDataForFirestore.safetyCertNumber = data.safetyCertNumber;
     if (data.safetyEquipReceiptNumber) registrationDataForFirestore.safetyEquipReceiptNumber = data.safetyEquipReceiptNumber;
     if (data.distinguishingFeatures) registrationDataForFirestore.distinguishingFeatures = data.distinguishingFeatures;
-    
+
     if (data.propulsionOtherDesc) registrationDataForFirestore.propulsionOtherDesc = data.propulsionOtherDesc;
     if (data.hullMaterialOtherDesc) registrationDataForFirestore.hullMaterialOtherDesc = data.hullMaterialOtherDesc;
     if (data.craftUseOtherDesc) registrationDataForFirestore.craftUseOtherDesc = data.craftUseOtherDesc;
     if (data.fuelTypeOtherDesc) registrationDataForFirestore.fuelTypeOtherDesc = data.fuelTypeOtherDesc;
     if (data.vesselTypeOtherDesc) registrationDataForFirestore.vesselTypeOtherDesc = data.vesselTypeOtherDesc;
-    
+
 
     if (submissionStatus === "Submitted") {
       registrationDataForFirestore.submittedAt = Timestamp.now();
@@ -364,17 +431,19 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
         const regDocRef = doc(db, "registrations", registrationId);
         await updateDoc(regDocRef, registrationDataForFirestore);
         toast({ title: "Registration Updated", description: `Status: ${submissionStatus}.` });
-        router.push(`/registrations/${registrationId}`); 
+        router.push(`/registrations/${registrationId}`);
       }
     } catch (error: any) {
       console.error("Error saving registration to Firestore:", error);
       const originalErrorMessage = error.message || "Unknown Firebase error";
       const originalErrorCode = error.code || "N/A";
-      toast({ 
-        title: "Save Failed", 
-        description: `Failed to save registration. Error: [${originalErrorCode}] ${originalErrorMessage}`, 
-        variant: "destructive" 
+      toast({
+        title: "Save Failed",
+        description: `Failed to save registration. Error: [${originalErrorCode}] ${originalErrorMessage}`,
+        variant: "destructive"
       });
+    } finally {
+      setImageUploadProgress(null);
     }
   };
 
@@ -425,7 +494,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
             )}
           </CardContent>
         </Card>
-        
+
         <OwnerManager owners={ownersData} setOwners={setOwnersData} form={form} />
 
         <FileUploadManager title="Proof of Ownership Documents *" docs={proofDocsData} setDocs={setProofDocsData} storagePath="registrations_proof_of_ownership/" form={form} fieldName="proofOfOwnershipDocs" />
@@ -442,20 +511,20 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                   <FormItem>
                     <FormLabel>Craft Year *</FormLabel>
                     <FormControl>
-                      <Input 
-                        type="number" 
-                        placeholder="e.g., 2023" 
-                        {...field} 
+                      <Input
+                        type="number"
+                        placeholder="e.g., 2023"
+                        {...field}
                         value={field.value === undefined || field.value === null || isNaN(Number(field.value)) ? '' : Number(field.value)}
                         onChange={e => {
                           const val = e.target.value;
                           field.onChange(val === '' || isNaN(parseInt(val, 10)) ? undefined : parseInt(val, 10));
-                        }} 
+                        }}
                       />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
-                )} 
+                )}
               />
               <FormField control={form.control} name="craftColor" render={({ field }) => (<FormItem><FormLabel>Craft Color *</FormLabel><FormControl><Input placeholder="e.g., Blue/White" {...field} /></FormControl><FormMessage /></FormItem>)} />
               <FormField control={form.control} name="hullIdNumber" render={({ field }) => (<FormItem><FormLabel>Hull ID / Serial No. *</FormLabel><FormControl><Input placeholder="Enter HIN" {...field} /></FormControl><FormMessage /></FormItem>)} />
@@ -464,11 +533,11 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                     <FormItem>
                       <FormLabel>Craft Length *</FormLabel>
                       <FormControl>
-                        <Input 
-                          type="number" 
-                          step="0.01" 
-                          placeholder="e.g., 3.5" 
-                          {...field} 
+                        <Input
+                          type="number"
+                          step="0.01"
+                          placeholder="e.g., 3.5"
+                          {...field}
                           value={field.value === undefined || field.value === null || isNaN(Number(field.value)) ? '' : Number(field.value)}
                           onChange={e => {
                             const val = e.target.value;
@@ -478,7 +547,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                       </FormControl>
                       <FormMessage />
                     </FormItem>
-                  )} 
+                  )}
                 />
                 <FormField control={form.control} name="lengthUnits" render={({ field }) => (<FormItem><FormLabel>Units *</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="m">Meters (m)</SelectItem><SelectItem value="ft">Feet (ft)</SelectItem></SelectContent></Select><FormMessage /></FormItem>)} />
               </div>
@@ -486,25 +555,42 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                   <FormItem>
                     <FormLabel>Passenger Capacity</FormLabel>
                     <FormControl>
-                      <Input 
-                        type="number" 
-                        placeholder="e.g., 10" 
-                        {...field} 
+                      <Input
+                        type="number"
+                        placeholder="e.g., 10"
+                        {...field}
                         value={field.value === undefined || field.value === null || isNaN(Number(field.value)) ? '' : Number(field.value)}
                         onChange={e => {
                           const val = e.target.value;
                           field.onChange(val === '' || isNaN(parseInt(val, 10)) ? undefined : parseInt(val, 10));
-                        }} 
+                        }}
                       />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
-                )} 
+                )}
               />
+              <FormItem className="md:col-span-2">
+                <FormLabel>Craft Image</FormLabel>
+                {imagePreviewUrl && (
+                  <div className="mt-2 mb-2">
+                    <Image src={imagePreviewUrl} alt="Craft preview" width={200} height={150} className="rounded-md object-cover aspect-video" data-ai-hint="boat" />
+                  </div>
+                )}
+                <FormControl>
+                  <Input type="file" accept="image/*" onChange={handleImageFileChange} />
+                </FormControl>
+                {imageUploadProgress !== null && imageUploadProgress < 100 && (
+                  <Progress value={imageUploadProgress} className="w-full mt-2 h-2" />
+                )}
+                <FormDescription>Upload an image of the craft (max 5MB).</FormDescription>
+                <FormMessage />
+              </FormItem>
+
             </div>
-            
+
             <Separator className="my-4" />
-            
+
             <div>
               <h3 className="text-lg font-medium mb-3">Engine Details</h3>
               {engineFields.map((field, index) => (
@@ -527,10 +613,10 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                       <FormItem>
                         <FormLabel>Horsepower (HP)</FormLabel>
                         <FormControl>
-                          <Input 
-                            type="number" 
-                            placeholder="e.g., 150" 
-                            {...field} 
+                          <Input
+                            type="number"
+                            placeholder="e.g., 150"
+                            {...field}
                             value={field.value === undefined || field.value === null || isNaN(Number(field.value)) ? '' : Number(field.value)}
                             onChange={e => {
                               const val = e.target.value;
@@ -558,7 +644,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                     variant="destructive"
                     size="sm"
                     onClick={() => removeEngine(index)}
-                    className="md:self-center mb-1" 
+                    className="md:self-center mb-1"
                   >
                     <Trash2 className="h-4 w-4 mr-1 md:mr-2" /> Remove
                   </Button>
@@ -586,7 +672,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FormField control={form.control} name="propulsionType" render={({ field }) => (<FormItem><FormLabel>Propulsion Type *</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{["Inboard", "Outboard", "Both", "Sail", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
             {watchPropulsionType === "Other" && <FormField control={form.control} name="propulsionOtherDesc" render={({ field }) => (<FormItem><FormLabel>Other Propulsion Desc. *</FormLabel><FormControl><Input placeholder="Specify other" {...field} /></FormControl><FormMessage /></FormItem>)} />}
-            
+
             <FormField control={form.control} name="hullMaterial" render={({ field }) => (<FormItem><FormLabel>Hull Material *</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{["Wood", "Fiberglass", "Metal", "Inflatable", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
             {watchHullMaterial === "Other" && <FormField control={form.control} name="hullMaterialOtherDesc" render={({ field }) => (<FormItem><FormLabel>Other Hull Material Desc. *</FormLabel><FormControl><Input placeholder="Specify other" {...field} /></FormControl><FormMessage /></FormItem>)} />}
 
@@ -595,7 +681,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
 
             <FormField control={form.control} name="fuelType" render={({ field }) => (<FormItem><FormLabel>Fuel Type *</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{["Electric", "Petrol", "Diesel", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
             {watchFuelType === "Other" && <FormField control={form.control} name="fuelTypeOtherDesc" render={({ field }) => (<FormItem><FormLabel>Other Fuel Type Desc. *</FormLabel><FormControl><Input placeholder="Specify other" {...field} /></FormControl><FormMessage /></FormItem>)} />}
-            
+
             <FormField control={form.control} name="vesselType" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Vessel Type *</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{["OpenBoat", "CabinCruiser", "Sailboat", "PWC", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
             {watchVesselType === "Other" && <FormField control={form.control} name="vesselTypeOtherDesc" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Other Vessel Type Desc. *</FormLabel><FormControl><Input placeholder="Specify other" {...field} /></FormControl><FormMessage /></FormItem>)} />}
           </CardContent>
@@ -609,21 +695,21 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                 <FormItem>
                   <FormLabel>Payment Amount</FormLabel>
                   <FormControl>
-                    <Input 
-                      type="number" 
-                      step="0.01" 
-                      placeholder="e.g., 150.00" 
-                      {...field} 
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="e.g., 150.00"
+                      {...field}
                       value={field.value === undefined || field.value === null || isNaN(Number(field.value)) ? '' : Number(field.value)}
                       onChange={e => {
                         const val = e.target.value;
                          field.onChange(val === '' || isNaN(parseFloat(val)) ? undefined : parseFloat(val));
-                      }} 
+                      }}
                     />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
-              )} 
+              )}
             />
             <FormField control={form.control} name="paymentReceiptNumber" render={({ field }) => (<FormItem><FormLabel>Payment Receipt No.</FormLabel><FormControl><Input placeholder="Receipt number" {...field} /></FormControl><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="bankStampRef" render={({ field }) => (<FormItem><FormLabel>Bank Stamp Ref.</FormLabel><FormControl><Input placeholder="Bank stamp reference" {...field} /></FormControl><FormMessage /></FormItem>)} />
@@ -642,10 +728,10 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
 
 
         <CardFooter className="flex justify-end gap-4 p-0 pt-8">
-          <Button type="button" variant="outline" onClick={form.handleSubmit((data) => onSubmit(data, "Draft"))} disabled={form.formState.isSubmitting}>
+          <Button type="button" variant="outline" onClick={form.handleSubmit((data) => onSubmit(data, "Draft"))} disabled={form.formState.isSubmitting || imageUploadProgress !== null && imageUploadProgress < 100}>
             <Save className="mr-2 h-4 w-4" /> Save Draft
           </Button>
-          <Button type="button" onClick={form.handleSubmit((data) => onSubmit(data, "Submitted"))} disabled={form.formState.isSubmitting}>
+          <Button type="button" onClick={form.handleSubmit((data) => onSubmit(data, "Submitted"))} disabled={form.formState.isSubmitting || imageUploadProgress !== null && imageUploadProgress < 100}>
             <Send className="mr-2 h-4 w-4" /> {mode === 'create' ? 'Submit for Review' : 'Resubmit for Review'}
           </Button>
         </CardFooter>

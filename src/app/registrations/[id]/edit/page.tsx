@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import React, { useState, useEffect, useCallback } from "react";
 import { doc, getDoc, Timestamp, DocumentReference } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { useAuth } from "@/hooks/useAuth"; 
+import { useAuth } from "@/hooks/useAuth";
 import { isValid } from "date-fns";
 
 
@@ -46,7 +46,7 @@ export default function EditRegistrationPage() {
   const params = useParams();
   const router = useRouter();
   const registrationId = params.id as string;
-  const { currentUser } = useAuth(); 
+  const { currentUser } = useAuth();
 
   const [existingRegistration, setExistingRegistration] = useState<Registration | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,8 +58,8 @@ export default function EditRegistrationPage() {
       setLoading(false);
       return;
     }
-     if (!currentUser) { 
-      setLoading(false); 
+     if (!currentUser) {
+      setLoading(false);
       return;
     }
 
@@ -73,24 +73,24 @@ export default function EditRegistrationPage() {
 
       if (docSnap.exists()) {
         const data = docSnap.data();
-        
+
         const mapOwner = (ownerData: any): Owner => ({
           ...ownerData,
-          ownerId: ownerData.ownerId || crypto.randomUUID(), 
-          dob: ensureDateObject(ownerData.dob) as Date, 
+          ownerId: ownerData.ownerId || crypto.randomUUID(),
+          dob: ensureDateObject(ownerData.dob) as Date,
         });
 
         const mapProofDoc = (docData: any): ProofOfOwnershipDoc => ({
           ...docData,
-          docId: docData.docId || crypto.randomUUID(), 
-          uploadedAt: ensureDateObject(docData.uploadedAt) as Date, 
+          docId: docData.docId || crypto.randomUUID(),
+          uploadedAt: ensureDateObject(docData.uploadedAt) as Date,
         });
 
         const mapEngineDetail = (engineData: any): EngineDetail => ({
           ...engineData,
           engineId: engineData.engineId || crypto.randomUUID(),
         });
-        
+
         const processedData: Registration = {
           registrationId: docSnap.id,
           scaRegoNo: data.scaRegoNo,
@@ -121,7 +121,8 @@ export default function EditRegistrationPage() {
           lengthUnits: data.lengthUnits || "m",
           passengerCapacity: data.passengerCapacity,
           distinguishingFeatures: data.distinguishingFeatures,
-          engines: Array.isArray(data.engines) ? data.engines.map(mapEngineDetail) : [], 
+          craftImageUrl: data.craftImageUrl,
+          engines: Array.isArray(data.engines) ? data.engines.map(mapEngineDetail) : [],
           propulsionType: data.propulsionType || "Outboard",
           propulsionOtherDesc: data.propulsionOtherDesc,
           hullMaterial: data.hullMaterial || "Fiberglass",
@@ -141,9 +142,9 @@ export default function EditRegistrationPage() {
           revocationReason: data.revocationReason,
           revokedAt: ensureDateObject(data.revokedAt),
           lastUpdatedByRef: (data.lastUpdatedByRef instanceof DocumentReference) ? data.lastUpdatedByRef.id : data.lastUpdatedByRef,
-          lastUpdatedAt: ensureDateObject(data.lastUpdatedAt) as Date, 
+          lastUpdatedAt: ensureDateObject(data.lastUpdatedAt) as Date,
           createdByRef: (data.createdByRef instanceof DocumentReference) ? data.createdByRef.id : data.createdByRef,
-          createdAt: ensureDateObject(data.createdAt) as Date, 
+          createdAt: ensureDateObject(data.createdAt) as Date,
         };
         setExistingRegistration(processedData);
       } else {
@@ -160,16 +161,16 @@ export default function EditRegistrationPage() {
   }, [registrationId, currentUser]);
 
   useEffect(() => {
-    if (currentUser !== undefined) { 
+    if (currentUser !== undefined) {
         fetchRegistrationDetails();
     }
   }, [registrationId, currentUser, fetchRegistrationDetails]);
 
 
-  if (loading || currentUser === undefined) { 
+  if (loading || currentUser === undefined) {
     return (
       <div className="flex h-64 justify-center items-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" /> 
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
         <p className="ml-2">Loading registration data...</p>
       </div>
     );
@@ -183,8 +184,8 @@ export default function EditRegistrationPage() {
       </div>
     );
   }
-  
-  if (!existingRegistration && !loading) { 
+
+  if (!existingRegistration && !loading) {
     return <div className="text-center py-10 text-muted-foreground">Registration not found.</div>;
   }
 

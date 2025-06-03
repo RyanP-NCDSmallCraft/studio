@@ -56,6 +56,7 @@ export async function getInspections(): Promise<Inspection[]> {
               craftMake: regData.craftMake,
               craftModel: regData.craftModel,
               craftType: regData.vesselType, // Assuming vesselType maps to craftType for display
+              craftImageUrl: regData.craftImageUrl, // Add craftImageUrl
             };
           }
         } catch (regError) {

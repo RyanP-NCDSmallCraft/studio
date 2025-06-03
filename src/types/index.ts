@@ -73,7 +73,7 @@ export interface Registration {
   hullIdNumber: string;
   craftLength: number;
   lengthUnits: "m" | "ft";
-  passengerCapacity?: number; // Added passenger capacity
+  passengerCapacity?: number;
   distinguishingFeatures?: string;
   propulsionType: "Inboard" | "Outboard" | "Both" | "Sail" | "Other";
   propulsionOtherDesc?: string;
@@ -85,6 +85,7 @@ export interface Registration {
   fuelTypeOtherDesc?: string;
   vesselType: "OpenBoat" | "CabinCruiser" | "Sailboat" | "PWC" | "Other";
   vesselTypeOtherDesc?: string;
+  craftImageUrl?: string; // Added for craft image
 
   engines?: EngineDetail[];
 
@@ -122,6 +123,7 @@ export interface Inspection {
     craftType?: string;
     craftMake?: string;
     craftModel?: string;
+    craftImageUrl?: string; // Added for craft image in inspection context
   };
   inspectorRef?: string | DocumentReference<User>;
   inspectorData?: {

@@ -61,7 +61,7 @@ export default function InspectionDetailPage() {
   const { currentUser, isInspector, isSupervisor, isAdmin, isRegistrar } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
-  
+
   const [inspection, setInspection] = useState<Inspection | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -88,7 +88,7 @@ export default function InspectionDetailPage() {
 
       if (inspectionSnap.exists()) {
         const data = inspectionSnap.data();
-        
+
         let registrationData: Inspection['registrationData'] = undefined;
         if (data.registrationRef) {
           try {
@@ -102,7 +102,7 @@ export default function InspectionDetailPage() {
             } else {
               throw new Error("Malformed registrationRef in inspection document.");
             }
-            
+
             const regDocSnap = await getDoc(doc(db, regRefPath));
             if (regDocSnap.exists()) {
               const regData = regDocSnap.data() as Registration;
@@ -113,6 +113,7 @@ export default function InspectionDetailPage() {
                 craftType: regData.vesselType,
                 craftMake: regData.craftMake,
                 craftModel: regData.craftModel,
+                craftImageUrl: regData.craftImageUrl, // Add craftImageUrl
               };
             }
           } catch (regError) {
@@ -146,7 +147,7 @@ export default function InspectionDetailPage() {
             console.warn("Failed to fetch linked inspector:", inspError);
           }
         }
-        
+
         const getRefId = (refField: any): string | undefined => {
             if (refField instanceof DocumentReference) return refField.id;
             if (typeof refField === 'string') return refField;
@@ -198,16 +199,16 @@ export default function InspectionDetailPage() {
 
   const getStatusBadgeVariant = (status?: Inspection["status"]) => {
      switch (status) {
-      case "Passed": return "default"; 
+      case "Passed": return "default";
       case "Failed": return "destructive";
       case "Scheduled": return "secondary";
-      case "InProgress": return "outline"; 
-      case "PendingReview": return "outline"; 
+      case "InProgress": return "outline";
+      case "PendingReview": return "outline";
       case "Cancelled": return "destructive";
       default: return "outline";
     }
   };
-  
+
   const getItemResultIcon = (result?: ChecklistItemResult["result"]) => {
     switch (result) {
       case "Pass": case "Yes": return <CheckSquare className="h-5 w-5 text-green-500" />;
@@ -217,7 +218,7 @@ export default function InspectionDetailPage() {
     }
   };
 
-  const canConductOrContinueInspection = 
+  const canConductOrContinueInspection =
     (isInspector && inspection?.inspectorData?.id === currentUser?.userId && (inspection?.status === "Scheduled" || inspection?.status === "InProgress")) ||
     ((isAdmin || isRegistrar || isSupervisor) && (inspection?.status === "Scheduled" || inspection?.status === "InProgress"));
 
@@ -231,7 +232,7 @@ export default function InspectionDetailPage() {
         return;
     }
     setIsReviewing(true);
-    
+
     const inspectionDocRef = doc(db, "inspections", inspection.inspectionId);
     const newStatus = action === "approve" ? "Passed" : "Failed";
     const updatePayload = {
@@ -320,7 +321,7 @@ export default function InspectionDetailPage() {
                     </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
-                    <AlertDialogHeader><AlertDialogTitle>Reject Inspection?</AlertDialogTitle><AlertDialogDescription>This will mark the inspection as 'Failed'. This action should be final. Consider adding comments for the inspector.</AlertDialogDescription></AlertDialogHeader>
+                    <AlertDialogHeader><AlertDialogTitle>Reject Inspection?</AlertDialogTitle><AlertDialogDescription>This action will mark the inspection as 'Failed'. This action should be final. Consider adding comments for the inspector.</AlertDialogDescription></AlertDialogHeader>
                     <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleReviewAction("reject")}>Confirm Reject</AlertDialogAction></AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
@@ -367,7 +368,7 @@ export default function InspectionDetailPage() {
             <CardHeader><CardTitle>Inspection Summary</CardTitle></CardHeader>
             <CardContent className="space-y-3 text-sm">
               <p><strong>Type:</strong> {inspection.inspectionType}</p>
-              <p><strong>Linked Registration:</strong> 
+              <p><strong>Linked Registration:</strong>
                 {typeof inspection.registrationRef === 'string' ? (
                   <Button variant="link" asChild className="p-0 h-auto"><Link href={`/registrations/${inspection.registrationRef}`}>{inspection.registrationData?.scaRegoNo || inspection.registrationRef}</Link></Button>
                 ) : "N/A"}
@@ -406,12 +407,16 @@ export default function InspectionDetailPage() {
                     ) : (
                         <p>Craft details unavailable.</p>
                     )}
-                    <Image src="https://placehold.co/600x400.png?text=Craft+Image" alt="Craft Image" width={600} height={400} className="mt-2 rounded-md aspect-video object-cover" data-ai-hint="boat generic"/>
+                    {inspection.registrationData?.craftImageUrl ? (
+                        <Image src={inspection.registrationData.craftImageUrl} alt="Craft Image" width={600} height={400} className="mt-2 rounded-md aspect-video object-cover" data-ai-hint="boat yacht"/>
+                    ) : (
+                        <Image src="https://placehold.co/600x400.png?text=Craft+Image" alt="Craft Image Placeholder" width={600} height={400} className="mt-2 rounded-md aspect-video object-cover" data-ai-hint="boat generic"/>
+                    )}
                 </CardContent>
             </Card>
         </div>
       </div>
-      
+
 
       <Card>
         <CardHeader><CardTitle>Checklist Results</CardTitle></CardHeader>
@@ -427,7 +432,7 @@ export default function InspectionDetailPage() {
                     </Badge>
                   </div>
                   {item.comments && <p className="text-sm text-muted-foreground mt-1 ml-7 pl-1 border-l-2 border-muted"><strong>Comments:</strong> {item.comments}</p>}
-                  
+
                 </Card>
               ))}
             </div>

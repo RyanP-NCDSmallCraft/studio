@@ -54,7 +54,7 @@ export async function getRegistrations(): Promise<Registration[]> {
         role: ownerData.role || 'Primary',
         surname: ownerData.surname || '',
         firstName: ownerData.firstName || '',
-        dob: ensureSerializableDate(ownerData.dob), 
+        dob: ensureSerializableDate(ownerData.dob),
         sex: ownerData.sex || 'Male',
         phone: ownerData.phone || '',
         fax: ownerData.fax,
@@ -70,9 +70,9 @@ export async function getRegistrations(): Promise<Registration[]> {
         description: docData.description || '',
         fileName: docData.fileName || '',
         fileUrl: docData.fileUrl || '',
-        uploadedAt: ensureSerializableDate(docData.uploadedAt), 
+        uploadedAt: ensureSerializableDate(docData.uploadedAt),
       });
-      
+
       const mapEngineDetail = (engineData: any): EngineDetail => ({
         engineId: engineData.engineId || crypto.randomUUID(),
         make: engineData.make,
@@ -110,6 +110,7 @@ export async function getRegistrations(): Promise<Registration[]> {
         lengthUnits: data.lengthUnits || 'm',
         passengerCapacity: data.passengerCapacity,
         distinguishingFeatures: data.distinguishingFeatures,
+        craftImageUrl: data.craftImageUrl,
         engines: Array.isArray(data.engines) ? data.engines.map(mapEngineDetail) : [],
         propulsionType: data.propulsionType || 'Outboard',
         propulsionOtherDesc: data.propulsionOtherDesc,
@@ -124,11 +125,11 @@ export async function getRegistrations(): Promise<Registration[]> {
         certificateGeneratedAt: ensureSerializableDate(data.certificateGeneratedAt),
         certificateFileName: data.certificateFileName,
         certificateFileUrl: data.certificateFileUrl,
-        lastUpdatedByRef: (data.lastUpdatedByRef instanceof DocumentReference) ? data.lastUpdatedByRef.id : data.lastUpdatedByRef, 
+        lastUpdatedByRef: (data.lastUpdatedByRef instanceof DocumentReference) ? data.lastUpdatedByRef.id : data.lastUpdatedByRef,
         lastUpdatedAt: ensureSerializableDate(data.lastUpdatedAt),
         createdByRef: (data.createdByRef instanceof DocumentReference) ? data.createdByRef.id : data.createdByRef,
         createdAt: ensureSerializableDate(data.createdAt),
-      } as Registration; 
+      } as Registration;
     });
     return registrations;
   } catch (error: any) {
@@ -136,7 +137,7 @@ export async function getRegistrations(): Promise<Registration[]> {
     const originalErrorCode = error.code || "N/A";
     console.error(
       `Error fetching registrations in Server Action. Original Error Code: ${originalErrorCode}, Message: ${originalErrorMessage}`,
-      error 
+      error
     );
     throw new Error(
       `Failed to fetch registrations from server. Original error: [${originalErrorCode}] ${originalErrorMessage}`
@@ -159,9 +160,9 @@ interface ClientRegistrationFormData extends Omit<Registration,
   'scaRegoNo' | 'interimRegoNo' | 'approvedAt' | 'effectiveDate' | 'expiryDate' | // Not set on creation
   'certificateGeneratedAt' | 'certificateFileName' | 'certificateFileUrl' // Not set on creation
 > {
-  owners: Array<Omit<Owner, 'dob'> & { dob: Date | string }>; 
-  proofOfOwnershipDocs: Array<Omit<ProofOfOwnershipDoc, 'uploadedAt'> & { uploadedAt: Date | string }>; 
-  paymentDate?: Date | string; 
+  owners: Array<Omit<Owner, 'dob'> & { dob: Date | string }>;
+  proofOfOwnershipDocs: Array<Omit<ProofOfOwnershipDoc, 'uploadedAt'> & { uploadedAt: Date | string }>;
+  paymentDate?: Date | string;
 }
 
 export async function createRegistration(
@@ -178,7 +179,7 @@ export async function createRegistration(
   try {
     const registrationDataForFirestore: { [key: string]: any } = {
       registrationType: clientData.registrationType,
-      status: clientData.status, 
+      status: clientData.status,
       owners: clientData.owners.map(owner => ({
         ...owner,
         // Ensure dob is a Firestore Timestamp
@@ -197,12 +198,13 @@ export async function createRegistration(
       craftLength: clientData.craftLength,
       lengthUnits: clientData.lengthUnits,
       passengerCapacity: clientData.passengerCapacity, // Added
+      craftImageUrl: clientData.craftImageUrl, // Added
       propulsionType: clientData.propulsionType,
       hullMaterial: clientData.hullMaterial,
       craftUse: clientData.craftUse,
       fuelType: clientData.fuelType,
       vesselType: clientData.vesselType,
-      safetyEquipIssued: clientData.safetyEquipIssued || false, 
+      safetyEquipIssued: clientData.safetyEquipIssued || false,
 
       // --- Fields set by the server ---
       createdByRef: doc(db, "users", currentUserId) as DocumentReference<User>,
@@ -217,20 +219,20 @@ export async function createRegistration(
     if (clientData.paymentReceiptNumber !== undefined) registrationDataForFirestore.paymentReceiptNumber = clientData.paymentReceiptNumber;
     if (clientData.bankStampRef !== undefined) registrationDataForFirestore.bankStampRef = clientData.bankStampRef;
     if (clientData.paymentAmount !== undefined && clientData.paymentAmount !== null) registrationDataForFirestore.paymentAmount = clientData.paymentAmount;
-    
-    if (clientData.paymentDate !== undefined && clientData.paymentDate !== null) { 
+
+    if (clientData.paymentDate !== undefined && clientData.paymentDate !== null) {
       registrationDataForFirestore.paymentDate = clientData.paymentDate instanceof Timestamp ? clientData.paymentDate : Timestamp.fromDate(new Date(clientData.paymentDate as string | Date));
     }
     if (clientData.safetyCertNumber !== undefined) registrationDataForFirestore.safetyCertNumber = clientData.safetyCertNumber;
     if (clientData.safetyEquipReceiptNumber !== undefined) registrationDataForFirestore.safetyEquipReceiptNumber = clientData.safetyEquipReceiptNumber;
     if (clientData.distinguishingFeatures !== undefined) registrationDataForFirestore.distinguishingFeatures = clientData.distinguishingFeatures;
-    
+
     if (clientData.propulsionOtherDesc !== undefined) registrationDataForFirestore.propulsionOtherDesc = clientData.propulsionOtherDesc;
     if (clientData.hullMaterialOtherDesc !== undefined) registrationDataForFirestore.hullMaterialOtherDesc = clientData.hullMaterialOtherDesc;
     if (clientData.craftUseOtherDesc !== undefined) registrationDataForFirestore.craftUseOtherDesc = clientData.craftUseOtherDesc;
     if (clientData.fuelTypeOtherDesc !== undefined) registrationDataForFirestore.fuelTypeOtherDesc = clientData.fuelTypeOtherDesc;
     if (clientData.vesselTypeOtherDesc !== undefined) registrationDataForFirestore.vesselTypeOtherDesc = clientData.vesselTypeOtherDesc;
-    
+
     if (clientData.engines) { // Added
       registrationDataForFirestore.engines = clientData.engines.map(engine => ({
         make: engine.make || null,
@@ -243,12 +245,12 @@ export async function createRegistration(
     if (clientData.status === "Submitted") {
       registrationDataForFirestore.submittedAt = Timestamp.now();
     }
-    
+
     console.log("Server Action createRegistration: Data to be written to Firestore:", JSON.stringify(registrationDataForFirestore, null, 2));
 
     const registrationsCol = collection(db, "registrations");
     const docRef = await addDoc(registrationsCol, registrationDataForFirestore);
-    
+
     console.log("Server Action createRegistration: Document written with ID:", docRef.id);
     return { success: true, registrationId: docRef.id };
 

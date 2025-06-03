@@ -65,7 +65,7 @@ export default function RegistrationDetailPage() {
   const [registration, setRegistration] = useState<Registration | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [linkedInspections, setLinkedInspections] = useState<Inspection[]>([]);
   const [loadingLinkedInspections, setLoadingLinkedInspections] = useState(false);
   const [errorLinkedInspections, setErrorLinkedInspections] = useState<string | null>(null);
@@ -134,7 +134,8 @@ export default function RegistrationDetailPage() {
           lengthUnits: data.lengthUnits,
           passengerCapacity: data.passengerCapacity,
           distinguishingFeatures: data.distinguishingFeatures,
-          engines: data.engines || [], 
+          craftImageUrl: data.craftImageUrl,
+          engines: data.engines || [],
           propulsionType: data.propulsionType,
           propulsionOtherDesc: data.propulsionOtherDesc,
           hullMaterial: data.hullMaterial,
@@ -208,7 +209,7 @@ export default function RegistrationDetailPage() {
   }, [registrationId, currentUser]);
 
   useEffect(() => {
-    if (currentUser !== undefined) { 
+    if (currentUser !== undefined) {
         fetchRegistrationDetails();
     }
   }, [registrationId, currentUser, fetchRegistrationDetails]);
@@ -252,7 +253,7 @@ export default function RegistrationDetailPage() {
     }
 
     const registrationDocRef = doc(db, "registrations", registration.registrationId);
-    
+
     const updatePayload: Partial<Registration> = {
       status: "Approved",
       scaRegoNo: scaRegoNo,
@@ -264,7 +265,7 @@ export default function RegistrationDetailPage() {
     };
 
     try {
-      await updateDoc(registrationDocRef, updatePayload as any); 
+      await updateDoc(registrationDocRef, updatePayload as any);
       toast({ title: "Registration Approved", description: `SCA Rego No: ${scaRegoNo} assigned.` });
       setApproveModalOpen(false);
       fetchRegistrationDetails(); // Re-fetch to update state
@@ -289,7 +290,7 @@ export default function RegistrationDetailPage() {
        toast({ title: "Rejection Failed", description: e.message || "Could not update registration.", variant: "destructive" });
     }
   };
-  
+
   const handleRequestInfo = async () => {
     if (!currentUser?.userId || !registration) return;
     const registrationDocRef = doc(db, "registrations", registration.registrationId);
@@ -526,7 +527,7 @@ export default function RegistrationDetailPage() {
           </CardContent>
         </Card>
       )}
-      
+
       {registration.status === "RequiresInfo" && (
         <Card className="border-yellow-500 bg-yellow-500/10">
           <CardHeader>
@@ -570,6 +571,18 @@ export default function RegistrationDetailPage() {
           <Card>
             <CardHeader><CardTitle>Craft Details</CardTitle></CardHeader>
             <CardContent className="space-y-4">
+              {registration.craftImageUrl && (
+                <div className="mb-4">
+                  <Image
+                    src={registration.craftImageUrl}
+                    alt={`Image of ${registration.craftMake} ${registration.craftModel}`}
+                    width={600}
+                    height={400}
+                    className="rounded-md aspect-video object-cover"
+                    data-ai-hint="boat yacht"
+                  />
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div><strong>Make:</strong> {registration.craftMake}</div>
                 <div><strong>Model:</strong> {registration.craftModel}</div>
@@ -645,7 +658,7 @@ export default function RegistrationDetailPage() {
               </CardContent>
             </Card>
           )}
-          
+
            {(registration.safetyCertNumber || registration.safetyEquipIssued) && (
             <Card>
               <CardHeader><CardTitle>Safety Equipment</CardTitle></CardHeader>
