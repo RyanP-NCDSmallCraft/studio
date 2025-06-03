@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
 import type { Inspection, ChecklistItemResult, Registration, User } from "@/types";
-import { ClipboardList, Ship, User as UserIconLucide, CalendarDays, CheckSquare, XSquare, AlertTriangle, Edit, MessageSquare, Image as ImageIcon, Play, ShieldCheck, ShieldX, Loader2, ArrowLeft } from "lucide-react";
+import { ClipboardList, Ship, User as UserIconLucide, CalendarDays, CheckSquare, XSquare, AlertTriangle, Edit, MessageSquare, Image as ImageIcon, Play, ShieldCheck, ShieldX, Loader2, ArrowLeft, FileSpreadsheet } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { formatFirebaseTimestamp } from '@/lib/utils';
@@ -113,7 +113,7 @@ export default function InspectionDetailPage() {
                 craftType: regData.vesselType,
                 craftMake: regData.craftMake,
                 craftModel: regData.craftModel,
-                craftImageUrl: regData.craftImageUrl, // Add craftImageUrl
+                craftImageUrl: regData.craftImageUrl, 
               };
             }
           } catch (regError) {
@@ -327,6 +327,13 @@ export default function InspectionDetailPage() {
             </AlertDialog>
             </>
           )}
+           {inspection.status === "Passed" && (
+            <Button asChild>
+              <Link href={`/inspections/${inspectionId}/safety-certificate`}>
+                <FileSpreadsheet className="mr-2 h-4 w-4" /> Generate Safety Certificate
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -444,5 +451,4 @@ export default function InspectionDetailPage() {
     </div>
   );
 }
-
     
