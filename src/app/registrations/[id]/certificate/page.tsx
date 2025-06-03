@@ -2,7 +2,7 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import type { Registration, Owner } from "@/types"; // Added Owner
+import type { Registration, Owner, User } from "@/types"; // Added User
 import { FileSpreadsheet, Download, Sailboat, ArrowLeft, Loader2, AlertTriangle } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { formatFirebaseTimestamp } from '@/lib/utils';
@@ -51,6 +51,7 @@ export default function CertificatePreviewPage() {
   const { toast } = useToast();
 
   const [registration, setRegistration] = useState<Registration | null>(null);
+  const [approvedByName, setApprovedByName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,6 +63,7 @@ export default function CertificatePreviewPage() {
     }
     setLoading(true);
     setError(null);
+    setApprovedByName(null);
 
     try {
       const regDocRef = doc(db, "registrations", registrationId);
@@ -75,6 +77,34 @@ export default function CertificatePreviewPage() {
           setLoading(false);
           return;
         }
+
+        if (data.approvedAt && data.lastUpdatedByRef) {
+          try {
+            let approverUserRef: DocumentReference<User>;
+            if (data.lastUpdatedByRef instanceof DocumentReference) {
+              approverUserRef = data.lastUpdatedByRef as DocumentReference<User>;
+            } else if (typeof data.lastUpdatedByRef === 'string') {
+              approverUserRef = doc(db, "users", data.lastUpdatedByRef) as DocumentReference<User>;
+            } else {
+               console.warn("Approver reference is not a DocumentReference or string ID for reg:", registrationId);
+            }
+            
+            if (approverUserRef!) {
+                const approverDocSnap = await getDoc(approverUserRef);
+                if (approverDocSnap.exists()) {
+                    const approverData = approverDocSnap.data() as User;
+                    setApprovedByName(approverData.displayName || approverData.email || "N/A");
+                } else {
+                    console.warn("Approver user document not found for ref:", data.lastUpdatedByRef);
+                    setApprovedByName("Details Unavailable");
+                }
+            }
+          } catch (userError) {
+            console.error("Error fetching approver user data:", userError);
+            setApprovedByName("Error fetching approver");
+          }
+        }
+
 
         const mapOwner = (ownerData: any): Owner => ({
           ...ownerData,
@@ -269,12 +299,18 @@ export default function CertificatePreviewPage() {
                 <h3 className="font-semibold text-primary mb-1">Expiry Date:</h3>
                 <p>{formatFirebaseTimestamp(registration.expiryDate, "MMMM dd, yyyy")}</p>
               </div>
+               {approvedByName && (
+                <div className="md:col-span-2">
+                    <h3 className="font-semibold text-primary mb-1">Approved By:</h3>
+                    <p>{approvedByName} (Registrar)</p>
+                </div>
+              )}
             </div>
             
             <div className="mt-10 text-center">
                 <p className="text-sm text-muted-foreground">Official Stamp / Signature Area</p>
-                <div className="h-24 w-24 border-2 border-dashed border-muted-foreground mx-auto mt-2 rounded-full flex items-center justify-center text-muted-foreground">
-                    [Seal Here]
+                <div className="h-32 w-32 border-2 border-dashed border-muted-foreground mx-auto mt-2 rounded-full flex items-center justify-center text-muted-foreground">
+                    {/* Text removed from here */}
                 </div>
             </div>
           </CardContent>
@@ -288,3 +324,4 @@ export default function CertificatePreviewPage() {
     </div>
   );
 }
+
