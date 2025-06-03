@@ -96,6 +96,7 @@ export default function SafetyCertificatePage() {
       const currentInspection: Inspection = {
         inspectionId: inspectionSnap.id,
         ...inspectionData,
+        displayId: inspectionData.displayId, // Added displayId
         registrationRef: (inspectionData.registrationRef instanceof DocumentReference) ? inspectionData.registrationRef.id : inspectionData.registrationRef,
         inspectorRef: inspectionData.inspectorRef ? ((inspectionData.inspectorRef instanceof DocumentReference) ? inspectionData.inspectorRef.id : inspectionData.inspectorRef) : undefined,
         reviewedByRef: inspectionData.reviewedByRef ? ((inspectionData.reviewedByRef instanceof DocumentReference) ? inspectionData.reviewedByRef.id : inspectionData.reviewedByRef) : undefined,
@@ -244,7 +245,7 @@ export default function SafetyCertificatePage() {
 
           <CardContent className="space-y-4 md:space-y-6 text-sm md:text-base">
             <div className="text-center my-4 md:my-6">
-              <p className="text-lg md:text-xl">Certificate No: <span className="font-semibold">{inspection.inspectionId}</span></p>
+              <p className="text-lg md:text-xl">Certificate No: <span className="font-semibold">{inspection.displayId || inspection.inspectionId}</span></p>
             </div>
             
             <Separator />

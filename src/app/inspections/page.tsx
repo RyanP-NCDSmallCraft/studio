@@ -166,6 +166,7 @@ export default function InspectionListPage() {
 
         return {
           inspectionId: docSnapshot.id,
+          displayId: data.displayId, // Added displayId
           registrationRef: getRefId(data.registrationRef),
           registrationData,
           inspectorRef: getRefId(data.inspectorRef),
@@ -349,7 +350,10 @@ export default function InspectionListPage() {
 
                   return (
                   <TableRow key={insp.inspectionId}>
-                    <TableCell className="font-medium">{insp.registrationData?.scaRegoNo || insp.inspectionId}</TableCell>
+                    <TableCell className="font-medium">
+                        <div>{insp.displayId || insp.inspectionId}</div>
+                        <div className="text-xs text-muted-foreground">{insp.registrationData?.scaRegoNo || "N/A"}</div>
+                    </TableCell>
                     <TableCell>
                       <div>{insp.registrationData?.craftMake} {insp.registrationData?.craftModel}</div>
                       <div className="text-xs text-muted-foreground">HIN: {insp.registrationData?.hullIdNumber || 'N/A'}</div>

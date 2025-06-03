@@ -85,7 +85,7 @@ export interface Registration {
   fuelTypeOtherDesc?: string;
   vesselType: "OpenBoat" | "CabinCruiser" | "Sailboat" | "PWC" | "Other";
   vesselTypeOtherDesc?: string;
-  craftImageUrl?: string; // Added for craft image
+  craftImageUrl?: string;
 
   engines?: EngineDetail[];
 
@@ -115,6 +115,7 @@ export interface ChecklistItemResult {
 
 export interface Inspection {
   inspectionId: string;
+  displayId?: string; // For standardized, human-readable ID like INSP-00001
   registrationRef: string | DocumentReference<Registration>;
   registrationData?: {
     id: string;
@@ -123,7 +124,7 @@ export interface Inspection {
     craftType?: string;
     craftMake?: string;
     craftModel?: string;
-    craftImageUrl?: string; // Added for craft image in inspection context
+    craftImageUrl?: string;
   };
   inspectorRef?: string | DocumentReference<User>;
   inspectorData?: {

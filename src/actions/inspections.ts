@@ -56,7 +56,7 @@ export async function getInspections(): Promise<Inspection[]> {
               craftMake: regData.craftMake,
               craftModel: regData.craftModel,
               craftType: regData.vesselType, // Assuming vesselType maps to craftType for display
-              craftImageUrl: regData.craftImageUrl, // Add craftImageUrl
+              craftImageUrl: regData.craftImageUrl,
             };
           }
         } catch (regError) {
@@ -88,6 +88,7 @@ export async function getInspections(): Promise<Inspection[]> {
 
       return {
         inspectionId: docSnapshot.id,
+        displayId: data.displayId, // Added displayId
         registrationRef: (data.registrationRef as DocumentReference<Registration>)?.id || data.registrationRef,
         registrationData,
         inspectorRef: (data.inspectorRef as DocumentReference<User>)?.id || data.inspectorRef,

@@ -157,6 +157,7 @@ export default function InspectionDetailPage() {
 
         const fetchedInspection: Inspection = {
           inspectionId: inspectionSnap.id,
+          displayId: data.displayId, // Added displayId
           registrationRef: getRefId(data.registrationRef) || data.registrationRef?.path, // Store ID or path for linking
           registrationData,
           inspectorRef: getRefId(data.inspectorRef) || data.inspectorRef?.path,
@@ -247,7 +248,7 @@ export default function InspectionDetailPage() {
         await updateDoc(inspectionDocRef, updatePayload);
         toast({
             title: `Inspection ${action === "approve" ? "Approved" : "Rejected"}`,
-            description: `Inspection ${inspection.inspectionId} has been marked as ${newStatus}.`
+            description: `Inspection ${inspection.displayId || inspection.inspectionId} has been marked as ${newStatus}.`
         });
         fetchInspectionDetails(); // Re-fetch to update local state
     } catch (e: any) {
@@ -279,7 +280,7 @@ export default function InspectionDetailPage() {
           </Button>
           <ClipboardList className="h-10 w-10 text-primary" />
           <div>
-            <h1 className="text-3xl font-bold">Inspection: {inspection.inspectionId}</h1>
+            <h1 className="text-3xl font-bold">Inspection: {inspection.displayId || inspection.inspectionId}</h1>
             <Badge variant={getStatusBadgeVariant(inspection.status)} className="mt-1">{inspection.status}</Badge>
           </div>
         </div>
