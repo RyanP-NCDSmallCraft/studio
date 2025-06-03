@@ -54,7 +54,7 @@ export async function getRegistrations(): Promise<Registration[]> {
         role: ownerData.role || 'Primary',
         surname: ownerData.surname || '',
         firstName: ownerData.firstName || '',
-        dob: ensureSerializableDate(ownerData.dob), // Will be Date | undefined
+        dob: ensureSerializableDate(ownerData.dob), 
         sex: ownerData.sex || 'Male',
         phone: ownerData.phone || '',
         fax: ownerData.fax,
@@ -70,7 +70,7 @@ export async function getRegistrations(): Promise<Registration[]> {
         description: docData.description || '',
         fileName: docData.fileName || '',
         fileUrl: docData.fileUrl || '',
-        uploadedAt: ensureSerializableDate(docData.uploadedAt), // Will be Date | undefined
+        uploadedAt: ensureSerializableDate(docData.uploadedAt), 
       });
       
       const mapEngineDetail = (engineData: any): EngineDetail => ({
@@ -108,6 +108,7 @@ export async function getRegistrations(): Promise<Registration[]> {
         hullIdNumber: data.hullIdNumber || '',
         craftLength: data.craftLength || 0,
         lengthUnits: data.lengthUnits || 'm',
+        passengerCapacity: data.passengerCapacity,
         distinguishingFeatures: data.distinguishingFeatures,
         engines: Array.isArray(data.engines) ? data.engines.map(mapEngineDetail) : [],
         propulsionType: data.propulsionType || 'Outboard',
@@ -123,11 +124,11 @@ export async function getRegistrations(): Promise<Registration[]> {
         certificateGeneratedAt: ensureSerializableDate(data.certificateGeneratedAt),
         certificateFileName: data.certificateFileName,
         certificateFileUrl: data.certificateFileUrl,
-        lastUpdatedByRef: (data.lastUpdatedByRef as DocumentReference<User>)?.id, 
+        lastUpdatedByRef: (data.lastUpdatedByRef instanceof DocumentReference) ? data.lastUpdatedByRef.id : data.lastUpdatedByRef, 
         lastUpdatedAt: ensureSerializableDate(data.lastUpdatedAt),
-        createdByRef: (data.createdByRef as DocumentReference<User>)?.id,
+        createdByRef: (data.createdByRef instanceof DocumentReference) ? data.createdByRef.id : data.createdByRef,
         createdAt: ensureSerializableDate(data.createdAt),
-      } as Registration; // Cast to Registration, understanding dates are now Date | undefined
+      } as Registration; 
     });
     return registrations;
   } catch (error: any) {
@@ -195,6 +196,7 @@ export async function createRegistration(
       hullIdNumber: clientData.hullIdNumber,
       craftLength: clientData.craftLength,
       lengthUnits: clientData.lengthUnits,
+      passengerCapacity: clientData.passengerCapacity, // Added
       propulsionType: clientData.propulsionType,
       hullMaterial: clientData.hullMaterial,
       craftUse: clientData.craftUse,
@@ -229,10 +231,14 @@ export async function createRegistration(
     if (clientData.fuelTypeOtherDesc !== undefined) registrationDataForFirestore.fuelTypeOtherDesc = clientData.fuelTypeOtherDesc;
     if (clientData.vesselTypeOtherDesc !== undefined) registrationDataForFirestore.vesselTypeOtherDesc = clientData.vesselTypeOtherDesc;
     
-    // Note: engine fields would need to be mapped here if this action was active
-    // if (clientData.engineHorsepower !== undefined && clientData.engineHorsepower !== null) registrationDataForFirestore.engineHorsepower = clientData.engineHorsepower;
-    // if (clientData.engineMake !== undefined) registrationDataForFirestore.engineMake = clientData.engineMake;
-    // if (clientData.engineSerialNumbers !== undefined) registrationDataForFirestore.engineSerialNumbers = clientData.engineSerialNumbers;
+    if (clientData.engines) { // Added
+      registrationDataForFirestore.engines = clientData.engines.map(engine => ({
+        make: engine.make || null,
+        horsepower: engine.horsepower || null,
+        serialNumber: engine.serialNumber || null,
+      }));
+    }
+
 
     if (clientData.status === "Submitted") {
       registrationDataForFirestore.submittedAt = Timestamp.now();

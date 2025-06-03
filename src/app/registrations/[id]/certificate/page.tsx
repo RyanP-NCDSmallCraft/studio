@@ -2,7 +2,7 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import type { Registration, Owner, User } from "@/types"; // Added User
+import type { Registration, Owner, User } from "@/types"; 
 import { FileSpreadsheet, Download, Sailboat, ArrowLeft, Loader2, AlertTriangle } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { formatFirebaseTimestamp } from '@/lib/utils';
@@ -140,6 +140,7 @@ export default function CertificatePreviewPage() {
           hullIdNumber: data.hullIdNumber || "",
           craftLength: data.craftLength || 0,
           lengthUnits: data.lengthUnits || "m",
+          passengerCapacity: data.passengerCapacity,
           distinguishingFeatures: data.distinguishingFeatures,
           engines: data.engines || [],
           propulsionType: data.propulsionType || "Outboard",
@@ -282,6 +283,7 @@ export default function CertificatePreviewPage() {
               <p><strong>Year:</strong> {registration.craftYear}</p>
               <p><strong>Hull ID (HIN):</strong> {registration.hullIdNumber}</p>
               <p><strong>Length:</strong> {registration.craftLength}{registration.lengthUnits}</p>
+              <p><strong>Passenger Capacity:</strong> {registration.passengerCapacity || "N/A"}</p>
               <p><strong>Color:</strong> {registration.craftColor}</p>
               <p><strong>Vessel Type:</strong> {registration.vesselType} {registration.vesselTypeOtherDesc && `(${registration.vesselTypeOtherDesc})`}</p>
               <p><strong>Propulsion:</strong> {registration.propulsionType} {registration.propulsionOtherDesc && `(${registration.propulsionOtherDesc})`}</p>
@@ -310,7 +312,7 @@ export default function CertificatePreviewPage() {
             <div className="mt-10 text-center">
                 <p className="text-sm text-muted-foreground">Official Stamp / Signature Area</p>
                 <div className="h-32 w-32 border-2 border-dashed border-muted-foreground mx-auto mt-2 rounded-full flex items-center justify-center text-muted-foreground">
-                    {/* Text removed from here */}
+                   
                 </div>
             </div>
           </CardContent>
@@ -324,4 +326,5 @@ export default function CertificatePreviewPage() {
     </div>
   );
 }
+
 

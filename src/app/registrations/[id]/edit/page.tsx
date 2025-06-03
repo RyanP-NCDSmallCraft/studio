@@ -119,8 +119,9 @@ export default function EditRegistrationPage() {
           hullIdNumber: data.hullIdNumber || "",
           craftLength: data.craftLength || 0,
           lengthUnits: data.lengthUnits || "m",
+          passengerCapacity: data.passengerCapacity,
           distinguishingFeatures: data.distinguishingFeatures,
-          engines: Array.isArray(data.engines) ? data.engines.map(mapEngineDetail) : [], // Process engines
+          engines: Array.isArray(data.engines) ? data.engines.map(mapEngineDetail) : [], 
           propulsionType: data.propulsionType || "Outboard",
           propulsionOtherDesc: data.propulsionOtherDesc,
           hullMaterial: data.hullMaterial || "Fiberglass",

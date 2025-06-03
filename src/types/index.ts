@@ -73,6 +73,7 @@ export interface Registration {
   hullIdNumber: string;
   craftLength: number;
   lengthUnits: "m" | "ft";
+  passengerCapacity?: number; // Added passenger capacity
   distinguishingFeatures?: string;
   propulsionType: "Inboard" | "Outboard" | "Both" | "Sail" | "Other";
   propulsionOtherDesc?: string;
@@ -85,7 +86,7 @@ export interface Registration {
   vesselType: "OpenBoat" | "CabinCruiser" | "Sailboat" | "PWC" | "Other";
   vesselTypeOtherDesc?: string;
 
-  engines?: EngineDetail[]; // Replaced individual engine fields
+  engines?: EngineDetail[];
 
   certificateGeneratedAt?: Timestamp | Date | string;
   certificateFileName?: string;

@@ -77,6 +77,7 @@ const registrationFormSchema = z.object({
   hullIdNumber: z.string().min(1, "Hull ID number is required"),
   craftLength: z.number({invalid_type_error: "Length must be a number"}).positive("Length must be positive"),
   lengthUnits: z.enum(["m", "ft"]),
+  passengerCapacity: z.number({invalid_type_error: "Capacity must be a number"}).int().positive("Passenger capacity must be a positive number").optional(),
   distinguishingFeatures: z.string().optional().default(""),
   
   engines: z.array(engineDetailSchema).optional().default([]),
@@ -175,6 +176,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       hullIdNumber: existingRegistrationData.hullIdNumber || "",
       craftLength: typeof existingRegistrationData.craftLength === 'number' ? existingRegistrationData.craftLength : 0,
       lengthUnits: existingRegistrationData.lengthUnits || "m",
+      passengerCapacity: existingRegistrationData.passengerCapacity || undefined,
       distinguishingFeatures: existingRegistrationData.distinguishingFeatures || "",
       engines: (existingRegistrationData.engines || []).map(e => ({
         engineId: e.engineId || crypto.randomUUID(),
@@ -214,6 +216,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       hullIdNumber: "",
       craftLength: 0, 
       lengthUnits: "m",
+      passengerCapacity: undefined,
       distinguishingFeatures: "",
       engines: [],
       propulsionType: "Outboard",
@@ -305,8 +308,9 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       hullIdNumber: data.hullIdNumber,
       craftLength: data.craftLength,
       lengthUnits: data.lengthUnits,
-      engines: (data.engines || []).map(engine => ({ // Map engines array
-        make: engine.make || null, // Use null for Firestore if empty, or ""
+      passengerCapacity: data.passengerCapacity,
+      engines: (data.engines || []).map(engine => ({ 
+        make: engine.make || null, 
         horsepower: engine.horsepower || null,
         serialNumber: engine.serialNumber || null,
       })),
@@ -345,7 +349,6 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
     if (data.fuelTypeOtherDesc) registrationDataForFirestore.fuelTypeOtherDesc = data.fuelTypeOtherDesc;
     if (data.vesselTypeOtherDesc) registrationDataForFirestore.vesselTypeOtherDesc = data.vesselTypeOtherDesc;
     
-    // Removed old single engine fields from here
 
     if (submissionStatus === "Submitted") {
       registrationDataForFirestore.submittedAt = Timestamp.now();
@@ -479,6 +482,25 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                 />
                 <FormField control={form.control} name="lengthUnits" render={({ field }) => (<FormItem><FormLabel>Units *</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="m">Meters (m)</SelectItem><SelectItem value="ft">Feet (ft)</SelectItem></SelectContent></Select><FormMessage /></FormItem>)} />
               </div>
+              <FormField control={form.control} name="passengerCapacity" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Passenger Capacity</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        placeholder="e.g., 10" 
+                        {...field} 
+                        value={field.value === undefined || field.value === null || isNaN(Number(field.value)) ? '' : Number(field.value)}
+                        onChange={e => {
+                          const val = e.target.value;
+                          field.onChange(val === '' || isNaN(parseInt(val, 10)) ? undefined : parseInt(val, 10));
+                        }} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} 
+              />
             </div>
             
             <Separator className="my-4" />

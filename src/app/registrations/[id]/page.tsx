@@ -132,8 +132,9 @@ export default function RegistrationDetailPage() {
           hullIdNumber: data.hullIdNumber,
           craftLength: data.craftLength,
           lengthUnits: data.lengthUnits,
+          passengerCapacity: data.passengerCapacity,
           distinguishingFeatures: data.distinguishingFeatures,
-          engines: data.engines || [], // Ensure engines array is processed
+          engines: data.engines || [], 
           propulsionType: data.propulsionType,
           propulsionOtherDesc: data.propulsionOtherDesc,
           hullMaterial: data.hullMaterial,
@@ -576,6 +577,7 @@ export default function RegistrationDetailPage() {
                 <div><strong>Color:</strong> {registration.craftColor}</div>
                 <div><strong>Hull ID:</strong> {registration.hullIdNumber}</div>
                 <div><strong>Length:</strong> {registration.craftLength} {registration.lengthUnits}</div>
+                <div><strong>Passenger Capacity:</strong> {registration.passengerCapacity || 'N/A'}</div>
                 <div><strong>Propulsion:</strong> {registration.propulsionType} {registration.propulsionOtherDesc && `(${registration.propulsionOtherDesc})`}</div>
                 <div><strong>Hull Material:</strong> {registration.hullMaterial} {registration.hullMaterialOtherDesc && `(${registration.hullMaterialOtherDesc})`}</div>
                 <div><strong>Craft Use:</strong> {registration.craftUse} {registration.craftUseOtherDesc && `(${registration.craftUseOtherDesc})`}</div>
