@@ -90,7 +90,7 @@ export function UserFormDialog({ mode, user, open, onOpenChange, onUserUpdated }
 
   const onSubmit = async (data: UserFormData) => {
     if (!adminUser?.userId) {
-      toast({ title: "Error", description: "Admin user not found.", variant: "destructive" });
+      toast({ title: "Error", description: "Admin user performing the action not found. Please re-login.", variant: "destructive" });
       return;
     }
 
@@ -124,11 +124,21 @@ export function UserFormDialog({ mode, user, open, onOpenChange, onUserUpdated }
         onUserUpdated(); // Refresh the list
         onOpenChange(false); // Close dialog
       } else {
+        // This is the part where the original error is thrown.
+        // The error message from result.error is what's shown in the console.
         throw new Error(result.error || `Failed to ${mode} user profile.`);
       }
     } catch (error: any) {
       console.error(`Error ${mode === 'create' ? 'creating' : 'updating'} user profile:`, error);
-      toast({ title: `Operation Failed`, description: error.message || `Could not ${mode} user profile.`, variant: "destructive" });
+      let description = error.message || `Could not ${mode} user profile.`;
+      if (error.message && error.message.toLowerCase().includes("permission")) {
+        description = `Server-side permission check failed: ${error.message}. Ensure your account has the necessary admin rights in Firestore and is active.`;
+      }
+      toast({ 
+        title: `Operation Failed`, 
+        description: description, 
+        variant: "destructive" 
+      });
     }
   };
 
