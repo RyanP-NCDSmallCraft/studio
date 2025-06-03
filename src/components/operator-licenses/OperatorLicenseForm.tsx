@@ -143,13 +143,13 @@ export function OperatorLicenseForm({
     phoneMobile: combinedData?.phoneMobile || "",
     email: combinedData?.email || "",
     postalAddress: combinedData?.postalAddress || "",
-    heightCm: combinedData?.heightCm || null,
-    eyeColor: combinedData?.eyeColor || "",
-    skinColor: combinedData?.skinColor || "",
-    hairColor: combinedData?.hairColor || "",
-    weightKg: combinedData?.weightKg || null,
-    bodyMarks: combinedData?.bodyMarks || "",
-    idSizePhotoUrl: combinedData?.idSizePhotoUrl || "",
+    heightCm: combinedData?.heightCm ?? null,
+    eyeColor: combinedData?.eyeColor ?? "",
+    skinColor: combinedData?.skinColor ?? "",
+    hairColor: combinedData?.hairColor ?? "",
+    weightKg: combinedData?.weightKg ?? null,
+    bodyMarks: combinedData?.bodyMarks ?? "",
+    idSizePhotoUrl: combinedData?.idSizePhotoUrl ?? "",
     attachedDocuments: (combinedData?.attachedDocuments || []).map(doc => ({
         ...doc,
         uploadedAt: doc.uploadedAt instanceof Timestamp ? doc.uploadedAt : Timestamp.fromDate(new Date(doc.uploadedAt as string)),
@@ -160,7 +160,7 @@ export function OperatorLicenseForm({
     methodOfPayment: combinedData?.methodOfPayment || undefined,
     paymentBy: combinedData?.paymentBy || "",
     paymentDateString: combinedData?.paymentDate ? format((combinedData.paymentDate instanceof Timestamp ? combinedData.paymentDate.toDate() : new Date(combinedData.paymentDate as any)), "yyyy-MM-dd") : "",
-    paymentAmount: combinedData?.paymentAmount || null,
+    paymentAmount: combinedData?.paymentAmount ?? null,
     issuedAtString: combinedData?.issuedAt ? format((combinedData.issuedAt instanceof Timestamp ? combinedData.issuedAt.toDate() : new Date(combinedData.issuedAt as any)), "yyyy-MM-dd") : "",
     expiryDateString: combinedData?.expiryDate ? format((combinedData.expiryDate instanceof Timestamp ? combinedData.expiryDate.toDate() : new Date(combinedData.expiryDate as any)), "yyyy-MM-dd") : "",
     licenseClass: combinedData?.licenseClass || "",
@@ -228,51 +228,93 @@ export function OperatorLicenseForm({
       const finalOperatorRef = doc(db, "operators", operatorId!) as DocumentReference<Operator>;
 
       // 2. Prepare License Application Data
-      const licenseDocData: Omit<OperatorLicense, 'licenseApplicationId' | 'createdAt' | 'lastUpdatedAt' | 'createdByUserRef' | 'lastUpdatedByRef' | 'operatorData'> = {
+      const licenseDocData: Partial<OperatorLicense> = { // Use Partial for flexibility
         operatorRef: finalOperatorRef,
         applicationType: data.applicationType,
-        previousLicenseNumber: data.previousLicenseNumber ?? "",
+        previousLicenseNumber: data.previousLicenseNumber ?? "", // Use null or empty string as per preference
         status: submissionStatus,
-        submittedAt: submissionStatus === "Submitted" ? Timestamp.now() : (existingLicenseData?.submittedAt || undefined),
-        approvedAt: existingLicenseData?.approvedAt || undefined, // Keep existing if not changing status here
-        issuedAt: data.issuedAtString ? Timestamp.fromDate(parseISO(data.issuedAtString)) : (existingLicenseData?.issuedAt || undefined),
-        expiryDate: data.expiryDateString ? Timestamp.fromDate(parseISO(data.expiryDateString)) : (existingLicenseData?.expiryDate || undefined),
+        
         assignedLicenseNumber: data.assignedLicenseNumber ?? "",
         receiptNo: data.receiptNo ?? "",
         placeIssued: data.placeIssued ?? "",
-        methodOfPayment: data.methodOfPayment, // This is optional enum, so undefined is fine for Firestore (omits field)
+        methodOfPayment: data.methodOfPayment || undefined, // Let Firestore omit if undefined
         paymentBy: data.paymentBy ?? "",
-        paymentDate: data.paymentDateString ? Timestamp.fromDate(parseISO(data.paymentDateString)) : (existingLicenseData?.paymentDate || undefined),
         paymentAmount: data.paymentAmount ?? null,
-        attachedDocuments: data.attachedDocuments.map(d => ({...d, uploadedAt: Timestamp.now()})), 
+        attachedDocuments: data.attachedDocuments.map(d => {
+            const uploadedAtTs = d.uploadedAt instanceof Timestamp ? d.uploadedAt : Timestamp.fromDate(new Date(d.uploadedAt as any));
+            return {...d, uploadedAt: uploadedAtTs};
+        }),
         notes: data.notes ?? "",
         licenseClass: data.licenseClass ?? "", 
         restrictions: data.restrictions ?? "",
       };
       
+      // Handle date fields carefully to avoid sending 'undefined'
+      if (submissionStatus === "Submitted") {
+        licenseDocData.submittedAt = Timestamp.now();
+      } else if (mode === 'edit' && existingLicenseData?.submittedAt) {
+        licenseDocData.submittedAt = existingLicenseData.submittedAt instanceof Timestamp 
+            ? existingLicenseData.submittedAt 
+            : Timestamp.fromDate(new Date(existingLicenseData.submittedAt as any));
+      } else {
+        licenseDocData.submittedAt = null;
+      }
+
+      // approvedAt is usually set by a separate action, not on general form submission
+      licenseDocData.approvedAt = (mode === 'edit' && existingLicenseData?.approvedAt)
+        ? (existingLicenseData.approvedAt instanceof Timestamp ? existingLicenseData.approvedAt : Timestamp.fromDate(new Date(existingLicenseData.approvedAt as any)))
+        : null;
+
+      if (data.issuedAtString) {
+        licenseDocData.issuedAt = Timestamp.fromDate(parseISO(data.issuedAtString));
+      } else if (mode === 'edit' && existingLicenseData?.issuedAt) {
+        licenseDocData.issuedAt = existingLicenseData.issuedAt instanceof Timestamp ? existingLicenseData.issuedAt : Timestamp.fromDate(new Date(existingLicenseData.issuedAt as any));
+      } else {
+        licenseDocData.issuedAt = null;
+      }
+
+      if (data.expiryDateString) {
+        licenseDocData.expiryDate = Timestamp.fromDate(parseISO(data.expiryDateString));
+      } else if (mode === 'edit' && existingLicenseData?.expiryDate) {
+        licenseDocData.expiryDate = existingLicenseData.expiryDate instanceof Timestamp ? existingLicenseData.expiryDate : Timestamp.fromDate(new Date(existingLicenseData.expiryDate as any));
+      } else {
+        licenseDocData.expiryDate = null;
+      }
+
+      if (data.paymentDateString) {
+        licenseDocData.paymentDate = Timestamp.fromDate(parseISO(data.paymentDateString));
+      } else if (mode === 'edit' && existingLicenseData?.paymentDate) {
+        licenseDocData.paymentDate = existingLicenseData.paymentDate instanceof Timestamp ? existingLicenseData.paymentDate : Timestamp.fromDate(new Date(existingLicenseData.paymentDate as any));
+      } else {
+        licenseDocData.paymentDate = null;
+      }
+      
       let finalLicenseApplicationId = licenseApplicationId;
 
       if (mode === 'create') {
         const licenseColRef = collection(db, "operatorLicenseApplications");
-        const finalLicenseData = {
+        const finalLicenseDataForCreate = {
             ...licenseDocData,
             createdAt: Timestamp.now(),
             createdByUserRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
             lastUpdatedAt: Timestamp.now(),
             lastUpdatedByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
         };
-        const newLicenseDocRef = await addDoc(licenseColRef, finalLicenseData);
+        // Clean object: remove keys with null values if Firestore should omit them,
+        // or ensure type definitions allow null for these fields.
+        // For simplicity, Firestore handles nulls correctly by storing them or allowing them in optional fields.
+        const newLicenseDocRef = await addDoc(licenseColRef, finalLicenseDataForCreate as OperatorLicense);
         finalLicenseApplicationId = newLicenseDocRef.id;
         toast({ title: "Application Saved", description: `Status: ${submissionStatus}. ID: ${finalLicenseApplicationId}` });
         router.push(`/operator-licenses/${finalLicenseApplicationId}`);
       } else if (finalLicenseApplicationId) {
         const licenseDocRef = doc(db, "operatorLicenseApplications", finalLicenseApplicationId);
-        const finalLicenseData = {
+        const finalLicenseDataForUpdate = {
             ...licenseDocData,
             lastUpdatedAt: Timestamp.now(),
             lastUpdatedByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
         };
-        await updateDoc(licenseDocRef, finalLicenseData);
+        await updateDoc(licenseDocRef, finalLicenseDataForUpdate);
         toast({ title: "Application Updated", description: `Status: ${submissionStatus}.` });
         router.push(`/operator-licenses/${finalLicenseApplicationId}`);
       }
