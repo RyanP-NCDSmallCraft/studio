@@ -11,7 +11,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Timestamp, doc, getDoc, updateDoc, DocumentReference } from "firebase/firestore";
 import { db } from '@/lib/firebase';
-import { Edit, FileText, UserCircle, ListChecks, ShieldCheck, ShieldX, Info, Loader2, ArrowLeft, BookUser, FileImage } from "lucide-react";
+import { Edit, FileText, UserCircle, ListChecks, ShieldCheck, ShieldX, Info, Loader2, ArrowLeft, BookUser, FileImage, Ban, AlertCircle, CalendarClock, CalendarCheck2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,6 +21,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -70,7 +71,6 @@ export default function OperatorLicenseDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // State for Office Use Only modal/fields
   const [officeUseModalOpen, setOfficeUseModalOpen] = useState(false);
   const [officeLicenseNumber, setOfficeLicenseNumber] = useState("");
   const [officeReceiptNo, setOfficeReceiptNo] = useState("");
@@ -83,6 +83,13 @@ export default function OperatorLicenseDetailPage() {
   const [officeExpiryDate, setOfficeExpiryDate] = useState("");
   const [officeLicenseClass, setOfficeLicenseClass] = useState("");
   const [officeRestrictions, setOfficeRestrictions] = useState("");
+  
+  const [suspendModalOpen, setSuspendModalOpen] = useState(false);
+  const [suspensionReason, setSuspensionReason] = useState("");
+  const [suspensionEndDate, setSuspensionEndDate] = useState("");
+
+  const [revokeModalOpen, setRevokeModalOpen] = useState(false);
+  const [revocationReason, setRevocationReason] = useState("");
 
 
   const fetchApplicationData = useCallback(async () => {
@@ -108,7 +115,7 @@ export default function OperatorLicenseDetailPage() {
       const appData: OperatorLicense = {
         ...licenseDataRaw,
         licenseApplicationId: licenseSnap.id,
-        operatorRef: licenseDataRaw.operatorRef, // Keep as is for updates
+        operatorRef: licenseDataRaw.operatorRef, 
         submittedAt: ensureDateObject(licenseDataRaw.submittedAt),
         approvedAt: ensureDateObject(licenseDataRaw.approvedAt),
         issuedAt: ensureDateObject(licenseDataRaw.issuedAt),
@@ -121,10 +128,15 @@ export default function OperatorLicenseDetailPage() {
             uploadedAt: ensureDateObject(d.uploadedAt) as Date,
             verifiedAt: ensureDateObject(d.verifiedAt)
         })),
+        // Suspension and Revocation fields
+        suspensionReason: licenseDataRaw.suspensionReason,
+        suspensionStartDate: ensureDateObject(licenseDataRaw.suspensionStartDate),
+        suspensionEndDate: ensureDateObject(licenseDataRaw.suspensionEndDate),
+        revocationReason: licenseDataRaw.revocationReason,
+        revokedAt: ensureDateObject(licenseDataRaw.revokedAt),
       };
       setApplication(appData);
 
-      // Set office use fields from fetched data
       setOfficeLicenseNumber(appData.assignedLicenseNumber || "");
       setOfficeReceiptNo(appData.receiptNo || "");
       setOfficePlaceIssued(appData.placeIssued || "");
@@ -189,7 +201,7 @@ export default function OperatorLicenseDetailPage() {
             lastUpdatedByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
         });
         toast({ title: "Status Updated", description: `Application status changed to ${newStatus}.` });
-        fetchApplicationData(); // Refresh data
+        fetchApplicationData(); 
     } catch (e: any) {
         toast({title: "Status Update Failed", description: e.message, variant: "destructive"});
     } finally {
@@ -225,11 +237,10 @@ export default function OperatorLicenseDetailPage() {
             updatePayload.expiryDate = Timestamp.fromDate(addYears( (updatePayload.issuedAt as Timestamp).toDate(), 3));
         }
 
-
-        await updateDoc(licenseDocRef, updatePayload as any); // Cast as any due to complex partial type
+        await updateDoc(licenseDocRef, updatePayload as any);
         toast({ title: "Office Details Saved", description: "Office use information has been updated."});
         setOfficeUseModalOpen(false);
-        fetchApplicationData(); // Refresh
+        fetchApplicationData(); 
     } catch (e: any) {
         console.error("Error saving office use data:", e);
         toast({title: "Save Failed", description: e.message || "Could not save office details.", variant: "destructive"});
@@ -238,12 +249,65 @@ export default function OperatorLicenseDetailPage() {
     }
   };
 
+  const handleSuspend = async () => {
+    if (!currentUser?.userId || !application || !suspensionReason.trim()) {
+      toast({ title: "Error", description: "User, application, or suspension reason missing.", variant: "destructive" });
+      return;
+    }
+    if (suspensionEndDate && !isValid(parseISO(suspensionEndDate))) {
+      toast({ title: "Validation Error", description: "Suspension End Date is invalid.", variant: "destructive" });
+      return;
+    }
+    setIsUpdating(true);
+    const updatePayload: Partial<OperatorLicense> = {
+      status: "Suspended",
+      suspensionReason: suspensionReason,
+      suspensionStartDate: Timestamp.now(),
+      suspensionEndDate: suspensionEndDate ? Timestamp.fromDate(parseISO(suspensionEndDate)) : null, // Use null
+    };
+    await handleStatusUpdate("Suspended", updatePayload);
+    setSuspendModalOpen(false);
+    setSuspensionReason("");
+    setSuspensionEndDate("");
+    setIsUpdating(false);
+  };
+
+  const handleRevoke = async () => {
+    if (!currentUser?.userId || !application || !revocationReason.trim()) {
+      toast({ title: "Error", description: "User, application, or revocation reason missing.", variant: "destructive" });
+      return;
+    }
+    setIsUpdating(true);
+    const updatePayload: Partial<OperatorLicense> = {
+      status: "Revoked",
+      revocationReason: revocationReason,
+      revokedAt: Timestamp.now(),
+    };
+    await handleStatusUpdate("Revoked", updatePayload);
+    setRevokeModalOpen(false);
+    setRevocationReason("");
+    setIsUpdating(false);
+  };
+  
+  const handleUnsuspend = async () => {
+    if (!currentUser?.userId || !application) return;
+    setIsUpdating(true);
+    const updatePayload: Partial<OperatorLicense> = {
+      status: "Approved", // Or determine previous valid state if more complex logic needed
+      suspensionReason: null,
+      suspensionStartDate: null,
+      suspensionEndDate: null,
+    };
+    await handleStatusUpdate("Approved", updatePayload);
+    setIsUpdating(false);
+  };
+
   const getStatusBadgeVariant = (status?: OperatorLicense["status"]): BadgeProps["variant"] => {
     if (!status) return "outline";
     switch (status) {
       case "Approved": return "default";
       case "Submitted": case "PendingReview": case "AwaitingTest": case "TestScheduled": case "TestPassed": return "secondary";
-      case "Rejected": case "Expired": case "Revoked": case "TestFailed": return "destructive";
+      case "Rejected": case "Expired": case "Revoked": case "TestFailed": case "Suspended": return "destructive";
       case "Draft": case "RequiresInfo": return "outline";
       default: return "outline";
     }
@@ -252,7 +316,7 @@ export default function OperatorLicenseDetailPage() {
   if (loading) {
     return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /> <p className="ml-2">Loading license details...</p></div>;
   }
-  if (error) return <div className="text-center py-10 text-destructive"><AlertTriangle className="mx-auto h-10 w-10 mb-2"/>Error: {error}</div>;
+  if (error) return <div className="text-center py-10 text-destructive"><AlertCircle className="mx-auto h-10 w-10 mb-2"/>Error: {error}</div>;
   if (!application || !operator) return <div className="text-center py-10 text-muted-foreground">License application or operator details not found.</div>;
 
   const canEditApplication = (isAdmin || isRegistrar || isSupervisor) && (application.status === "Draft" || application.status === "RequiresInfo");
@@ -293,18 +357,7 @@ export default function OperatorLicenseDetailPage() {
         <Card>
             <CardHeader><CardTitle>Management Actions</CardTitle></CardHeader>
             <CardContent className="flex flex-wrap gap-2">
-                {application.status === "PendingReview" && (
-                    <>
-                    <Button onClick={() => handleStatusUpdate("AwaitingTest")} disabled={isUpdating}>
-                        {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <ListChecks className="mr-2 h-4 w-4" />} Mark Ready for Test
-                    </Button>
-                     <Button variant="outline" onClick={() => handleStatusUpdate("RequiresInfo")} disabled={isUpdating}>
-                        {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Info className="mr-2 h-4 w-4" />} Request More Information
-                    </Button>
-                    </>
-                )}
-                {/* Simplified Approval - directly from PendingReview or if TestPassed */}
-                 {(application.status === "PendingReview" || application.status === "TestPassed") && (
+                { (application.status === "PendingReview" || application.status === "Submitted" || application.status === "TestPassed" || application.status === "RequiresInfo") && (
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
                             <Button variant="default" disabled={isUpdating}>
@@ -322,7 +375,7 @@ export default function OperatorLicenseDetailPage() {
                         </AlertDialogContent>
                     </AlertDialog>
                 )}
-                 {(application.status === "PendingReview" || application.status === "RequiresInfo" || application.status === "TestFailed") && (
+                 {(application.status === "PendingReview" || application.status === "Submitted" || application.status === "RequiresInfo" || application.status === "TestFailed" || application.status === "AwaitingTest" || application.status === "TestScheduled") && (
                      <AlertDialog>
                         <AlertDialogTrigger asChild>
                             <Button variant="destructive" disabled={isUpdating}>
@@ -337,9 +390,77 @@ export default function OperatorLicenseDetailPage() {
                         </AlertDialogContent>
                     </AlertDialog>
                  )}
+                 {application.status === "PendingReview" && (
+                     <Button variant="outline" onClick={() => handleStatusUpdate("RequiresInfo")} disabled={isUpdating}>
+                        {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Info className="mr-2 h-4 w-4" />} Request More Information
+                    </Button>
+                 )}
+                 {(application.status === "Approved" || application.status === "Expired") && (
+                    <AlertDialog open={suspendModalOpen} onOpenChange={setSuspendModalOpen}>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="outline" className="text-orange-600 border-orange-500 hover:bg-orange-100 hover:text-orange-700" disabled={isUpdating}>
+                                {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <CalendarClock className="mr-2 h-4 w-4" />} Suspend
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader><AlertDialogTitle>Suspend License</AlertDialogTitle><AlertDialogDescription>Provide reason and optional end date.</AlertDialogDescription></AlertDialogHeader>
+                            <div className="space-y-2 py-2">
+                                <Textarea placeholder="Reason for suspension..." value={suspensionReason} onChange={(e) => setSuspensionReason(e.target.value)} />
+                                <Input type="date" placeholder="Suspension end date (optional)" value={suspensionEndDate} onChange={(e) => setSuspensionEndDate(e.target.value)} />
+                            </div>
+                            <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleSuspend}>Confirm Suspend</AlertDialogAction></AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                 )}
+                 {application.status === "Suspended" && (
+                    <Button variant="outline" className="text-green-600 border-green-500 hover:bg-green-100 hover:text-green-700" onClick={handleUnsuspend} disabled={isUpdating}>
+                        {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <CalendarCheck2 className="mr-2 h-4 w-4" />} Unsuspend
+                    </Button>
+                 )}
+                  {(application.status === "Approved" || application.status === "Expired" || application.status === "Suspended") && (
+                    <AlertDialog open={revokeModalOpen} onOpenChange={setRevokeModalOpen}>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="destructive" disabled={isUpdating}>
+                                {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Ban className="mr-2 h-4 w-4" />} Revoke
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader><AlertDialogTitle>Revoke License</AlertDialogTitle><AlertDialogDescription>This action is permanent. Provide reason.</AlertDialogDescription></AlertDialogHeader>
+                             <Textarea placeholder="Reason for revocation..." value={revocationReason} onChange={(e) => setRevocationReason(e.target.value)} />
+                            <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleRevoke} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">Confirm Revoke</AlertDialogAction></AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                  )}
             </CardContent>
         </Card>
       )}
+
+       {application.status === "Suspended" && (
+        <Card className="border-orange-500 bg-orange-500/10">
+          <CardHeader>
+            <CardTitle className="text-orange-700 flex items-center gap-2"><CalendarClock /> License Suspended</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-orange-700 space-y-1">
+            <p><strong>Reason:</strong> {application.suspensionReason || "Not specified"}</p>
+            {application.suspensionStartDate && <p><strong>Suspended From:</strong> {formatFirebaseTimestamp(application.suspensionStartDate, "PP")}</p>}
+            {application.suspensionEndDate && <p><strong>Suspended Until:</strong> {formatFirebaseTimestamp(application.suspensionEndDate, "PP")}</p>}
+            {!application.suspensionEndDate && <p>Suspended indefinitely or until further notice.</p>}
+          </CardContent>
+        </Card>
+      )}
+
+      {application.status === "Revoked" && (
+        <Card className="border-red-700 bg-red-700/10">
+          <CardHeader>
+            <CardTitle className="text-red-800 flex items-center gap-2"><Ban /> License Revoked</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-red-800 space-y-1">
+            <p><strong>Reason:</strong> {application.revocationReason || "Not specified"}</p>
+            {application.revokedAt && <p><strong>Revoked On:</strong> {formatFirebaseTimestamp(application.revokedAt, "PP")}</p>}
+          </CardContent>
+        </Card>
+      )}
+
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
@@ -434,7 +555,6 @@ export default function OperatorLicenseDetailPage() {
         </div>
       </div>
 
-      {/* Office Use Modal */}
       <AlertDialog open={officeUseModalOpen} onOpenChange={setOfficeUseModalOpen}>
         <AlertDialogContent className="sm:max-w-md">
           <AlertDialogHeader>
@@ -480,3 +600,4 @@ export default function OperatorLicenseDetailPage() {
     </div>
   );
 }
+
