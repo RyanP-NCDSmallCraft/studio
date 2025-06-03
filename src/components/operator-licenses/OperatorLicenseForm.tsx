@@ -201,15 +201,15 @@ export function OperatorLicenseForm({
         placeOfOriginLLG: data.placeOfOriginLLG,
         placeOfOriginVillage: data.placeOfOriginVillage,
         phoneMobile: data.phoneMobile,
-        email: data.email || undefined,
+        email: data.email ?? "",
         postalAddress: data.postalAddress,
-        heightCm: data.heightCm || undefined,
-        eyeColor: data.eyeColor || undefined,
-        skinColor: data.skinColor || undefined,
-        hairColor: data.hairColor || undefined,
-        weightKg: data.weightKg || undefined,
-        bodyMarks: data.bodyMarks || undefined,
-        idSizePhotoUrl: data.idSizePhotoUrl || undefined, // Placeholder
+        heightCm: data.heightCm ?? null,
+        eyeColor: data.eyeColor ?? "",
+        skinColor: data.skinColor ?? "",
+        hairColor: data.hairColor ?? "",
+        weightKg: data.weightKg ?? null,
+        bodyMarks: data.bodyMarks ?? "",
+        idSizePhotoUrl: data.idSizePhotoUrl ?? "", 
       };
 
       if (mode === 'create' || !operatorId) {
@@ -231,23 +231,23 @@ export function OperatorLicenseForm({
       const licenseDocData: Omit<OperatorLicense, 'licenseApplicationId' | 'createdAt' | 'lastUpdatedAt' | 'createdByUserRef' | 'lastUpdatedByRef' | 'operatorData'> = {
         operatorRef: finalOperatorRef,
         applicationType: data.applicationType,
-        previousLicenseNumber: data.previousLicenseNumber || undefined,
+        previousLicenseNumber: data.previousLicenseNumber ?? "",
         status: submissionStatus,
         submittedAt: submissionStatus === "Submitted" ? Timestamp.now() : (existingLicenseData?.submittedAt || undefined),
         approvedAt: existingLicenseData?.approvedAt || undefined, // Keep existing if not changing status here
         issuedAt: data.issuedAtString ? Timestamp.fromDate(parseISO(data.issuedAtString)) : (existingLicenseData?.issuedAt || undefined),
         expiryDate: data.expiryDateString ? Timestamp.fromDate(parseISO(data.expiryDateString)) : (existingLicenseData?.expiryDate || undefined),
-        assignedLicenseNumber: data.assignedLicenseNumber || undefined,
-        receiptNo: data.receiptNo || undefined,
-        placeIssued: data.placeIssued || undefined,
-        methodOfPayment: data.methodOfPayment || undefined,
-        paymentBy: data.paymentBy || undefined,
+        assignedLicenseNumber: data.assignedLicenseNumber ?? "",
+        receiptNo: data.receiptNo ?? "",
+        placeIssued: data.placeIssued ?? "",
+        methodOfPayment: data.methodOfPayment, // This is optional enum, so undefined is fine for Firestore (omits field)
+        paymentBy: data.paymentBy ?? "",
         paymentDate: data.paymentDateString ? Timestamp.fromDate(parseISO(data.paymentDateString)) : (existingLicenseData?.paymentDate || undefined),
-        paymentAmount: data.paymentAmount || undefined,
-        attachedDocuments: data.attachedDocuments.map(d => ({...d, uploadedAt: Timestamp.now()})), // Placeholder URLs
-        notes: data.notes || undefined,
-        licenseClass: data.licenseClass || undefined,
-        restrictions: data.restrictions || undefined,
+        paymentAmount: data.paymentAmount ?? null,
+        attachedDocuments: data.attachedDocuments.map(d => ({...d, uploadedAt: Timestamp.now()})), 
+        notes: data.notes ?? "",
+        licenseClass: data.licenseClass ?? "", 
+        restrictions: data.restrictions ?? "",
       };
       
       let finalLicenseApplicationId = licenseApplicationId;
@@ -457,3 +457,4 @@ export function OperatorLicenseForm({
     </Form>
   );
 }
+
