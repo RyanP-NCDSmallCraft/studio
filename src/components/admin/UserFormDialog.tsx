@@ -126,7 +126,7 @@ export function UserFormDialog({ mode, user, open, onOpenChange, onUserUpdated }
         onOpenChange(false);
       } else {
         // Directly handle the server action's structured error for toasting.
-        console.error(`Server action failed for ${mode} user profile:`, result.error);
+        // The console.error line previously here was causing the reported Next.js console error.
         let description = result.error || `Could not ${mode} user profile.`;
         if (result.error && result.error.toLowerCase().includes("permission check failed")) {
             description = `Server-side permission check failed: ${result.error}. This usually means your account ('${adminUser?.email}') lacks the necessary admin rights in Firestore (checked via its 'users/${adminUser?.userId}' document) or your user profile is inactive. Please verify your Firestore user document and security rules.`;
@@ -279,5 +279,3 @@ export function UserFormDialog({ mode, user, open, onOpenChange, onUserUpdated }
     </Dialog>
   );
 }
-
-    
