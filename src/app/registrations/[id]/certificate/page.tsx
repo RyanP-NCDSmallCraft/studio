@@ -2,29 +2,45 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import type { Registration } from "@/types";
-import { FileSpreadsheet, Download, Sailboat, ArrowLeft } from "lucide-react";
+import type { Registration, Owner } from "@/types"; // Added Owner
+import { FileSpreadsheet, Download, Sailboat, ArrowLeft, Loader2, AlertTriangle } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { formatFirebaseTimestamp } from '@/lib/utils';
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
-import Image from "next/image"; // Added import for Image
+import Image from "next/image";
+import React, { useState, useEffect, useCallback } from "react";
+import { doc, getDoc, Timestamp, DocumentReference } from 'firebase/firestore'; // Added DocumentReference
+import { db } from '@/lib/firebase';
+import { isValid } from "date-fns";
 
-// Placeholder data
-const placeholderRegistration: Registration = {
-  registrationId: "REG001",
-  scaRegoNo: "SCA123",
-  owners: [{ ownerId: "owner1", role: "Primary", surname: "Smith", firstName: "John", dob: new Date(1980,5,15) as any, sex: "Male", phone: "123", postalAddress: "1 Street", townDistrict: "Town", llg: "LLG A", wardVillage: "Village 1" }],
-  craftMake: "Yamaha",
-  craftModel: "FX Cruiser HO",
-  craftYear: 2022,
-  hullIdNumber: "YAM12345X122",
-  craftLength: 3.56,
-  lengthUnits: "m",
-  effectiveDate: new Date() as any,
-  expiryDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)) as any,
-  // Fill other required fields for Registration type if necessary for display
-  registrationType: "New", status: "Approved", craftColor: "Blue", propulsionType: "Inboard", hullMaterial: "Fiberglass", craftUse: "Pleasure", fuelType: "Gasoline", vesselType: "PWC", proofOfOwnershipDocs: [], createdAt: new Date() as any, lastUpdatedAt: new Date() as any, createdByRef: {} as any
+// Helper function to safely convert Firestore Timestamps or other date forms to JS Date objects
+const ensureDateObject = (dateValue: any): Date | undefined => {
+  if (!dateValue) return undefined;
+  if (dateValue instanceof Timestamp) {
+    return dateValue.toDate();
+  }
+  if (dateValue instanceof Date) {
+    return dateValue;
+  }
+  // Handle Firestore-like {seconds, nanoseconds} objects
+  if (typeof dateValue === 'object' && dateValue !== null && typeof dateValue.seconds === 'number' && typeof dateValue.nanoseconds === 'number') {
+    try {
+      return new Timestamp(dateValue.seconds, dateValue.nanoseconds).toDate();
+    } catch (e) {
+      console.warn('CertificatePage: Failed to convert object to Timestamp then to Date:', dateValue, e);
+      return undefined;
+    }
+  }
+  // Handle ISO strings or numbers (timestamps)
+  if (typeof dateValue === 'string' || typeof dateValue === 'number') {
+    const parsedDate = new Date(dateValue);
+    if (isValid(parsedDate)) {
+      return parsedDate;
+    }
+  }
+  console.warn(`CertificatePage: Could not convert field to a serializable Date:`, dateValue);
+  return undefined;
 };
 
 
@@ -32,26 +48,151 @@ export default function CertificatePreviewPage() {
   const params = useParams();
   const router = useRouter();
   const registrationId = params.id as string;
-  const registration = placeholderRegistration; // In real app, fetch by ID
   const { toast } = useToast();
 
-  if (!registration) {
-    return <p>Loading certificate data...</p>;
-  }
-  
+  const [registration, setRegistration] = useState<Registration | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchCertificateData = useCallback(async () => {
+    if (!registrationId) {
+      setError("Registration ID is missing.");
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+
+    try {
+      const regDocRef = doc(db, "registrations", registrationId);
+      const docSnap = await getDoc(regDocRef);
+
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.status !== "Approved") {
+          setError("Certificate can only be generated for 'Approved' registrations.");
+          setRegistration(null);
+          setLoading(false);
+          return;
+        }
+
+        const mapOwner = (ownerData: any): Owner => ({
+          ...ownerData,
+          ownerId: ownerData.ownerId || crypto.randomUUID(),
+          dob: ensureDateObject(ownerData.dob) as Date,
+        });
+
+        const processedData: Registration = {
+          registrationId: docSnap.id,
+          scaRegoNo: data.scaRegoNo,
+          interimRegoNo: data.interimRegoNo,
+          registrationType: data.registrationType || "New",
+          previousScaRegoNo: data.previousScaRegoNo,
+          status: data.status || "Draft",
+          submittedAt: ensureDateObject(data.submittedAt),
+          approvedAt: ensureDateObject(data.approvedAt),
+          effectiveDate: ensureDateObject(data.effectiveDate),
+          expiryDate: ensureDateObject(data.expiryDate),
+          paymentMethod: data.paymentMethod,
+          paymentReceiptNumber: data.paymentReceiptNumber,
+          bankStampRef: data.bankStampRef,
+          paymentAmount: data.paymentAmount,
+          paymentDate: ensureDateObject(data.paymentDate),
+          safetyCertNumber: data.safetyCertNumber,
+          safetyEquipIssued: data.safetyEquipIssued || false,
+          safetyEquipReceiptNumber: data.safetyEquipReceiptNumber,
+          owners: Array.isArray(data.owners) ? data.owners.map(mapOwner) : [],
+          proofOfOwnershipDocs: Array.isArray(data.proofOfOwnershipDocs) ? data.proofOfOwnershipDocs.map(d => ({...d, uploadedAt: ensureDateObject(d.uploadedAt)})) : [],
+          craftMake: data.craftMake || "",
+          craftModel: data.craftModel || "",
+          craftYear: data.craftYear || new Date().getFullYear(),
+          craftColor: data.craftColor || "",
+          hullIdNumber: data.hullIdNumber || "",
+          craftLength: data.craftLength || 0,
+          lengthUnits: data.lengthUnits || "m",
+          distinguishingFeatures: data.distinguishingFeatures,
+          engines: data.engines || [],
+          propulsionType: data.propulsionType || "Outboard",
+          propulsionOtherDesc: data.propulsionOtherDesc,
+          hullMaterial: data.hullMaterial || "Fiberglass",
+          hullMaterialOtherDesc: data.hullMaterialOtherDesc,
+          craftUse: data.craftUse || "Pleasure",
+          craftUseOtherDesc: data.craftUseOtherDesc,
+          fuelType: data.fuelType || "Petrol",
+          fuelTypeOtherDesc: data.fuelTypeOtherDesc,
+          vesselType: data.vesselType || "OpenBoat",
+          vesselTypeOtherDesc: data.vesselTypeOtherDesc,
+          certificateGeneratedAt: ensureDateObject(data.certificateGeneratedAt),
+          certificateFileName: data.certificateFileName,
+          certificateFileUrl: data.certificateFileUrl,
+          suspensionReason: data.suspensionReason,
+          suspensionStartDate: ensureDateObject(data.suspensionStartDate),
+          suspensionEndDate: ensureDateObject(data.suspensionEndDate),
+          revocationReason: data.revocationReason,
+          revokedAt: ensureDateObject(data.revokedAt),
+          lastUpdatedByRef: (data.lastUpdatedByRef instanceof DocumentReference) ? data.lastUpdatedByRef.id : data.lastUpdatedByRef,
+          lastUpdatedAt: ensureDateObject(data.lastUpdatedAt) as Date,
+          createdByRef: (data.createdByRef instanceof DocumentReference) ? data.createdByRef.id : data.createdByRef,
+          createdAt: ensureDateObject(data.createdAt) as Date,
+        };
+        setRegistration(processedData);
+      } else {
+        setError("Registration not found.");
+        setRegistration(null);
+      }
+    } catch (err: any) {
+      console.error("Error fetching registration for certificate:", err);
+      setError(err.message || "Failed to load registration data.");
+      setRegistration(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [registrationId]);
+
+  useEffect(() => {
+    fetchCertificateData();
+  }, [fetchCertificateData]);
+
   const handleDownloadPlaceholder = () => {
+    if (!registration) return;
     toast({
       title: "Download Initiated (Placeholder)",
       description: "In a real application, a PDF certificate would be downloaded.",
     });
-    // Here you would trigger the actual download if a URL exists, or trigger a generation function
     if (registration.certificateFileUrl) {
         window.open(registration.certificateFileUrl, '_blank');
     } else {
-        // Potentially trigger a cloud function to generate and then download
         console.log("Triggering certificate generation for", registrationId);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex h-64 justify-center items-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="ml-2">Loading certificate data...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-10">
+        <AlertTriangle className="mx-auto h-10 w-10 text-destructive mb-2" />
+        <p className="text-destructive text-lg">{error}</p>
+        <Button onClick={() => router.back()} className="mt-4" variant="outline">Go Back</Button>
+      </div>
+    );
+  }
+
+  if (!registration) {
+    return (
+      <div className="text-center py-10 text-muted-foreground">
+        <p>Registration data could not be loaded.</p>
+        <Button onClick={() => router.back()} className="mt-4" variant="outline">Go Back</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -70,8 +211,7 @@ export default function CertificatePreviewPage() {
       </div>
 
       <Card className="shadow-lg p-6 md:p-10 certificate-preview relative overflow-hidden" data-ai-hint="document certificate">
-        {/* Background watermark/logo */}
-        <Sailboat className="absolute inset-0 m-auto h-1/2 w-1/2 text-primary/5 opacity-30 z-0" />
+        <Sailboat className="absolute inset-0 m-auto h-1/2 w-1/2 text-primary/5 opacity-20 z-0" />
         
         <div className="relative z-10">
           <header className="text-center border-b-2 border-primary pb-4 mb-6">
@@ -113,8 +253,8 @@ export default function CertificatePreviewPage() {
               <p><strong>Hull ID (HIN):</strong> {registration.hullIdNumber}</p>
               <p><strong>Length:</strong> {registration.craftLength}{registration.lengthUnits}</p>
               <p><strong>Color:</strong> {registration.craftColor}</p>
-              <p><strong>Vessel Type:</strong> {registration.vesselType}</p>
-              <p><strong>Propulsion:</strong> {registration.propulsionType}</p>
+              <p><strong>Vessel Type:</strong> {registration.vesselType} {registration.vesselTypeOtherDesc && `(${registration.vesselTypeOtherDesc})`}</p>
+              <p><strong>Propulsion:</strong> {registration.propulsionType} {registration.propulsionOtherDesc && `(${registration.propulsionOtherDesc})`}</p>
             </div>
 
             <Separator className="my-6" />
@@ -122,7 +262,7 @@ export default function CertificatePreviewPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
               <div>
                 <h3 className="font-semibold text-primary mb-1">Date of Issue:</h3>
-                <p>{formatFirebaseTimestamp(registration.effectiveDate, "MMMM dd, yyyy")}</p>
+                <p>{formatFirebaseTimestamp(registration.effectiveDate || registration.approvedAt, "MMMM dd, yyyy")}</p>
               </div>
               <div>
                 <h3 className="font-semibold text-primary mb-1">Expiry Date:</h3>
@@ -139,7 +279,7 @@ export default function CertificatePreviewPage() {
           </CardContent>
           
           <footer className="mt-10 pt-4 border-t text-center text-xs text-muted-foreground">
-            <p>This certificate is issued under the authority of the RegoCraft National Maritime Safety Authority (Placeholder).</p>
+            <p>This certificate is issued under the authority of the National Capital District Small Craft Registration Board (NCDSCRB).</p>
             <p>RegoCraft &copy; {new Date().getFullYear()}</p>
           </footer>
         </div>
