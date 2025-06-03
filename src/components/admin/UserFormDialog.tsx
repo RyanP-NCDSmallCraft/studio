@@ -32,22 +32,22 @@ import { createUserProfile, updateUserProfileDetails } from "@/actions/users";
 import { useAuth } from "@/hooks/useAuth";
 
 const userFormSchema = z.object({
-  userId: z.string().min(1, "User ID (Firebase Auth UID) is required.").optional(), // Required for create, display for edit
-  email: z.string().email("Invalid email address.").min(1, "Email is required."), // Required for create, display for edit
+  userId: z.string().min(1, "User ID (Firebase Auth UID) is required.").optional(),
+  email: z.string().email("Invalid email address.").min(1, "Email is required."),
   displayName: z.string().min(1, "Display name is required.").optional(),
-  fullname: z.string().optional(), // Added fullname
-  role: z.enum(["Admin", "Registrar", "Inspector", "Supervisor", "ReadOnly"] as [UserRole, ...UserRole[]]), // Ensure it aligns with UserRole type
-  isActive: z.boolean().default(true).optional(), // Only relevant for create mode
+  fullname: z.string().optional(),
+  role: z.enum(["Admin", "Registrar", "Inspector", "Supervisor", "ReadOnly"] as [UserRole, ...UserRole[]]),
+  isActive: z.boolean().default(true).optional(),
 });
 
 export type UserFormData = z.infer<typeof userFormSchema>;
 
 interface UserFormDialogProps {
   mode: "create" | "edit";
-  user?: User | null; // For pre-filling in edit mode
+  user?: User | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onUserUpdated: () => void; // Callback to refresh user list
+  onUserUpdated: () => void;
 }
 
 export function UserFormDialog({ mode, user, open, onOpenChange, onUserUpdated }: UserFormDialogProps) {
@@ -60,7 +60,7 @@ export function UserFormDialog({ mode, user, open, onOpenChange, onUserUpdated }
       userId: "",
       email: "",
       displayName: "",
-      fullname: "", // Default for fullname
+      fullname: "",
       role: "ReadOnly",
       isActive: true,
     },
@@ -72,16 +72,16 @@ export function UserFormDialog({ mode, user, open, onOpenChange, onUserUpdated }
         userId: user.userId,
         email: user.email,
         displayName: user.displayName || "",
-        fullname: user.fullname || "", // Reset with fullname
+        fullname: user.fullname || "",
         role: user.role,
-        isActive: user.isActive, // Though isActive is not directly edited in this dialog for "edit" mode
+        isActive: user.isActive,
       });
     } else if (mode === "create") {
       form.reset({
         userId: "",
         email: "",
         displayName: "",
-        fullname: "", // Default for fullname
+        fullname: "",
         role: "ReadOnly",
         isActive: true,
       });
@@ -97,7 +97,7 @@ export function UserFormDialog({ mode, user, open, onOpenChange, onUserUpdated }
     try {
       let result;
       if (mode === "create") {
-        if (!data.userId || !data.email) { // Extra check for create mode
+        if (!data.userId || !data.email) {
           toast({ title: "Validation Error", description: "User ID and Email are mandatory for new users.", variant: "destructive" });
           return;
         }
@@ -105,39 +105,46 @@ export function UserFormDialog({ mode, user, open, onOpenChange, onUserUpdated }
           userId: data.userId,
           email: data.email,
           displayName: data.displayName,
-          fullname: data.fullname, // Pass fullname
+          fullname: data.fullname,
           role: data.role,
           isActive: data.isActive !== undefined ? data.isActive : true,
         }, adminUser.userId);
       } else if (mode === "edit" && user) {
         result = await updateUserProfileDetails(user.userId, {
           displayName: data.displayName,
-          fullname: data.fullname, // Pass fullname
+          fullname: data.fullname,
           role: data.role,
         }, adminUser.userId);
       } else {
-        throw new Error("Invalid form mode or missing user data for edit.");
+        toast({ title: "Internal Error", description: "Invalid form mode or missing user data for edit.", variant: "destructive" });
+        return;
       }
 
       if (result.success) {
         toast({ title: `User ${mode === "create" ? "Profile Created" : "Details Updated"}`, description: `User ${data.displayName || data.email} has been successfully ${mode === "create" ? "added" : "updated"}.` });
-        onUserUpdated(); // Refresh the list
-        onOpenChange(false); // Close dialog
+        onUserUpdated();
+        onOpenChange(false);
       } else {
-        // This is the part where the original error is thrown.
-        // The error message from result.error is what's shown in the console.
-        throw new Error(result.error || `Failed to ${mode} user profile.`);
+        // Directly handle the server action's structured error for toasting.
+        console.error(`Server action failed for ${mode} user profile:`, result.error);
+        let description = result.error || `Could not ${mode} user profile.`;
+        if (result.error && result.error.toLowerCase().includes("permission check failed")) {
+            description = `Server-side permission check failed: ${result.error}. This usually means your account ('${adminUser?.email}') lacks the necessary admin rights in Firestore (checked via its 'users/${adminUser?.userId}' document) or your user profile is inactive. Please verify your Firestore user document and security rules.`;
+        }
+        toast({
+            title: `Operation Failed`,
+            description: description,
+            variant: "destructive"
+        });
       }
     } catch (error: any) {
-      console.error(`Error ${mode === 'create' ? 'creating' : 'updating'} user profile:`, error);
-      let description = error.message || `Could not ${mode} user profile.`;
-      if (error.message && error.message.toLowerCase().includes("permission")) {
-        description = `Server-side permission check failed: ${error.message}. Ensure your account has the necessary admin rights in Firestore and is active.`;
-      }
-      toast({ 
-        title: `Operation Failed`, 
-        description: description, 
-        variant: "destructive" 
+      // This catch block now primarily handles unexpected errors from the `await` calls themselves (e.g., network issues)
+      // or if the server action threw an unhandled exception rather than returning a structured error.
+      console.error(`Unexpected error during ${mode} user profile operation:`, error);
+      toast({
+        title: `Operation Failed`,
+        description: error.message || `An unexpected error occurred while trying to ${mode} user profile.`,
+        variant: "destructive",
       });
     }
   };
@@ -272,3 +279,5 @@ export function UserFormDialog({ mode, user, open, onOpenChange, onUserUpdated }
     </Dialog>
   );
 }
+
+    
