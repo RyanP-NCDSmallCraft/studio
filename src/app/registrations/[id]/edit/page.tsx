@@ -1,14 +1,14 @@
 
 "use client";
 import { RegistrationForm } from "@/components/registrations/RegistrationForm";
-import type { Registration, Owner, ProofOfOwnershipDoc, User } from "@/types";
+import type { Registration, Owner, ProofOfOwnershipDoc, User, EngineDetail } from "@/types";
 import { Ship, ArrowLeft, Loader2, AlertTriangle } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import React, { useState, useEffect, useCallback } from "react";
-import { doc, getDoc, Timestamp, DocumentReference } from 'firebase/firestore'; // Changed: Removed 'type' from DocumentReference
+import { doc, getDoc, Timestamp, DocumentReference } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { useAuth } from "@/hooks/useAuth"; // Import useAuth
+import { useAuth } from "@/hooks/useAuth"; 
 import { isValid } from "date-fns";
 
 
@@ -46,7 +46,7 @@ export default function EditRegistrationPage() {
   const params = useParams();
   const router = useRouter();
   const registrationId = params.id as string;
-  const { currentUser } = useAuth(); // Get current user for auth checks if needed by rules
+  const { currentUser } = useAuth(); 
 
   const [existingRegistration, setExistingRegistration] = useState<Registration | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,9 +58,8 @@ export default function EditRegistrationPage() {
       setLoading(false);
       return;
     }
-     if (!currentUser) { // Wait for currentUser to be determined
-      // setError("User authentication pending..."); // Or simply don't fetch yet
-      setLoading(false); // Or keep true if you want to wait for currentUser
+     if (!currentUser) { 
+      setLoading(false); 
       return;
     }
 
@@ -77,14 +76,19 @@ export default function EditRegistrationPage() {
         
         const mapOwner = (ownerData: any): Owner => ({
           ...ownerData,
-          ownerId: ownerData.ownerId || crypto.randomUUID(), // Ensure ID
-          dob: ensureDateObject(ownerData.dob) as Date, // Form expects Date
+          ownerId: ownerData.ownerId || crypto.randomUUID(), 
+          dob: ensureDateObject(ownerData.dob) as Date, 
         });
 
         const mapProofDoc = (docData: any): ProofOfOwnershipDoc => ({
           ...docData,
-          docId: docData.docId || crypto.randomUUID(), // Ensure ID
-          uploadedAt: ensureDateObject(docData.uploadedAt) as Date, // Form expects Date
+          docId: docData.docId || crypto.randomUUID(), 
+          uploadedAt: ensureDateObject(docData.uploadedAt) as Date, 
+        });
+
+        const mapEngineDetail = (engineData: any): EngineDetail => ({
+          ...engineData,
+          engineId: engineData.engineId || crypto.randomUUID(),
         });
         
         const processedData: Registration = {
@@ -116,6 +120,7 @@ export default function EditRegistrationPage() {
           craftLength: data.craftLength || 0,
           lengthUnits: data.lengthUnits || "m",
           distinguishingFeatures: data.distinguishingFeatures,
+          engines: Array.isArray(data.engines) ? data.engines.map(mapEngineDetail) : [], // Process engines
           propulsionType: data.propulsionType || "Outboard",
           propulsionOtherDesc: data.propulsionOtherDesc,
           hullMaterial: data.hullMaterial || "Fiberglass",
@@ -126,9 +131,6 @@ export default function EditRegistrationPage() {
           fuelTypeOtherDesc: data.fuelTypeOtherDesc,
           vesselType: data.vesselType || "OpenBoat",
           vesselTypeOtherDesc: data.vesselTypeOtherDesc,
-          engineHorsepower: data.engineHorsepower,
-          engineMake: data.engineMake,
-          engineSerialNumbers: data.engineSerialNumbers,
           certificateGeneratedAt: ensureDateObject(data.certificateGeneratedAt),
           certificateFileName: data.certificateFileName,
           certificateFileUrl: data.certificateFileUrl,
@@ -138,9 +140,9 @@ export default function EditRegistrationPage() {
           revocationReason: data.revocationReason,
           revokedAt: ensureDateObject(data.revokedAt),
           lastUpdatedByRef: (data.lastUpdatedByRef instanceof DocumentReference) ? data.lastUpdatedByRef.id : data.lastUpdatedByRef,
-          lastUpdatedAt: ensureDateObject(data.lastUpdatedAt) as Date, // Cast as Date
+          lastUpdatedAt: ensureDateObject(data.lastUpdatedAt) as Date, 
           createdByRef: (data.createdByRef instanceof DocumentReference) ? data.createdByRef.id : data.createdByRef,
-          createdAt: ensureDateObject(data.createdAt) as Date, // Cast as Date
+          createdAt: ensureDateObject(data.createdAt) as Date, 
         };
         setExistingRegistration(processedData);
       } else {
@@ -157,13 +159,13 @@ export default function EditRegistrationPage() {
   }, [registrationId, currentUser]);
 
   useEffect(() => {
-    if (currentUser !== undefined) { // Only fetch if currentUser state is determined
+    if (currentUser !== undefined) { 
         fetchRegistrationDetails();
     }
   }, [registrationId, currentUser, fetchRegistrationDetails]);
 
 
-  if (loading || currentUser === undefined) { // Added currentUser === undefined to loading condition
+  if (loading || currentUser === undefined) { 
     return (
       <div className="flex h-64 justify-center items-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" /> 
@@ -181,7 +183,7 @@ export default function EditRegistrationPage() {
     );
   }
   
-  if (!existingRegistration && !loading) { // Only show if not loading and no data
+  if (!existingRegistration && !loading) { 
     return <div className="text-center py-10 text-muted-foreground">Registration not found.</div>;
   }
 
@@ -201,3 +203,5 @@ export default function EditRegistrationPage() {
     </div>
   );
 }
+
+    

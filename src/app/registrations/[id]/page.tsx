@@ -5,8 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
-import type { Registration, Owner, ProofOfOwnershipDoc, Inspection, User } from "@/types";
-import { Ship, User as UserIconLucide, FileText, ClipboardCheck, CalendarDays, DollarSign, Edit, CheckCircle, XCircle, Info, FileSpreadsheet, ListChecks, AlertTriangle, Loader2, ArrowLeft, Ban, AlertCircle, CalendarClock } from "lucide-react";
+import type { Registration, Owner, ProofOfOwnershipDoc, Inspection, User, EngineDetail } from "@/types";
+import { Ship, User as UserIconLucide, FileText, ClipboardCheck, CalendarDays, DollarSign, Edit, CheckCircle, XCircle, Info, FileSpreadsheet, ListChecks, AlertTriangle, Loader2, ArrowLeft, Ban, AlertCircle, CalendarClock, Cog } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { formatFirebaseTimestamp } from '@/lib/utils';
@@ -133,6 +133,7 @@ export default function RegistrationDetailPage() {
           craftLength: data.craftLength,
           lengthUnits: data.lengthUnits,
           distinguishingFeatures: data.distinguishingFeatures,
+          engines: data.engines || [], // Ensure engines array is processed
           propulsionType: data.propulsionType,
           propulsionOtherDesc: data.propulsionOtherDesc,
           hullMaterial: data.hullMaterial,
@@ -143,9 +144,6 @@ export default function RegistrationDetailPage() {
           fuelTypeOtherDesc: data.fuelTypeOtherDesc,
           vesselType: data.vesselType,
           vesselTypeOtherDesc: data.vesselTypeOtherDesc,
-          engineHorsepower: data.engineHorsepower,
-          engineMake: data.engineMake,
-          engineSerialNumbers: data.engineSerialNumbers,
           certificateGeneratedAt: ensureDateObject(data.certificateGeneratedAt),
           certificateFileName: data.certificateFileName,
           certificateFileUrl: data.certificateFileUrl,
@@ -570,22 +568,34 @@ export default function RegistrationDetailPage() {
         <div className="lg:col-span-2 space-y-6">
           <Card>
             <CardHeader><CardTitle>Craft Details</CardTitle></CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-              <div><strong>Make:</strong> {registration.craftMake}</div>
-              <div><strong>Model:</strong> {registration.craftModel}</div>
-              <div><strong>Year:</strong> {registration.craftYear}</div>
-              <div><strong>Color:</strong> {registration.craftColor}</div>
-              <div><strong>Hull ID:</strong> {registration.hullIdNumber}</div>
-              <div><strong>Length:</strong> {registration.craftLength} {registration.lengthUnits}</div>
-              {registration.engineMake && <div><strong>Engine Make:</strong> {registration.engineMake}</div>}
-              {registration.engineHorsepower && <div><strong>Engine HP:</strong> {registration.engineHorsepower}</div>}
-              {registration.engineSerialNumbers && <div className="md:col-span-2"><strong>Engine S/N:</strong> {registration.engineSerialNumbers}</div>}
-              <div><strong>Propulsion:</strong> {registration.propulsionType} {registration.propulsionOtherDesc && `(${registration.propulsionOtherDesc})`}</div>
-              <div><strong>Hull Material:</strong> {registration.hullMaterial} {registration.hullMaterialOtherDesc && `(${registration.hullMaterialOtherDesc})`}</div>
-              <div><strong>Craft Use:</strong> {registration.craftUse} {registration.craftUseOtherDesc && `(${registration.craftUseOtherDesc})`}</div>
-              <div><strong>Fuel Type:</strong> {registration.fuelType} {registration.fuelTypeOtherDesc && `(${registration.fuelTypeOtherDesc})`}</div>
-              <div><strong>Vessel Type:</strong> {registration.vesselType} {registration.vesselTypeOtherDesc && `(${registration.vesselTypeOtherDesc})`}</div>
-              {registration.distinguishingFeatures && <div className="md:col-span-2"><strong>Features:</strong> {registration.distinguishingFeatures}</div>}
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div><strong>Make:</strong> {registration.craftMake}</div>
+                <div><strong>Model:</strong> {registration.craftModel}</div>
+                <div><strong>Year:</strong> {registration.craftYear}</div>
+                <div><strong>Color:</strong> {registration.craftColor}</div>
+                <div><strong>Hull ID:</strong> {registration.hullIdNumber}</div>
+                <div><strong>Length:</strong> {registration.craftLength} {registration.lengthUnits}</div>
+                <div><strong>Propulsion:</strong> {registration.propulsionType} {registration.propulsionOtherDesc && `(${registration.propulsionOtherDesc})`}</div>
+                <div><strong>Hull Material:</strong> {registration.hullMaterial} {registration.hullMaterialOtherDesc && `(${registration.hullMaterialOtherDesc})`}</div>
+                <div><strong>Craft Use:</strong> {registration.craftUse} {registration.craftUseOtherDesc && `(${registration.craftUseOtherDesc})`}</div>
+                <div><strong>Fuel Type:</strong> {registration.fuelType} {registration.fuelTypeOtherDesc && `(${registration.fuelTypeOtherDesc})`}</div>
+                <div className="md:col-span-2"><strong>Vessel Type:</strong> {registration.vesselType} {registration.vesselTypeOtherDesc && `(${registration.vesselTypeOtherDesc})`}</div>
+                {registration.distinguishingFeatures && <div className="md:col-span-2"><strong>Features:</strong> {registration.distinguishingFeatures}</div>}
+              </div>
+              {(registration.engines && registration.engines.length > 0) && (
+                <>
+                  <Separator className="my-3" />
+                  <h4 className="font-semibold text-md mb-2 flex items-center gap-2"><Cog className="h-5 w-5 text-muted-foreground"/>Engine Details</h4>
+                  {registration.engines.map((engine, index) => (
+                    <div key={engine.engineId || index} className="ml-2 pl-3 border-l-2 border-muted space-y-1 text-sm">
+                      <p><strong>Engine {index + 1} Make:</strong> {engine.make || "N/A"}</p>
+                      <p><strong>Engine {index + 1} HP:</strong> {engine.horsepower || "N/A"}</p>
+                      <p><strong>Engine {index + 1} S/N:</strong> {engine.serialNumber || "N/A"}</p>
+                    </div>
+                  ))}
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -705,3 +715,5 @@ export default function RegistrationDetailPage() {
     </div>
   );
 }
+
+    

@@ -4,7 +4,7 @@
 
 import { collection, getDocs, Timestamp, doc, type DocumentReference } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { Registration, Owner, ProofOfOwnershipDoc, User } from '@/types';
+import type { Registration, Owner, ProofOfOwnershipDoc, User, EngineDetail } from '@/types';
 
 // Helper function to safely convert a Firestore Timestamp, JS Date, or Firestore-like object to a JS Date object.
 // Returns undefined if input is null/undefined or cannot be converted.
@@ -72,6 +72,13 @@ export async function getRegistrations(): Promise<Registration[]> {
         fileUrl: docData.fileUrl || '',
         uploadedAt: ensureSerializableDate(docData.uploadedAt), // Will be Date | undefined
       });
+      
+      const mapEngineDetail = (engineData: any): EngineDetail => ({
+        engineId: engineData.engineId || crypto.randomUUID(),
+        make: engineData.make,
+        horsepower: engineData.horsepower,
+        serialNumber: engineData.serialNumber,
+      });
 
       return {
         registrationId: docSnapshot.id,
@@ -102,6 +109,7 @@ export async function getRegistrations(): Promise<Registration[]> {
         craftLength: data.craftLength || 0,
         lengthUnits: data.lengthUnits || 'm',
         distinguishingFeatures: data.distinguishingFeatures,
+        engines: Array.isArray(data.engines) ? data.engines.map(mapEngineDetail) : [],
         propulsionType: data.propulsionType || 'Outboard',
         propulsionOtherDesc: data.propulsionOtherDesc,
         hullMaterial: data.hullMaterial || 'Fiberglass',
@@ -112,9 +120,6 @@ export async function getRegistrations(): Promise<Registration[]> {
         fuelTypeOtherDesc: data.fuelTypeOtherDesc,
         vesselType: data.vesselType || 'OpenBoat',
         vesselTypeOtherDesc: data.vesselTypeOtherDesc,
-        engineHorsepower: data.engineHorsepower,
-        engineMake: data.engineMake,
-        engineSerialNumbers: data.engineSerialNumbers,
         certificateGeneratedAt: ensureSerializableDate(data.certificateGeneratedAt),
         certificateFileName: data.certificateFileName,
         certificateFileUrl: data.certificateFileUrl,
@@ -224,9 +229,10 @@ export async function createRegistration(
     if (clientData.fuelTypeOtherDesc !== undefined) registrationDataForFirestore.fuelTypeOtherDesc = clientData.fuelTypeOtherDesc;
     if (clientData.vesselTypeOtherDesc !== undefined) registrationDataForFirestore.vesselTypeOtherDesc = clientData.vesselTypeOtherDesc;
     
-    if (clientData.engineHorsepower !== undefined && clientData.engineHorsepower !== null) registrationDataForFirestore.engineHorsepower = clientData.engineHorsepower;
-    if (clientData.engineMake !== undefined) registrationDataForFirestore.engineMake = clientData.engineMake;
-    if (clientData.engineSerialNumbers !== undefined) registrationDataForFirestore.engineSerialNumbers = clientData.engineSerialNumbers;
+    // Note: engine fields would need to be mapped here if this action was active
+    // if (clientData.engineHorsepower !== undefined && clientData.engineHorsepower !== null) registrationDataForFirestore.engineHorsepower = clientData.engineHorsepower;
+    // if (clientData.engineMake !== undefined) registrationDataForFirestore.engineMake = clientData.engineMake;
+    // if (clientData.engineSerialNumbers !== undefined) registrationDataForFirestore.engineSerialNumbers = clientData.engineSerialNumbers;
 
     if (clientData.status === "Submitted") {
       registrationDataForFirestore.submittedAt = Timestamp.now();
@@ -252,5 +258,7 @@ export async function createRegistration(
 }
 */
 
+
+    
 
     

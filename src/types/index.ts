@@ -38,6 +38,13 @@ export interface ProofOfOwnershipDoc {
   uploadedAt: Timestamp | Date | string;
 }
 
+export interface EngineDetail {
+  engineId?: string; // Optional UUID for react key
+  make?: string;
+  horsepower?: number;
+  serialNumber?: string;
+}
+
 export interface Registration {
   registrationId: string;
   scaRegoNo?: string;
@@ -78,9 +85,7 @@ export interface Registration {
   vesselType: "OpenBoat" | "CabinCruiser" | "Sailboat" | "PWC" | "Other";
   vesselTypeOtherDesc?: string;
 
-  engineHorsepower?: number;
-  engineMake?: string;
-  engineSerialNumbers?: string;
+  engines?: EngineDetail[]; // Replaced individual engine fields
 
   certificateGeneratedAt?: Timestamp | Date | string;
   certificateFileName?: string;
@@ -319,3 +324,5 @@ export interface Infringement {
   lastUpdatedAt?: Timestamp | Date | string;
   lastUpdatedByRef?: string | DocumentReference<User>;
 }
+
+    
