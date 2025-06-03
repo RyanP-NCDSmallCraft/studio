@@ -108,6 +108,14 @@ interface OperatorLicenseFormProps {
   existingOperatorData?: Partial<Operator>;
 }
 
+const licenseClassOptions = [
+  "Commercial Passenger Small Craft",
+  "Commercial Fishing Small Craft",
+  "Commercial Cargo Small Craft",
+  "Commercial Mixed Use Small Craft",
+  "Other"
+];
+
 export function OperatorLicenseForm({
   mode,
   licenseApplicationId,
@@ -126,7 +134,7 @@ export function OperatorLicenseForm({
     previousLicenseNumber: combinedData?.previousLicenseNumber || "",
     surname: combinedData?.surname || "",
     firstName: combinedData?.firstName || "",
-    dobString: combinedData?.dob ? format( (combinedData.dob as Timestamp).toDate(), "yyyy-MM-dd") : "",
+    dobString: combinedData?.dob ? format( (combinedData.dob instanceof Timestamp ? combinedData.dob.toDate() : new Date(combinedData.dob as any)), "yyyy-MM-dd") : "",
     sex: combinedData?.sex || "Male",
     placeOfOriginTown: combinedData?.placeOfOriginTown || "",
     placeOfOriginDistrict: combinedData?.placeOfOriginDistrict || "",
@@ -151,10 +159,10 @@ export function OperatorLicenseForm({
     placeIssued: combinedData?.placeIssued || "",
     methodOfPayment: combinedData?.methodOfPayment || undefined,
     paymentBy: combinedData?.paymentBy || "",
-    paymentDateString: combinedData?.paymentDate ? format((combinedData.paymentDate as Timestamp).toDate(), "yyyy-MM-dd") : "",
+    paymentDateString: combinedData?.paymentDate ? format((combinedData.paymentDate instanceof Timestamp ? combinedData.paymentDate.toDate() : new Date(combinedData.paymentDate as any)), "yyyy-MM-dd") : "",
     paymentAmount: combinedData?.paymentAmount || null,
-    issuedAtString: combinedData?.issuedAt ? format((combinedData.issuedAt as Timestamp).toDate(), "yyyy-MM-dd") : "",
-    expiryDateString: combinedData?.expiryDate ? format((combinedData.expiryDate as Timestamp).toDate(), "yyyy-MM-dd") : "",
+    issuedAtString: combinedData?.issuedAt ? format((combinedData.issuedAt instanceof Timestamp ? combinedData.issuedAt.toDate() : new Date(combinedData.issuedAt as any)), "yyyy-MM-dd") : "",
+    expiryDateString: combinedData?.expiryDate ? format((combinedData.expiryDate instanceof Timestamp ? combinedData.expiryDate.toDate() : new Date(combinedData.expiryDate as any)), "yyyy-MM-dd") : "",
     licenseClass: combinedData?.licenseClass || "",
     restrictions: combinedData?.restrictions || "",
     notes: combinedData?.notes || "",
@@ -414,7 +422,22 @@ export function OperatorLicenseForm({
                  <FormField control={form.control} name="paymentAmount" render={({ field }) => (<FormItem><FormLabel>Payment Amount</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? null : parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
                  <FormField control={form.control} name="issuedAtString" render={({ field }) => (<FormItem><FormLabel>Date Issued</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>)} />
                  <FormField control={form.control} name="expiryDateString" render={({ field }) => (<FormItem><FormLabel>Expiry Date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                 <FormField control={form.control} name="licenseClass" render={({ field }) => (<FormItem><FormLabel>License Class</FormLabel><FormControl><Input placeholder="e.g., Class 1 - Dinghy" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                 <FormField
+                    control={form.control}
+                    name="licenseClass"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>License Class</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl><SelectTrigger><SelectValue placeholder="Select license class..." /></SelectTrigger></FormControl>
+                          <SelectContent>
+                            {licenseClassOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                  <FormField control={form.control} name="restrictions" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Restrictions</FormLabel><FormControl><Textarea placeholder="e.g., Daylight hours only" {...field} /></FormControl><FormMessage /></FormItem>)} />
             </CardContent>
         </Card>
@@ -434,5 +457,3 @@ export function OperatorLicenseForm({
     </Form>
   );
 }
-
-    

@@ -24,6 +24,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { FormItem } from "@/components/ui/form";
 import React, { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -45,6 +47,14 @@ const ensureDateObject = (dateValue: any): Date | undefined => {
   }
   return undefined;
 };
+
+const licenseClassOptions = [
+  "Commercial Passenger Small Craft",
+  "Commercial Fishing Small Craft",
+  "Commercial Cargo Small Craft",
+  "Commercial Mixed Use Small Craft",
+  "Other"
+];
 
 
 export default function OperatorLicenseDetailPage() {
@@ -448,7 +458,15 @@ export default function OperatorLicenseDetailPage() {
             <FormItem><Label htmlFor="officePaymentAmount">Payment Amount (K)</Label><Input id="officePaymentAmount" type="number" value={officePaymentAmount} onChange={e => setOfficePaymentAmount(e.target.value)} /></FormItem>
             <FormItem><Label htmlFor="officeIssuedAt">Date Issued</Label><Input id="officeIssuedAt" type="date" value={officeIssuedAt} onChange={e => setOfficeIssuedAt(e.target.value)} /></FormItem>
             <FormItem><Label htmlFor="officeExpiryDate">Expiry Date</Label><Input id="officeExpiryDate" type="date" value={officeExpiryDate} onChange={e => setOfficeExpiryDate(e.target.value)} /></FormItem>
-            <FormItem><Label htmlFor="officeLicenseClass">License Class</Label><Input id="officeLicenseClass" value={officeLicenseClass} onChange={e => setOfficeLicenseClass(e.target.value)} /></FormItem>
+            <FormItem>
+                <Label htmlFor="officeLicenseClass">License Class</Label>
+                <Select onValueChange={(value) => setOfficeLicenseClass(value)} value={officeLicenseClass}>
+                    <SelectTrigger id="officeLicenseClass"><SelectValue placeholder="Select license class..."/></SelectTrigger>
+                    <SelectContent>
+                        {licenseClassOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                    </SelectContent>
+                </Select>
+            </FormItem>
             <FormItem><Label htmlFor="officeRestrictions">Restrictions</Label><Textarea id="officeRestrictions" value={officeRestrictions} onChange={e => setOfficeRestrictions(e.target.value)} /></FormItem>
           </div>
           <AlertDialogFooter>
@@ -462,5 +480,3 @@ export default function OperatorLicenseDetailPage() {
     </div>
   );
 }
-
-    
