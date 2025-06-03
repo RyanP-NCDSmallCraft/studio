@@ -73,8 +73,49 @@ export default function InfringementListPage() {
       const infringementsQuery = query(collection(db, "infringements"), ...queryConstraints);
       
       const snapshot = await getDocs(infringementsQuery);
-      const fetchedInfringements = snapshot.docs.map(docSnap => {
+      const fetchedInfringementsPromises = snapshot.docs.map(async docSnap => { // Added async here
         const data = docSnap.data();
+        
+        let registrationData: Infringement['registrationData'] = undefined;
+        if (data.registrationRef instanceof DocumentReference) {
+            const regDocSnap = await getDoc(data.registrationRef as DocumentReference<Registration>);
+            if (regDocSnap.exists()) {
+                const regData = regDocSnap.data();
+                const primaryOwner = regData.owners?.find(o => o.role === 'Primary') || regData.owners?.[0];
+                registrationData = {
+                    id: regDocSnap.id,
+                    scaRegoNo: regData.scaRegoNo,
+                    hullIdNumber: regData.hullIdNumber,
+                    craftMake: regData.craftMake,
+                    craftModel: regData.craftModel,
+                    ownerName: primaryOwner ? `${primaryOwner.firstName} ${primaryOwner.surname}` : 'N/A',
+                };
+            }
+        } else if (typeof data.registrationRef === 'string') {
+           // Potentially fetch if only ID is stored, or assume it's denormalized in registrationData
+           if (data.registrationData) {
+             registrationData = data.registrationData;
+           }
+        }
+
+
+        let issuedByData: Infringement['issuedByData'] = undefined;
+        if (data.issuedByRef instanceof DocumentReference) {
+            const userDocSnap = await getDoc(data.issuedByRef as DocumentReference<User>);
+            if (userDocSnap.exists()) {
+                const userData = userDocSnap.data();
+                issuedByData = {
+                    id: userDocSnap.id,
+                    displayName: userData.displayName || userData.email,
+                };
+            }
+        } else if (typeof data.issuedByRef === 'string') {
+            if (data.issuedByData) {
+                issuedByData = data.issuedByData;
+            }
+        }
+
+
         return {
           ...data,
           infringementId: docSnap.id,
@@ -86,13 +127,16 @@ export default function InfringementListPage() {
             ...data.paymentDetails,
             paymentDate: ensureSerializableDate(data.paymentDetails.paymentDate),
           } : undefined,
-          registrationRef: (data.registrationRef as DocumentReference)?.id || data.registrationRef,
-          issuedByRef: (data.issuedByRef as DocumentReference)?.id || data.issuedByRef,
-          approvedByRef: (data.approvedByRef as DocumentReference)?.id || data.approvedByRef,
-          createdByRef: (data.createdByRef as DocumentReference)?.id || data.createdByRef,
-          lastUpdatedByRef: (data.lastUpdatedByRef as DocumentReference)?.id || data.lastUpdatedByRef,
+          registrationRef: (data.registrationRef instanceof DocumentReference) ? data.registrationRef.id : data.registrationRef,
+          registrationData, // Use the fetched/denormalized data
+          issuedByRef: (data.issuedByRef instanceof DocumentReference) ? data.issuedByRef.id : data.issuedByRef,
+          issuedByData, // Use the fetched/denormalized data
+          approvedByRef: (data.approvedByRef instanceof DocumentReference) ? data.approvedByRef.id : data.approvedByRef,
+          createdByRef: (data.createdByRef instanceof DocumentReference) ? data.createdByRef.id : data.createdByRef,
+          lastUpdatedByRef: (data.lastUpdatedByRef instanceof DocumentReference) ? data.lastUpdatedByRef.id : data.lastUpdatedByRef,
         } as Infringement;
       });
+      const fetchedInfringements = await Promise.all(fetchedInfringementsPromises); // Wait for all promises
       setInfringements(fetchedInfringements);
     } catch (error: any) {
       console.error("Error fetching infringements:", error);

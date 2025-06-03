@@ -6,7 +6,7 @@ import { Ship, ArrowLeft, Loader2, AlertTriangle } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import React, { useState, useEffect, useCallback } from "react";
-import { doc, getDoc, Timestamp, type DocumentReference } from 'firebase/firestore'; // Ensure DocumentReference is imported
+import { doc, getDoc, Timestamp, DocumentReference } from 'firebase/firestore'; // Changed: Removed 'type' from DocumentReference
 import { db } from '@/lib/firebase';
 import { useAuth } from "@/hooks/useAuth"; // Import useAuth
 import { isValid } from "date-fns";

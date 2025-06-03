@@ -4,7 +4,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import type { Infringement, User } from "@/types";
+import type { Infringement, User, Registration } from "@/types"; // Added Registration
 import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
 import { useParams, useRouter }
@@ -64,6 +64,42 @@ export default function InfringementDetailPage() {
       const docSnap = await getDoc(infringDocRef);
       if (docSnap.exists()) {
         const data = docSnap.data();
+
+        let registrationData: Infringement['registrationData'] = undefined;
+        if (data.registrationRef instanceof DocumentReference) {
+            const regDocSnap = await getDoc(data.registrationRef as DocumentReference<Registration>);
+            if (regDocSnap.exists()) {
+                const regData = regDocSnap.data();
+                const primaryOwner = regData.owners?.find(o => o.role === 'Primary') || regData.owners?.[0];
+                registrationData = {
+                    id: regDocSnap.id,
+                    scaRegoNo: regData.scaRegoNo,
+                    hullIdNumber: regData.hullIdNumber,
+                    craftMake: regData.craftMake,
+                    craftModel: regData.craftModel,
+                    ownerName: primaryOwner ? `${primaryOwner.firstName} ${primaryOwner.surname}` : 'N/A',
+                };
+            }
+        } else if (data.registrationData) { // Use denormalized data if ref not present or string
+            registrationData = data.registrationData;
+        }
+
+
+        let issuedByData: Infringement['issuedByData'] = undefined;
+        if (data.issuedByRef instanceof DocumentReference) {
+            const userDocSnap = await getDoc(data.issuedByRef as DocumentReference<User>);
+            if (userDocSnap.exists()) {
+                const userData = userDocSnap.data();
+                issuedByData = {
+                    id: userDocSnap.id,
+                    displayName: userData.displayName || userData.email,
+                };
+            }
+        } else if (data.issuedByData) { // Use denormalized data if ref not present or string
+             issuedByData = data.issuedByData;
+        }
+
+
         setInfringement({
           ...data,
           infringementId: docSnap.id,
@@ -75,11 +111,13 @@ export default function InfringementDetailPage() {
             ...data.paymentDetails,
             paymentDate: ensureSerializableDate(data.paymentDetails.paymentDate),
           } : undefined,
-          registrationRef: (data.registrationRef as DocumentReference)?.id || data.registrationRef,
-          issuedByRef: (data.issuedByRef as DocumentReference)?.id || data.issuedByRef,
-          approvedByRef: (data.approvedByRef as DocumentReference)?.id || data.approvedByRef,
-          createdByRef: (data.createdByRef as DocumentReference)?.id || data.createdByRef,
-          lastUpdatedByRef: (data.lastUpdatedByRef as DocumentReference)?.id || data.lastUpdatedByRef,
+          registrationRef: (data.registrationRef instanceof DocumentReference) ? data.registrationRef.id : data.registrationRef,
+          registrationData, // Use the fetched/denormalized data
+          issuedByRef: (data.issuedByRef instanceof DocumentReference) ? data.issuedByRef.id : data.issuedByRef,
+          issuedByData, // Use the fetched/denormalized data
+          approvedByRef: (data.approvedByRef instanceof DocumentReference) ? data.approvedByRef.id : data.approvedByRef,
+          createdByRef: (data.createdByRef instanceof DocumentReference) ? data.createdByRef.id : data.createdByRef,
+          lastUpdatedByRef: (data.lastUpdatedByRef instanceof DocumentReference) ? data.lastUpdatedByRef.id : data.lastUpdatedByRef,
         } as Infringement);
       } else {
         setError("Infringement not found.");
