@@ -7,7 +7,8 @@ import { FileSpreadsheet, Download, Sailboat, ArrowLeft } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { formatFirebaseTimestamp } from '@/lib/utils';
 import { useToast } from "@/hooks/use-toast";
-import { Separator } from "@/components/ui/separator"; // Added import
+import { Separator } from "@/components/ui/separator";
+import Image from "next/image"; // Added import for Image
 
 // Placeholder data
 const placeholderRegistration: Registration = {
@@ -74,7 +75,13 @@ export default function CertificatePreviewPage() {
         
         <div className="relative z-10">
           <header className="text-center border-b-2 border-primary pb-4 mb-6">
-            <Sailboat className="h-16 w-16 text-primary mx-auto mb-2" />
+            <Image 
+              src="https://ncdsmallcraft.com/images/114/11667247/LOGO-NCDCRB-small.png" 
+              alt="NCDCRB Logo" 
+              width={64} 
+              height={64} 
+              className="mx-auto mb-2 h-16 w-16"
+            />
             <h2 className="text-4xl font-bold text-primary">Certificate of Registration</h2>
             <p className="text-muted-foreground text-lg">Small Craft Safety Program</p>
           </header>
