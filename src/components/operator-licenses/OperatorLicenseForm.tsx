@@ -22,28 +22,29 @@ import type { Operator, OperatorLicense, OperatorLicenseAttachedDoc, User } from
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
-import { Save, Send, UserCircle, FileText, UploadCloud, PlusCircle, Trash2 } from "lucide-react"; // Added icons
+import { Save, Send, UserCircle, FileText, UploadCloud, PlusCircle, Trash2, ImageUp } from "lucide-react"; // Added ImageUp
 import React, { useState, useEffect } from "react";
-import { Timestamp, doc, setDoc, addDoc, collection, DocumentReference, serverTimestamp, updateDoc } from "firebase/firestore"; // Added Firestore functions
-import { db } from "@/lib/firebase"; // Import db
+import { Timestamp, doc, setDoc, addDoc, collection, DocumentReference, serverTimestamp, updateDoc } from "firebase/firestore";
+import { getStorage, ref as storageRefFirebase, uploadBytesResumable, getDownloadURL } from "firebase/storage"; // Explicit import for storageRef
+import { db, storage } from "@/lib/firebase";
 import { format, parseISO, isValid } from 'date-fns';
+import Image from "next/image"; // For image preview
+import { Progress } from "@/components/ui/progress"; // For upload progress
 
 const attachedDocSchema = z.object({
-  docId: z.string().optional(), // Will be auto-generated if new
+  docId: z.string().optional(),
   docType: z.enum(["PoliceClearance", "PreviousLicenseCopy", "BirthCertificateCopy", "NIDCardCopy", "IDPhoto", "Other"]),
   docOtherDescription: z.string().optional(),
-  fileName: z.string().min(1, "File name is required for uploaded documents."), // To be filled after mock upload
-  fileUrl: z.string().url("Valid URL required.").min(1, "File URL is required."), // To be filled after mock upload
-  uploadedAt: z.custom<Timestamp>().default(() => Timestamp.now()), // Default to now
-  // file: z.any().optional(), // Removed, handle file objects transiently
+  fileName: z.string().min(1, "File name is required for uploaded documents."),
+  fileUrl: z.string().url("Valid URL required.").min(1, "File URL is required."),
+  uploadedAt: z.custom<Timestamp>().default(() => Timestamp.now()),
 });
 
 const operatorLicenseFormSchema = z.object({
   applicationType: z.enum(["New", "Renewal"]),
   previousLicenseNumber: z.string().optional(),
 
-  // Operator details (will be part of a sub-object for saving to 'operators' collection)
-  operatorId: z.string().optional(), // To store existing operator ID during edit
+  operatorId: z.string().optional(),
   surname: z.string().min(1, "Surname is required"),
   firstName: z.string().min(1, "First name is required"),
   dobString: z.string().min(1, "Date of birth is required").refine(val => isValid(parseISO(val)), { message: "Invalid date format. Use YYYY-MM-DD."}),
@@ -61,11 +62,10 @@ const operatorLicenseFormSchema = z.object({
   hairColor: z.string().optional(),
   weightKg: z.number().positive("Weight must be positive").optional().nullable(),
   bodyMarks: z.string().optional(),
-  idSizePhotoUrl: z.string().url("Valid URL for photo required").optional().or(z.literal("")), // Store URL
+  idSizePhotoUrl: z.string().url("Valid URL for photo required").optional().or(z.literal("")),
   
   attachedDocuments: z.array(attachedDocSchema).optional().default([]),
 
-  // Office Use Only - fields for the license itself
   assignedLicenseNumber: z.string().optional(),
   receiptNo: z.string().optional(),
   placeIssued: z.string().optional(),
@@ -86,16 +86,6 @@ const operatorLicenseFormSchema = z.object({
       path: ["previousLicenseNumber"],
       message: "Previous License No. is required for renewals.",
     });
-  }
-  // Refine idSizePhotoUrl for new applications
-  if (data.applicationType === "New" && (!data.idSizePhotoUrl || data.idSizePhotoUrl.trim() === "")) {
-     // For now, making it optional as file upload is not implemented.
-     // In a real scenario with file upload, this would be required.
-    // ctx.addIssue({
-    //   code: z.ZodIssueCode.custom,
-    //   path: ["idSizePhotoUrl"],
-    //   message: "ID Photo URL is required for new applications.",
-    // });
   }
 });
 
@@ -126,23 +116,28 @@ export function OperatorLicenseForm({
   const { toast } = useToast();
   const router = useRouter();
 
+  const [selectedIdPhotoFile, setSelectedIdPhotoFile] = useState<File | null>(null);
+  const [idPhotoPreviewUrl, setIdPhotoPreviewUrl] = useState<string | null>(existingOperatorData?.idSizePhotoUrl || null);
+  const [idPhotoUploadProgress, setIdPhotoUploadProgress] = useState<number | null>(null);
+
+
   const combinedData = { ...existingOperatorData, ...existingLicenseData };
 
   const defaultValues: Partial<OperatorLicenseFormValues> = {
-    operatorId: existingOperatorData?.operatorId || undefined,
+    operatorId: existingOperatorData?.operatorId ?? undefined,
     applicationType: combinedData?.applicationType || "New",
-    previousLicenseNumber: combinedData?.previousLicenseNumber || "",
-    surname: combinedData?.surname || "",
-    firstName: combinedData?.firstName || "",
+    previousLicenseNumber: combinedData?.previousLicenseNumber ?? "",
+    surname: combinedData?.surname ?? "",
+    firstName: combinedData?.firstName ?? "",
     dobString: combinedData?.dob ? format( (combinedData.dob instanceof Timestamp ? combinedData.dob.toDate() : new Date(combinedData.dob as any)), "yyyy-MM-dd") : "",
     sex: combinedData?.sex || "Male",
-    placeOfOriginTown: combinedData?.placeOfOriginTown || "",
-    placeOfOriginDistrict: combinedData?.placeOfOriginDistrict || "",
-    placeOfOriginLLG: combinedData?.placeOfOriginLLG || "",
-    placeOfOriginVillage: combinedData?.placeOfOriginVillage || "",
-    phoneMobile: combinedData?.phoneMobile || "",
-    email: combinedData?.email || "",
-    postalAddress: combinedData?.postalAddress || "",
+    placeOfOriginTown: combinedData?.placeOfOriginTown ?? "",
+    placeOfOriginDistrict: combinedData?.placeOfOriginDistrict ?? "",
+    placeOfOriginLLG: combinedData?.placeOfOriginLLG ?? "",
+    placeOfOriginVillage: combinedData?.placeOfOriginVillage ?? "",
+    phoneMobile: combinedData?.phoneMobile ?? "",
+    email: combinedData?.email ?? "",
+    postalAddress: combinedData?.postalAddress ?? "",
     heightCm: combinedData?.heightCm ?? null,
     eyeColor: combinedData?.eyeColor ?? "",
     skinColor: combinedData?.skinColor ?? "",
@@ -154,18 +149,18 @@ export function OperatorLicenseForm({
         ...doc,
         uploadedAt: doc.uploadedAt instanceof Timestamp ? doc.uploadedAt : Timestamp.fromDate(new Date(doc.uploadedAt as string)),
     })),
-    assignedLicenseNumber: combinedData?.assignedLicenseNumber || "",
-    receiptNo: combinedData?.receiptNo || "",
-    placeIssued: combinedData?.placeIssued || "",
-    methodOfPayment: combinedData?.methodOfPayment || undefined,
-    paymentBy: combinedData?.paymentBy || "",
+    assignedLicenseNumber: combinedData?.assignedLicenseNumber ?? "",
+    receiptNo: combinedData?.receiptNo ?? "",
+    placeIssued: combinedData?.placeIssued ?? "",
+    methodOfPayment: combinedData?.methodOfPayment ?? undefined,
+    paymentBy: combinedData?.paymentBy ?? "",
     paymentDateString: combinedData?.paymentDate ? format((combinedData.paymentDate instanceof Timestamp ? combinedData.paymentDate.toDate() : new Date(combinedData.paymentDate as any)), "yyyy-MM-dd") : "",
     paymentAmount: combinedData?.paymentAmount ?? null,
     issuedAtString: combinedData?.issuedAt ? format((combinedData.issuedAt instanceof Timestamp ? combinedData.issuedAt.toDate() : new Date(combinedData.issuedAt as any)), "yyyy-MM-dd") : "",
     expiryDateString: combinedData?.expiryDate ? format((combinedData.expiryDate instanceof Timestamp ? combinedData.expiryDate.toDate() : new Date(combinedData.expiryDate as any)), "yyyy-MM-dd") : "",
-    licenseClass: combinedData?.licenseClass || "",
-    restrictions: combinedData?.restrictions || "",
-    notes: combinedData?.notes || "",
+    licenseClass: combinedData?.licenseClass ?? "",
+    restrictions: combinedData?.restrictions ?? "",
+    notes: combinedData?.notes ?? "",
   };
 
   const form = useForm<OperatorLicenseFormValues>({
@@ -174,13 +169,37 @@ export function OperatorLicenseForm({
     mode: "onChange",
   });
 
+  useEffect(() => {
+    // Initialize preview URL if existing data has it
+    if (existingOperatorData?.idSizePhotoUrl) {
+      setIdPhotoPreviewUrl(existingOperatorData.idSizePhotoUrl);
+    }
+  }, [existingOperatorData?.idSizePhotoUrl]);
+
   const { fields, append, remove, update } = useFieldArray({
     control: form.control,
     name: "attachedDocuments",
   });
 
-
   const watchApplicationType = form.watch("applicationType");
+
+  const handleIdPhotoFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedIdPhotoFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setIdPhotoPreviewUrl(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+      // Clear the form's idSizePhotoUrl field value as we will get it from upload
+      form.setValue("idSizePhotoUrl", ""); 
+    } else {
+      setSelectedIdPhotoFile(null);
+      // Revert to existing image URL if available, otherwise null
+      setIdPhotoPreviewUrl(existingOperatorData?.idSizePhotoUrl || null);
+    }
+  };
 
   const onSubmit = async (data: OperatorLicenseFormValues, submissionStatus: OperatorLicense["status"]) => {
     if (!currentUser?.userId) {
@@ -188,10 +207,48 @@ export function OperatorLicenseForm({
       return;
     }
     
+    let finalIdSizePhotoUrl = data.idSizePhotoUrl; // Start with existing or form-provided URL (if any)
+
+    if (selectedIdPhotoFile) {
+      toast({ title: "Uploading ID Photo...", description: "Please wait." });
+      setIdPhotoUploadProgress(0);
+      const photoFileName = `${Date.now()}_${selectedIdPhotoFile.name}`;
+      // Use operatorId if available and in edit mode, otherwise use a timestamp for uniqueness
+      const operatorContextId = data.operatorId || (mode === 'edit' ? licenseApplicationId : Date.now().toString());
+      const photoPath = `operator_photos/${operatorContextId}/${photoFileName}`;
+      const photoStorageRef = storageRefFirebase(storage, photoPath);
+
+      try {
+        const uploadTask = uploadBytesResumable(photoStorageRef, selectedIdPhotoFile);
+        await new Promise<void>((resolve, reject) => {
+          uploadTask.on('state_changed',
+            (snapshot) => {
+              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+              setIdPhotoUploadProgress(progress);
+            },
+            (error) => {
+              console.error("ID Photo upload error:", error);
+              reject(error);
+            },
+            async () => {
+              finalIdSizePhotoUrl = await getDownloadURL(uploadTask.snapshot.ref);
+              resolve();
+            }
+          );
+        });
+        toast({ title: "ID Photo Upload Successful" });
+        setIdPhotoUploadProgress(100);
+      } catch (error) {
+        toast({ title: "ID Photo Upload Failed", description: "Could not upload ID photo. Please try again.", variant: "destructive" });
+        setIdPhotoUploadProgress(null);
+        return; // Stop submission if photo upload fails
+      }
+    }
+
+
     try {
-      // 1. Prepare Operator Data
       let operatorId = data.operatorId || (mode === 'edit' && existingOperatorData?.operatorId ? existingOperatorData.operatorId : undefined);
-      const operatorDocData: Omit<Operator, 'operatorId' | 'createdAt' | 'updatedAt' | 'createdByRef' | 'lastUpdatedByRef'> & { createdAt?: Timestamp, updatedAt?: Timestamp, createdByRef?: DocumentReference<User>, lastUpdatedByRef?: DocumentReference<User> } = {
+      const operatorDocData: Omit<Operator, 'operatorId' | 'createdAt' | 'updatedAt' | 'createdByRef' | 'lastUpdatedByRef'> & { createdAt?: Timestamp, updatedAt?: Timestamp, createdByRef?: DocumentReference<User>, lastUpdatedByRef?: DocumentReference<User>, idSizePhotoUrl: string } = {
         surname: data.surname,
         firstName: data.firstName,
         dob: Timestamp.fromDate(parseISO(data.dobString)),
@@ -209,7 +266,7 @@ export function OperatorLicenseForm({
         hairColor: data.hairColor ?? "",
         weightKg: data.weightKg ?? null,
         bodyMarks: data.bodyMarks ?? "",
-        idSizePhotoUrl: data.idSizePhotoUrl ?? "", 
+        idSizePhotoUrl: finalIdSizePhotoUrl ?? "",
       };
 
       if (mode === 'create' || !operatorId) {
@@ -218,7 +275,7 @@ export function OperatorLicenseForm({
         const operatorColRef = collection(db, "operators");
         const newOperatorDocRef = await addDoc(operatorColRef, operatorDocData);
         operatorId = newOperatorDocRef.id;
-        form.setValue("operatorId", operatorId); // Update form state if needed
+        form.setValue("operatorId", operatorId);
       } else {
         operatorDocData.updatedAt = Timestamp.now();
         operatorDocData.lastUpdatedByRef = doc(db, "users", currentUser.userId) as DocumentReference<User>;
@@ -227,17 +284,15 @@ export function OperatorLicenseForm({
       }
       const finalOperatorRef = doc(db, "operators", operatorId!) as DocumentReference<Operator>;
 
-      // 2. Prepare License Application Data
-      const licenseDocData: Partial<OperatorLicense> = { // Use Partial for flexibility
+      const licenseDocData: Partial<OperatorLicense> = {
         operatorRef: finalOperatorRef,
         applicationType: data.applicationType,
-        previousLicenseNumber: data.previousLicenseNumber ?? "", // Use null or empty string as per preference
+        previousLicenseNumber: data.previousLicenseNumber ?? "",
         status: submissionStatus,
-        
         assignedLicenseNumber: data.assignedLicenseNumber ?? "",
         receiptNo: data.receiptNo ?? "",
         placeIssued: data.placeIssued ?? "",
-        methodOfPayment: data.methodOfPayment || undefined, // Let Firestore omit if undefined
+        methodOfPayment: data.methodOfPayment || undefined,
         paymentBy: data.paymentBy ?? "",
         paymentAmount: data.paymentAmount ?? null,
         attachedDocuments: data.attachedDocuments.map(d => {
@@ -249,45 +304,27 @@ export function OperatorLicenseForm({
         restrictions: data.restrictions ?? "",
       };
       
-      // Handle date fields carefully to avoid sending 'undefined'
-      if (submissionStatus === "Submitted") {
-        licenseDocData.submittedAt = Timestamp.now();
-      } else if (mode === 'edit' && existingLicenseData?.submittedAt) {
-        licenseDocData.submittedAt = existingLicenseData.submittedAt instanceof Timestamp 
-            ? existingLicenseData.submittedAt 
-            : Timestamp.fromDate(new Date(existingLicenseData.submittedAt as any));
-      } else {
-        licenseDocData.submittedAt = null;
-      }
+      licenseDocData.submittedAt = (submissionStatus === "Submitted")
+        ? Timestamp.now()
+        : (mode === 'edit' && existingLicenseData?.submittedAt
+            ? (existingLicenseData.submittedAt instanceof Timestamp ? existingLicenseData.submittedAt : Timestamp.fromDate(new Date(existingLicenseData.submittedAt as any)))
+            : null);
 
-      // approvedAt is usually set by a separate action, not on general form submission
       licenseDocData.approvedAt = (mode === 'edit' && existingLicenseData?.approvedAt)
         ? (existingLicenseData.approvedAt instanceof Timestamp ? existingLicenseData.approvedAt : Timestamp.fromDate(new Date(existingLicenseData.approvedAt as any)))
         : null;
 
-      if (data.issuedAtString) {
-        licenseDocData.issuedAt = Timestamp.fromDate(parseISO(data.issuedAtString));
-      } else if (mode === 'edit' && existingLicenseData?.issuedAt) {
-        licenseDocData.issuedAt = existingLicenseData.issuedAt instanceof Timestamp ? existingLicenseData.issuedAt : Timestamp.fromDate(new Date(existingLicenseData.issuedAt as any));
-      } else {
-        licenseDocData.issuedAt = null;
-      }
+      licenseDocData.issuedAt = data.issuedAtString
+        ? Timestamp.fromDate(parseISO(data.issuedAtString))
+        : (mode === 'edit' && existingLicenseData?.issuedAt ? (existingLicenseData.issuedAt instanceof Timestamp ? existingLicenseData.issuedAt : Timestamp.fromDate(new Date(existingLicenseData.issuedAt as any))) : null);
 
-      if (data.expiryDateString) {
-        licenseDocData.expiryDate = Timestamp.fromDate(parseISO(data.expiryDateString));
-      } else if (mode === 'edit' && existingLicenseData?.expiryDate) {
-        licenseDocData.expiryDate = existingLicenseData.expiryDate instanceof Timestamp ? existingLicenseData.expiryDate : Timestamp.fromDate(new Date(existingLicenseData.expiryDate as any));
-      } else {
-        licenseDocData.expiryDate = null;
-      }
+      licenseDocData.expiryDate = data.expiryDateString
+        ? Timestamp.fromDate(parseISO(data.expiryDateString))
+        : (mode === 'edit' && existingLicenseData?.expiryDate ? (existingLicenseData.expiryDate instanceof Timestamp ? existingLicenseData.expiryDate : Timestamp.fromDate(new Date(existingLicenseData.expiryDate as any))) : null);
 
-      if (data.paymentDateString) {
-        licenseDocData.paymentDate = Timestamp.fromDate(parseISO(data.paymentDateString));
-      } else if (mode === 'edit' && existingLicenseData?.paymentDate) {
-        licenseDocData.paymentDate = existingLicenseData.paymentDate instanceof Timestamp ? existingLicenseData.paymentDate : Timestamp.fromDate(new Date(existingLicenseData.paymentDate as any));
-      } else {
-        licenseDocData.paymentDate = null;
-      }
+      licenseDocData.paymentDate = data.paymentDateString
+        ? Timestamp.fromDate(parseISO(data.paymentDateString))
+        : (mode === 'edit' && existingLicenseData?.paymentDate ? (existingLicenseData.paymentDate instanceof Timestamp ? existingLicenseData.paymentDate : Timestamp.fromDate(new Date(existingLicenseData.paymentDate as any))) : null);
       
       let finalLicenseApplicationId = licenseApplicationId;
 
@@ -300,9 +337,6 @@ export function OperatorLicenseForm({
             lastUpdatedAt: Timestamp.now(),
             lastUpdatedByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
         };
-        // Clean object: remove keys with null values if Firestore should omit them,
-        // or ensure type definitions allow null for these fields.
-        // For simplicity, Firestore handles nulls correctly by storing them or allowing them in optional fields.
         const newLicenseDocRef = await addDoc(licenseColRef, finalLicenseDataForCreate as OperatorLicense);
         finalLicenseApplicationId = newLicenseDocRef.id;
         toast({ title: "Application Saved", description: `Status: ${submissionStatus}. ID: ${finalLicenseApplicationId}` });
@@ -323,6 +357,8 @@ export function OperatorLicenseForm({
     } catch (error: any) {
       console.error("Error saving operator license:", error);
       toast({ title: "Save Failed", description: error.message || "Could not save operator license.", variant: "destructive" });
+    } finally {
+        setIdPhotoUploadProgress(null); // Reset progress after attempt
     }
   };
   
@@ -359,7 +395,7 @@ export function OperatorLicenseForm({
                 render={({ field }) => (
                   <FormItem className="mt-4">
                     <FormLabel>Previous License Number *</FormLabel>
-                    <FormControl><Input placeholder="Enter previous license number" {...field} /></FormControl>
+                    <FormControl><Input placeholder="Enter previous license number" {...field} value={field.value ?? ""} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -380,7 +416,7 @@ export function OperatorLicenseForm({
             <FormField control={form.control} name="placeOfOriginLLG" render={({ field }) => (<FormItem><FormLabel>LLG *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="placeOfOriginVillage" render={({ field }) => (<FormItem><FormLabel>Village *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="phoneMobile" render={({ field }) => (<FormItem><FormLabel>Mobile Phone *</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="postalAddress" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Postal Address *</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
           </CardContent>
         </Card>
@@ -389,31 +425,34 @@ export function OperatorLicenseForm({
           <CardHeader><CardTitle>Physical Characteristics</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FormField control={form.control} name="heightCm" render={({ field }) => (<FormItem><FormLabel>Height (cm)</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? null : parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="eyeColor" render={({ field }) => (<FormItem><FormLabel>Colour of Eyes</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="skinColor" render={({ field }) => (<FormItem><FormLabel>Colour of Skin</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="hairColor" render={({ field }) => (<FormItem><FormLabel>Colour of Hair</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="eyeColor" render={({ field }) => (<FormItem><FormLabel>Colour of Eyes</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="skinColor" render={({ field }) => (<FormItem><FormLabel>Colour of Skin</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="hairColor" render={({ field }) => (<FormItem><FormLabel>Colour of Hair</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="weightKg" render={({ field }) => (<FormItem><FormLabel>Weight (kg)</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? null : parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="bodyMarks" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Any body marks (e.g., tattoo, scar)</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="bodyMarks" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Any body marks (e.g., tattoo, scar)</FormLabel><FormControl><Textarea {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader><CardTitle>ID Photo</CardTitle></CardHeader>
           <CardContent>
-             <FormField
-                control={form.control}
-                name="idSizePhotoUrl"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Passport-size Photo URL</FormLabel>
-                    <FormControl>
-                      <Input type="url" placeholder="https://example.com/photo.jpg (placeholder for upload)" {...field} />
-                    </FormControl>
-                     <FormDescription>Enter the URL of the applicant's photo. Actual file upload will be added later.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            <FormItem>
+              <FormLabel htmlFor="id-photo-upload">Passport-size Photo</FormLabel>
+              {idPhotoPreviewUrl && (
+                <div className="mt-2 mb-2 w-32 h-40 relative border rounded-md overflow-hidden" data-ai-hint="person portrait">
+                  <Image src={idPhotoPreviewUrl} alt="ID Photo Preview" layout="fill" objectFit="cover" />
+                </div>
+              )}
+              <FormControl>
+                <Input id="id-photo-upload" type="file" accept="image/*" onChange={handleIdPhotoFileChange} className="mt-1" />
+              </FormControl>
+              {idPhotoUploadProgress !== null && idPhotoUploadProgress < 100 && (
+                  <Progress value={idPhotoUploadProgress} className="w-full mt-2 h-2" />
+              )}
+              {idPhotoUploadProgress === 100 && <p className="text-xs text-green-600 mt-1">Upload complete. Image will be saved with form.</p>}
+              <FormDescription>Upload a clear, passport-style photo of the applicant.</FormDescription>
+              <FormMessage>{/* This will show errors for idSizePhotoUrl if any after schema validation, e.g. if URL required by schema but not uploaded */}</FormMessage>
+            </FormItem>
           </CardContent>
         </Card>
         
@@ -439,7 +478,7 @@ export function OperatorLicenseForm({
                   )}
                 />
                 {form.watch(`attachedDocuments.${index}.docType`) === "Other" && (
-                  <FormField control={form.control} name={`attachedDocuments.${index}.docOtherDescription`} render={({ field }) => (<FormItem><FormLabel>Other Description *</FormLabel><FormControl><Input placeholder="Specify document type" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name={`attachedDocuments.${index}.docOtherDescription`} render={({ field }) => (<FormItem><FormLabel>Other Description *</FormLabel><FormControl><Input placeholder="Specify document type" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
                 )}
                 <FormField control={form.control} name={`attachedDocuments.${index}.fileName`} render={({ field }) => (<FormItem><FormLabel>File Name *</FormLabel><FormControl><Input placeholder="document.pdf" {...field} /></FormControl><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name={`attachedDocuments.${index}.fileUrl`} render={({ field }) => (<FormItem><FormLabel>File URL *</FormLabel><FormControl><Input type="url" placeholder="https://example.com/doc.pdf" {...field} /></FormControl><FormDescription>Placeholder for actual file upload.</FormDescription><FormMessage /></FormItem>)} />
@@ -455,22 +494,22 @@ export function OperatorLicenseForm({
         <Card>
             <CardHeader><CardTitle>Office Use Only</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                 <FormField control={form.control} name="assignedLicenseNumber" render={({ field }) => (<FormItem><FormLabel>Assigned License No.</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                 <FormField control={form.control} name="receiptNo" render={({ field }) => (<FormItem><FormLabel>Receipt No.</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                 <FormField control={form.control} name="placeIssued" render={({ field }) => (<FormItem><FormLabel>Place Issued</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                 <FormField control={form.control} name="assignedLicenseNumber" render={({ field }) => (<FormItem><FormLabel>Assigned License No.</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
+                 <FormField control={form.control} name="receiptNo" render={({ field }) => (<FormItem><FormLabel>Receipt No.</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
+                 <FormField control={form.control} name="placeIssued" render={({ field }) => (<FormItem><FormLabel>Place Issued</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
                  <FormField control={form.control} name="methodOfPayment" render={({ field }) => (<FormItem><FormLabel>Method of Payment</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger></FormControl><SelectContent>{["Cash", "Card", "BankDeposit", "Other"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                 <FormField control={form.control} name="paymentBy" render={({ field }) => (<FormItem><FormLabel>Payment By</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                 <FormField control={form.control} name="paymentDateString" render={({ field }) => (<FormItem><FormLabel>Payment Date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                 <FormField control={form.control} name="paymentBy" render={({ field }) => (<FormItem><FormLabel>Payment By</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
+                 <FormField control={form.control} name="paymentDateString" render={({ field }) => (<FormItem><FormLabel>Payment Date</FormLabel><FormControl><Input type="date" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
                  <FormField control={form.control} name="paymentAmount" render={({ field }) => (<FormItem><FormLabel>Payment Amount</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? null : parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
-                 <FormField control={form.control} name="issuedAtString" render={({ field }) => (<FormItem><FormLabel>Date Issued</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                 <FormField control={form.control} name="expiryDateString" render={({ field }) => (<FormItem><FormLabel>Expiry Date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                 <FormField control={form.control} name="issuedAtString" render={({ field }) => (<FormItem><FormLabel>Date Issued</FormLabel><FormControl><Input type="date" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
+                 <FormField control={form.control} name="expiryDateString" render={({ field }) => (<FormItem><FormLabel>Expiry Date</FormLabel><FormControl><Input type="date" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
                  <FormField
                     control={form.control}
                     name="licenseClass"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>License Class</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value ?? ""}>
                           <FormControl><SelectTrigger><SelectValue placeholder="Select license class..." /></SelectTrigger></FormControl>
                           <SelectContent>
                             {licenseClassOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
@@ -480,18 +519,18 @@ export function OperatorLicenseForm({
                       </FormItem>
                     )}
                   />
-                 <FormField control={form.control} name="restrictions" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Restrictions</FormLabel><FormControl><Textarea placeholder="e.g., Daylight hours only" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                 <FormField control={form.control} name="restrictions" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Restrictions</FormLabel><FormControl><Textarea placeholder="e.g., Daylight hours only" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
             </CardContent>
         </Card>
         
-        <FormField control={form.control} name="notes" render={({ field }) => (<FormItem><FormLabel>General Notes</FormLabel><FormControl><Textarea placeholder="Any other relevant notes for this application" {...field} /></FormControl><FormMessage /></FormItem>)} />
+        <FormField control={form.control} name="notes" render={({ field }) => (<FormItem><FormLabel>General Notes</FormLabel><FormControl><Textarea placeholder="Any other relevant notes for this application" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
 
 
         <CardFooter className="flex justify-end gap-4 p-0 pt-8">
-          <Button type="button" variant="outline" onClick={form.handleSubmit(data => onSubmit(data, "Draft"))} disabled={form.formState.isSubmitting}>
+          <Button type="button" variant="outline" onClick={form.handleSubmit(data => onSubmit(data, "Draft"))} disabled={form.formState.isSubmitting || (idPhotoUploadProgress !== null && idPhotoUploadProgress < 100)}>
             <Save className="mr-2 h-4 w-4" /> Save Draft
           </Button>
-          <Button type="button" onClick={form.handleSubmit(data => onSubmit(data, "Submitted"))} disabled={form.formState.isSubmitting}>
+          <Button type="button" onClick={form.handleSubmit(data => onSubmit(data, "Submitted"))} disabled={form.formState.isSubmitting || (idPhotoUploadProgress !== null && idPhotoUploadProgress < 100)}>
             <Send className="mr-2 h-4 w-4" /> {mode === "create" ? "Submit Application" : "Update & Submit"}
           </Button>
         </CardFooter>
@@ -500,3 +539,4 @@ export function OperatorLicenseForm({
   );
 }
 
+    
