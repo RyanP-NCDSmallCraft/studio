@@ -292,7 +292,7 @@ export function OperatorLicenseForm({
         assignedLicenseNumber: data.assignedLicenseNumber ?? "",
         receiptNo: data.receiptNo ?? "",
         placeIssued: data.placeIssued ?? "",
-        methodOfPayment: data.methodOfPayment || undefined,
+        methodOfPayment: data.methodOfPayment ?? null,
         paymentBy: data.paymentBy ?? "",
         paymentAmount: data.paymentAmount ?? null,
         attachedDocuments: data.attachedDocuments.map(d => {
@@ -481,7 +481,7 @@ export function OperatorLicenseForm({
                   <FormField control={form.control} name={`attachedDocuments.${index}.docOtherDescription`} render={({ field }) => (<FormItem><FormLabel>Other Description *</FormLabel><FormControl><Input placeholder="Specify document type" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
                 )}
                 <FormField control={form.control} name={`attachedDocuments.${index}.fileName`} render={({ field }) => (<FormItem><FormLabel>File Name *</FormLabel><FormControl><Input placeholder="document.pdf" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name={`attachedDocuments.${index}.fileUrl`} render={({ field }) => (<FormItem><FormLabel>File URL *</FormLabel><FormControl><Input type="url" placeholder="https://example.com/doc.pdf" {...field} /></FormControl><FormDescription>Placeholder for actual file upload.</FormDescription><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name={`attachedDocuments.${index}.fileUrl`} render={({ field }) => (<FormItem><FormLabel>File URL *</FormLabel><FormControl><Input type="url" placeholder="https://placehold.co/100x100.png?text=DOC" {...field} /></FormControl><FormDescription>Placeholder for actual file upload.</FormDescription><FormMessage /></FormItem>)} />
                 <Button type="button" variant="destructive" size="sm" onClick={() => remove(index)}><Trash2 className="mr-2 h-4 w-4" /> Remove Document</Button>
               </div>
             ))}
