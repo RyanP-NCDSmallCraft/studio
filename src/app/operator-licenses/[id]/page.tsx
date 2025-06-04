@@ -4,7 +4,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
-import type { OperatorLicense, Operator, OperatorLicenseAttachedDoc, User } from "@/types";
+import type { OperatorLicense, Operator, OperatorLicenseAttachedDoc, User, CompetencyTest } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
 import { useParams, useRouter } from "next/navigation";
@@ -65,12 +65,13 @@ function generateRandomSixDigitNumber(): string {
 export default function OperatorLicenseDetailPage() {
   const params = useParams();
   const licenseApplicationId = params.id as string;
-  const { currentUser, isAdmin, isRegistrar, isSupervisor } = useAuth(); 
+  const { currentUser, isAdmin, isRegistrar, isSupervisor, isInspector } = useAuth(); 
   const router = useRouter();
   const { toast } = useToast();
 
   const [application, setApplication] = useState<OperatorLicense | null>(null);
   const [operator, setOperator] = useState<Operator | null>(null);
+  const [completedTest, setCompletedTest] = useState<CompetencyTest | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -103,6 +104,7 @@ export default function OperatorLicenseDetailPage() {
     }
     setLoading(true);
     setError(null);
+    setCompletedTest(null);
     try {
       const licenseDocRef = doc(db, "operatorLicenseApplications", licenseApplicationId);
       const licenseSnap = await getDoc(licenseDocRef);
@@ -115,11 +117,16 @@ export default function OperatorLicenseDetailPage() {
         return;
       }
       
-      const licenseDataRaw = licenseSnap.data() as Omit<OperatorLicense, 'operatorRef'> & { operatorRef: DocumentReference<Operator> | string };
+      const licenseDataRaw = licenseSnap.data() as Omit<OperatorLicense, 'operatorRef' | 'competencyTestRef'> & { 
+        operatorRef: DocumentReference<Operator> | string,
+        competencyTestRef?: DocumentReference<CompetencyTest> | string 
+      };
+
       const appData: OperatorLicense = {
         ...licenseDataRaw,
         licenseApplicationId: licenseSnap.id,
         operatorRef: licenseDataRaw.operatorRef, 
+        competencyTestRef: licenseDataRaw.competencyTestRef,
         submittedAt: ensureDateObject(licenseDataRaw.submittedAt),
         approvedAt: ensureDateObject(licenseDataRaw.approvedAt),
         issuedAt: ensureDateObject(licenseDataRaw.issuedAt),
@@ -132,7 +139,6 @@ export default function OperatorLicenseDetailPage() {
             uploadedAt: ensureDateObject(d.uploadedAt) as Date,
             verifiedAt: ensureDateObject(d.verifiedAt)
         })),
-        // Suspension and Revocation fields
         suspensionReason: licenseDataRaw.suspensionReason,
         suspensionStartDate: ensureDateObject(licenseDataRaw.suspensionStartDate),
         suspensionEndDate: ensureDateObject(licenseDataRaw.suspensionEndDate),
@@ -141,7 +147,6 @@ export default function OperatorLicenseDetailPage() {
       };
       setApplication(appData);
 
-      // Set initial values for office use modal state
       setOfficeLicenseNumber(appData.assignedLicenseNumber || "");
       setOfficeReceiptNo(appData.receiptNo || "");
       setOfficePlaceIssued(appData.placeIssued || "");
@@ -156,14 +161,14 @@ export default function OperatorLicenseDetailPage() {
 
 
       if (licenseDataRaw.operatorRef) {
-        let operatorRef: DocumentReference<Operator>;
+        let operatorRefPath: DocumentReference<Operator>;
         if (typeof licenseDataRaw.operatorRef === 'string') {
-          operatorRef = doc(db, licenseDataRaw.operatorRef) as DocumentReference<Operator>;
+          operatorRefPath = doc(db, licenseDataRaw.operatorRef) as DocumentReference<Operator>;
         } else {
-          operatorRef = licenseDataRaw.operatorRef as DocumentReference<Operator>;
+          operatorRefPath = licenseDataRaw.operatorRef as DocumentReference<Operator>;
         }
         
-        const operatorSnap = await getDoc(operatorRef);
+        const operatorSnap = await getDoc(operatorRefPath);
         if (operatorSnap.exists()) {
           const opDataRaw = operatorSnap.data() as Operator;
           setOperator({
@@ -182,6 +187,26 @@ export default function OperatorLicenseDetailPage() {
         setOperator(null);
       }
 
+      if (appData.competencyTestRef) {
+        let testRefPath: DocumentReference<CompetencyTest>;
+        if (typeof appData.competencyTestRef === 'string') {
+          testRefPath = doc(db, appData.competencyTestRef) as DocumentReference<CompetencyTest>;
+        } else {
+          testRefPath = appData.competencyTestRef as DocumentReference<CompetencyTest>;
+        }
+        const testSnap = await getDoc(testRefPath);
+        if (testSnap.exists()) {
+          const testDataRaw = testSnap.data();
+          setCompletedTest({
+            ...testDataRaw,
+            testId: testSnap.id,
+            testDate: ensureDateObject(testDataRaw.testDate) as Date,
+            createdAt: ensureDateObject(testDataRaw.createdAt) as Date,
+          } as CompetencyTest);
+        }
+      }
+
+
     } catch (err: any) {
       console.error("Error fetching application data:", err);
       setError(err.message || "Failed to load data.");
@@ -195,7 +220,6 @@ export default function OperatorLicenseDetailPage() {
   }, [fetchApplicationData]);
 
   const handleOpenOfficeUseModal = () => {
-    // If current application.assignedLicenseNumber is empty and status is suitable, generate one
     if (application && !application.assignedLicenseNumber && 
         (application.status === "Submitted" || 
          application.status === "PendingReview" || 
@@ -205,7 +229,6 @@ export default function OperatorLicenseDetailPage() {
     } else if (application) {
       setOfficeLicenseNumber(application.assignedLicenseNumber || "");
     }
-    // Reset other fields from application state if modal was closed without saving
     if (application) {
         setOfficeReceiptNo(application.receiptNo || "");
         setOfficePlaceIssued(application.placeIssued || "");
@@ -296,7 +319,7 @@ export default function OperatorLicenseDetailPage() {
       status: "Suspended",
       suspensionReason: suspensionReason,
       suspensionStartDate: Timestamp.now(),
-      suspensionEndDate: suspensionEndDate ? Timestamp.fromDate(parseISO(suspensionEndDate)) : null, // Use null
+      suspensionEndDate: suspensionEndDate ? Timestamp.fromDate(parseISO(suspensionEndDate)) : null,
     };
     await handleStatusUpdate("Suspended", updatePayload);
     setSuspendModalOpen(false);
@@ -326,7 +349,7 @@ export default function OperatorLicenseDetailPage() {
     if (!currentUser?.userId || !application) return;
     setIsUpdating(true);
     const updatePayload: Partial<OperatorLicense> = {
-      status: "Approved", // Or determine previous valid state if more complex logic needed
+      status: "Approved", 
       suspensionReason: null,
       suspensionStartDate: null,
       suspensionEndDate: null,
@@ -355,6 +378,23 @@ export default function OperatorLicenseDetailPage() {
   const canEditApplication = (isAdmin || isRegistrar || isSupervisor) && 
                              (application.status === "Draft" || application.status === "RequiresInfo" || application.status === "Approved");
   const canManageApplication = isAdmin || isRegistrar || isSupervisor;
+  const canAdministerTest = isAdmin || isRegistrar || isSupervisor || isInspector;
+  
+  const testLink = `/operator-licenses/${licenseApplicationId}/test`;
+  let testButtonText = "Take Competency Test";
+  let showTestButton = false;
+
+  if (completedTest) {
+    testButtonText = `View Test (${completedTest.result} - ${completedTest.percentageAchieved?.toFixed(0) || 0}%)`;
+    showTestButton = true;
+  } else {
+      const canTakeTestStatuses: OperatorLicense['status'][] = ["Submitted", "PendingReview", "AwaitingTest", "RequiresInfo", "TestScheduled"];
+      if (canTakeTestStatuses.includes(application.status)) {
+          testButtonText = "Take Competency Test";
+          showTestButton = true;
+      }
+  }
+
 
   return (
     <div className="space-y-6">
@@ -429,6 +469,13 @@ export default function OperatorLicenseDetailPage() {
                         {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Info className="mr-2 h-4 w-4" />} Request More Information
                     </Button>
                  )}
+                {canAdministerTest && showTestButton && (
+                    <Button variant="outline" asChild>
+                        <Link href={testLink}>
+                        <ListChecks className="mr-2 h-4 w-4" /> {testButtonText}
+                        </Link>
+                    </Button>
+                )}
                  {(application.status === "Approved" || application.status === "Expired") && (
                     <AlertDialog open={suspendModalOpen} onOpenChange={setSuspendModalOpen}>
                         <AlertDialogTrigger asChild>
@@ -491,6 +538,19 @@ export default function OperatorLicenseDetailPage() {
           <CardContent className="text-sm text-red-800 space-y-1">
             <p><strong>Reason:</strong> {application.revocationReason || "Not specified"}</p>
             {application.revokedAt && <p><strong>Revoked On:</strong> {formatFirebaseTimestamp(application.revokedAt, "PP")}</p>}
+          </CardContent>
+        </Card>
+      )}
+
+      {completedTest && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Competency Test Result</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm">
+            <p><strong>Test Taken:</strong> {formatFirebaseTimestamp(completedTest.testDate, "PPpp")}</p>
+            <p><strong>Result:</strong> <Badge variant={completedTest.result === "Pass" ? "default" : "destructive"}>{completedTest.result}</Badge></p>
+            <p><strong>Score:</strong> {completedTest.scoreAchieved} / {completedTest.answers?.length || 0} ({completedTest.percentageAchieved?.toFixed(0) || 0}%)</p>
           </CardContent>
         </Card>
       )}
