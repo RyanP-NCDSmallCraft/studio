@@ -57,6 +57,10 @@ const licenseClassOptions = [
   "Other"
 ];
 
+function generateRandomSixDigitNumber(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
 
 export default function OperatorLicenseDetailPage() {
   const params = useParams();
@@ -137,6 +141,7 @@ export default function OperatorLicenseDetailPage() {
       };
       setApplication(appData);
 
+      // Set initial values for office use modal state
       setOfficeLicenseNumber(appData.assignedLicenseNumber || "");
       setOfficeReceiptNo(appData.receiptNo || "");
       setOfficePlaceIssued(appData.placeIssued || "");
@@ -189,6 +194,34 @@ export default function OperatorLicenseDetailPage() {
     fetchApplicationData();
   }, [fetchApplicationData]);
 
+  const handleOpenOfficeUseModal = () => {
+    // If current application.assignedLicenseNumber is empty and status is suitable, generate one
+    if (application && !application.assignedLicenseNumber && 
+        (application.status === "Submitted" || 
+         application.status === "PendingReview" || 
+         application.status === "TestPassed" ||
+         application.status === "Approved")) {
+      setOfficeLicenseNumber(generateRandomSixDigitNumber());
+    } else if (application) {
+      setOfficeLicenseNumber(application.assignedLicenseNumber || "");
+    }
+    // Reset other fields from application state if modal was closed without saving
+    if (application) {
+        setOfficeReceiptNo(application.receiptNo || "");
+        setOfficePlaceIssued(application.placeIssued || "");
+        setOfficePaymentMethod(application.methodOfPayment);
+        setOfficePaymentBy(application.paymentBy || "");
+        setOfficePaymentDate(application.paymentDate ? format(application.paymentDate as Date, "yyyy-MM-dd") : "");
+        setOfficePaymentAmount(application.paymentAmount !== undefined && application.paymentAmount !== null ? String(application.paymentAmount) : "");
+        setOfficeIssuedAt(application.issuedAt ? format(application.issuedAt as Date, "yyyy-MM-dd") : "");
+        setOfficeExpiryDate(application.expiryDate ? format(application.expiryDate as Date, "yyyy-MM-dd") : "");
+        setOfficeLicenseClass(application.licenseClass || "");
+        setOfficeRestrictions(application.restrictions || "");
+    }
+    setOfficeUseModalOpen(true);
+  };
+
+
   const handleStatusUpdate = async (newStatus: OperatorLicense["status"], extraData?: Partial<OperatorLicense>) => {
     if (!currentUser?.userId || !application) return;
     setIsUpdating(true);
@@ -220,20 +253,20 @@ export default function OperatorLicenseDetailPage() {
             placeIssued: officePlaceIssued || undefined,
             methodOfPayment: officePaymentMethod || undefined,
             paymentBy: officePaymentBy || undefined,
-            paymentDate: officePaymentDate ? Timestamp.fromDate(parseISO(officePaymentDate)) : undefined,
-            paymentAmount: officePaymentAmount !== "" ? parseFloat(String(officePaymentAmount)) : undefined,
-            issuedAt: officeIssuedAt ? Timestamp.fromDate(parseISO(officeIssuedAt)) : undefined,
-            expiryDate: officeExpiryDate ? Timestamp.fromDate(parseISO(officeExpiryDate)) : undefined,
+            paymentDate: officePaymentDate ? Timestamp.fromDate(parseISO(officePaymentDate)) : null,
+            paymentAmount: officePaymentAmount !== "" ? parseFloat(String(officePaymentAmount)) : null,
+            issuedAt: officeIssuedAt ? Timestamp.fromDate(parseISO(officeIssuedAt)) : null,
+            expiryDate: officeExpiryDate ? Timestamp.fromDate(parseISO(officeExpiryDate)) : null,
             licenseClass: officeLicenseClass || undefined,
             restrictions: officeRestrictions || undefined,
             lastUpdatedAt: Timestamp.now(),
             lastUpdatedByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
         };
         
-        if (application.status === "Approved" && !updatePayload.issuedAt) {
+        if (application.status === "Approved" && !updatePayload.issuedAt && !officeIssuedAt) {
             updatePayload.issuedAt = Timestamp.now();
         }
-        if (application.status === "Approved" && !updatePayload.expiryDate && updatePayload.issuedAt) {
+        if (application.status === "Approved" && !updatePayload.expiryDate && !officeExpiryDate && updatePayload.issuedAt) {
             updatePayload.expiryDate = Timestamp.fromDate(addYears( (updatePayload.issuedAt as Timestamp).toDate(), 3));
         }
 
@@ -343,7 +376,7 @@ export default function OperatorLicenseDetailPage() {
             </Button>
           )}
           {canManageApplication && (
-            <Button onClick={() => setOfficeUseModalOpen(true)} variant="outline">Manage Office Details</Button>
+            <Button onClick={handleOpenOfficeUseModal} variant="outline">Manage Office Details</Button>
           )}
           {application.status === "Approved" && canManageApplication && (
             <Button asChild>
