@@ -4,10 +4,10 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import type { OperatorLicense, Operator, User } from "@/types"; 
-import { FileImage, Download, UserCircle2, ArrowLeft, Loader2, AlertTriangle } from "lucide-react";
+import { FileImage, Download, UserCircle2, ArrowLeft, Loader2, AlertTriangle, Printer } from "lucide-react"; // Changed Download to Printer
 import { useParams, useRouter } from "next/navigation";
 import { formatFirebaseTimestamp } from '@/lib/utils';
-import { useToast } from "@/hooks/use-toast";
+// Removed useToast as it's no longer used for the print action
 import { Separator } from "@/components/ui/separator";
 import Image from "next/image";
 import React, { useState, useEffect, useCallback } from "react";
@@ -36,7 +36,7 @@ export default function OperatorLicenseCertificatePage() {
   const params = useParams();
   const router = useRouter();
   const licenseApplicationId = params.id as string;
-  const { toast } = useToast();
+  // const { toast } = useToast(); // Removed
 
   const [license, setLicense] = useState<OperatorLicense | null>(null);
   const [operator, setOperator] = useState<Operator | null>(null);
@@ -125,11 +125,8 @@ export default function OperatorLicenseCertificatePage() {
     fetchCertificateData();
   }, [fetchCertificateData]);
 
-  const handleDownloadPlaceholder = () => {
-    toast({
-      title: "Download Initiated (Placeholder)",
-      description: "In a real application, a PDF license card would be generated and downloaded.",
-    });
+  const handlePrintCertificate = () => {
+    window.print();
   };
 
   if (loading) {
@@ -165,7 +162,7 @@ export default function OperatorLicenseCertificatePage() {
 
   return (
     <div className="space-y-6 p-4 md:p-8">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 no-print-on-page">
         <div className="flex items-center gap-2">
          <Button variant="outline" size="icon" onClick={() => router.back()} className="mr-2 h-9 w-9">
             <ArrowLeft className="h-5 w-5" />
@@ -174,8 +171,8 @@ export default function OperatorLicenseCertificatePage() {
           <FileImage className="h-8 w-8 text-primary" />
           <h1 className="text-2xl md:text-3xl font-bold">Operator License Card</h1>
         </div>
-        <Button onClick={handleDownloadPlaceholder}>
-          <Download className="mr-2 h-4 w-4" /> Download Placeholder
+        <Button onClick={handlePrintCertificate}>
+          <Printer className="mr-2 h-4 w-4" /> Print License Card
         </Button>
       </div>
 
