@@ -352,7 +352,8 @@ export default function OperatorLicenseDetailPage() {
   if (error) return <div className="text-center py-10 text-destructive"><AlertCircle className="mx-auto h-10 w-10 mb-2"/>Error: {error}</div>;
   if (!application || !operator) return <div className="text-center py-10 text-muted-foreground">License application or operator details not found.</div>;
 
-  const canEditApplication = (isAdmin || isRegistrar || isSupervisor) && (application.status === "Draft" || application.status === "RequiresInfo");
+  const canEditApplication = (isAdmin || isRegistrar || isSupervisor) && 
+                             (application.status === "Draft" || application.status === "RequiresInfo" || application.status === "Approved");
   const canManageApplication = isAdmin || isRegistrar || isSupervisor;
 
   return (
