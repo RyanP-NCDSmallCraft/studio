@@ -185,13 +185,13 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       hullIdNumber: existingRegistrationData.hullIdNumber || "",
       craftLength: typeof existingRegistrationData.craftLength === 'number' ? existingRegistrationData.craftLength : 0,
       lengthUnits: existingRegistrationData.lengthUnits || "m",
-      passengerCapacity: existingRegistrationData.passengerCapacity || undefined,
+      passengerCapacity: existingRegistrationData.passengerCapacity === undefined ? undefined : (existingRegistrationData.passengerCapacity ?? undefined),
       distinguishingFeatures: existingRegistrationData.distinguishingFeatures || "",
       craftImageUrl: existingRegistrationData.craftImageUrl || undefined,
       engines: (existingRegistrationData.engines || []).map(e => ({
         engineId: e.engineId || crypto.randomUUID(),
         make: e.make || "",
-        horsepower: e.horsepower === undefined ? undefined : (e.horsepower || undefined),
+        horsepower: e.horsepower === undefined ? undefined : (e.horsepower ?? undefined),
         serialNumber: e.serialNumber || "",
       })),
       propulsionType: existingRegistrationData.propulsionType || "Outboard",
@@ -207,7 +207,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       paymentMethod: existingRegistrationData.paymentMethod || undefined,
       paymentReceiptNumber: existingRegistrationData.paymentReceiptNumber || "",
       bankStampRef: existingRegistrationData.bankStampRef || "",
-      paymentAmount: existingRegistrationData.paymentAmount === undefined ? undefined : (existingRegistrationData.paymentAmount || undefined),
+      paymentAmount: existingRegistrationData.paymentAmount === undefined ? undefined : (existingRegistrationData.paymentAmount ?? undefined),
       paymentDate: existingRegistrationData.paymentDate instanceof Timestamp ? existingRegistrationData.paymentDate.toDate() : (existingRegistrationData.paymentDate ? new Date(existingRegistrationData.paymentDate as any) : undefined),
       safetyCertNumber: existingRegistrationData.safetyCertNumber || "",
       safetyEquipIssued: existingRegistrationData.safetyEquipIssued === undefined ? false : existingRegistrationData.safetyEquipIssued,
@@ -311,7 +311,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
     form.clearErrors();
     setImageUploadProgress(null);
 
-    let finalCraftImageUrl = data.craftImageUrl; // Use URL from form if already set (e.g. during edit and image not changed)
+    let finalCraftImageUrl = data.craftImageUrl; 
 
     if (selectedImageFile) {
       toast({ title: "Uploading Image...", description: "Please wait." });
@@ -334,7 +334,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
             },
             async () => {
               finalCraftImageUrl = await getDownloadURL(uploadTask.snapshot.ref);
-              form.setValue("craftImageUrl", finalCraftImageUrl); // Update form value
+              form.setValue("craftImageUrl", finalCraftImageUrl); 
               resolve();
             }
           );
@@ -344,10 +344,9 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       } catch (error) {
         toast({ title: "Image Upload Failed", description: "Could not upload the craft image. Please try again.", variant: "destructive" });
         setImageUploadProgress(null);
-        return; // Stop submission if image upload fails
+        return; 
       }
     }
-
 
     const registrationDataForFirestore: { [key: string]: any } = {
       registrationType: data.registrationType,
@@ -374,21 +373,37 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       hullIdNumber: data.hullIdNumber,
       craftLength: data.craftLength,
       lengthUnits: data.lengthUnits,
-      passengerCapacity: data.passengerCapacity,
-      craftImageUrl: finalCraftImageUrl || null,
+      passengerCapacity: data.passengerCapacity ?? null,
+      craftImageUrl: finalCraftImageUrl ?? null,
       engines: (data.engines || []).map(engine => ({
-        make: engine.make || null,
-        horsepower: engine.horsepower || null,
-        serialNumber: engine.serialNumber || null,
+        engineId: engine.engineId || crypto.randomUUID(),
+        make: engine.make ?? "",
+        horsepower: engine.horsepower ?? null,
+        serialNumber: engine.serialNumber ?? "",
       })),
       propulsionType: data.propulsionType,
       hullMaterial: data.hullMaterial,
       craftUse: data.craftUse,
       fuelType: data.fuelType,
       vesselType: data.vesselType,
-      safetyEquipIssued: data.safetyEquipIssued || false,
+      safetyEquipIssued: data.safetyEquipIssued ?? false,
       lastUpdatedByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
       lastUpdatedAt: Timestamp.now(),
+
+      previousScaRegoNo: data.previousScaRegoNo ?? "",
+      paymentMethod: data.paymentMethod ?? null,
+      paymentReceiptNumber: data.paymentReceiptNumber ?? "",
+      bankStampRef: data.bankStampRef ?? "",
+      paymentAmount: data.paymentAmount ?? null,
+      paymentDate: data.paymentDate ? Timestamp.fromDate(data.paymentDate instanceof Date ? data.paymentDate : new Date(data.paymentDate as string)) : null,
+      safetyCertNumber: data.safetyCertNumber ?? "",
+      safetyEquipReceiptNumber: data.safetyEquipReceiptNumber ?? "",
+      distinguishingFeatures: data.distinguishingFeatures ?? "",
+      propulsionOtherDesc: data.propulsionOtherDesc ?? "",
+      hullMaterialOtherDesc: data.hullMaterialOtherDesc ?? "",
+      craftUseOtherDesc: data.craftUseOtherDesc ?? "",
+      fuelTypeOtherDesc: data.fuelTypeOtherDesc ?? "",
+      vesselTypeOtherDesc: data.vesselTypeOtherDesc ?? "",
     };
 
     if (mode === "create") {
@@ -399,27 +414,12 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       registrationDataForFirestore.createdByRef = typeof existingRegistrationData.createdByRef === 'string' ? doc(db, "users", existingRegistrationData.createdByRef) : existingRegistrationData.createdByRef;
     }
 
-    // Add optional fields only if they have a value
-    if (data.previousScaRegoNo) registrationDataForFirestore.previousScaRegoNo = data.previousScaRegoNo;
-    if (data.paymentMethod) registrationDataForFirestore.paymentMethod = data.paymentMethod;
-    if (data.paymentReceiptNumber) registrationDataForFirestore.paymentReceiptNumber = data.paymentReceiptNumber;
-    if (data.bankStampRef) registrationDataForFirestore.bankStampRef = data.bankStampRef;
-    if (data.paymentAmount !== undefined && data.paymentAmount !== null) registrationDataForFirestore.paymentAmount = data.paymentAmount;
-    if (data.paymentDate) registrationDataForFirestore.paymentDate = Timestamp.fromDate(data.paymentDate instanceof Date ? data.paymentDate : new Date(data.paymentDate));
-    if (data.safetyCertNumber) registrationDataForFirestore.safetyCertNumber = data.safetyCertNumber;
-    if (data.safetyEquipReceiptNumber) registrationDataForFirestore.safetyEquipReceiptNumber = data.safetyEquipReceiptNumber;
-    if (data.distinguishingFeatures) registrationDataForFirestore.distinguishingFeatures = data.distinguishingFeatures;
-
-    if (data.propulsionOtherDesc) registrationDataForFirestore.propulsionOtherDesc = data.propulsionOtherDesc;
-    if (data.hullMaterialOtherDesc) registrationDataForFirestore.hullMaterialOtherDesc = data.hullMaterialOtherDesc;
-    if (data.craftUseOtherDesc) registrationDataForFirestore.craftUseOtherDesc = data.craftUseOtherDesc;
-    if (data.fuelTypeOtherDesc) registrationDataForFirestore.fuelTypeOtherDesc = data.fuelTypeOtherDesc;
-    if (data.vesselTypeOtherDesc) registrationDataForFirestore.vesselTypeOtherDesc = data.vesselTypeOtherDesc;
-
 
     if (submissionStatus === "Submitted") {
       registrationDataForFirestore.submittedAt = Timestamp.now();
     }
+    
+    // console.log("Data being sent to Firestore:", JSON.stringify(registrationDataForFirestore, null, 2));
 
     try {
       if (mode === "create") {
