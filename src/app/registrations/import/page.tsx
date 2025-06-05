@@ -3,7 +3,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, UploadCloud, List, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react';
@@ -12,7 +12,8 @@ import { importRegistrations_serverAction, type RegistrationImportData } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { useAuth } from '@/hooks/useAuth'; // Import useAuth
+import { useAuth } from '@/hooks/useAuth';
+import { ScrollArea } from '@/components/ui/scroll-area'; // Added ScrollArea import
 
 const CSV_HEADERS = [
   "registrationType","previousScaRegoNo","craftMake","craftModel","craftYear","craftColor","hullIdNumber","craftLength","lengthUnits","passengerCapacity","distinguishingFeatures",
@@ -25,7 +26,7 @@ const CSV_HEADERS = [
 export default function ImportRegistrationsPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const { currentUser, isAdmin, isRegistrar, loading: authLoading } = useAuth(); // Use useAuth
+  const { currentUser, isAdmin, isRegistrar, loading: authLoading } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [parsedData, setParsedData] = useState<RegistrationImportData[]>([]);
   const [isParsing, setIsParsing] = useState(false);
@@ -218,9 +219,48 @@ export default function ImportRegistrationsPage() {
 
       {parsedData.length > 0 && (
         <Card>
-          <CardContent className="pt-6"> {/* Added pt-6 to give some padding if header is removed */}
-            <p>Cannot see the parsed data</p>
+          <CardHeader>
+            <CardTitle>Step 2: Review Parsed Data (First 5 Records)</CardTitle>
+            <CardDescription>
+              Verify that the data from your CSV has been parsed correctly. If it looks good, proceed to import.
+              Only the first 5 records are shown for preview.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ScrollArea className="w-full whitespace-nowrap rounded-md border">
+              <div className="max-h-96"> {/* Added max-height for vertical scroll if needed */}
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Craft Make</TableHead>
+                      <TableHead>Model</TableHead>
+                      <TableHead>HIN</TableHead>
+                      <TableHead>Owner 1</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {parsedData.slice(0, 5).map((record, index) => (
+                      <TableRow key={index}>
+                        <TableCell>{record.craftMake}</TableCell>
+                        <TableCell>{record.craftModel}</TableCell>
+                        <TableCell>{record.hullIdNumber}</TableCell>
+                        <TableCell>{record.owner1_firstName} {record.owner1_surname}</TableCell>
+                        <TableCell><Badge variant="outline">To be Imported as Draft</Badge></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </ScrollArea>
           </CardContent>
+          <CardFooter className="flex flex-col items-start gap-2">
+            <p className="text-sm text-muted-foreground">Total records parsed: {parsedData.length}</p>
+            <Button onClick={handleImportData} disabled={isImporting || isParsing} className="w-full sm:w-auto">
+              {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
+              {isImporting ? 'Importing...' : `Import All ${parsedData.length} Records`}
+            </Button>
+          </CardFooter>
         </Card>
       )}
 
