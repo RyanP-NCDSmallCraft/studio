@@ -101,11 +101,11 @@ export async function getRegistrations(): Promise<Registration[]> {
         safetyEquipReceiptNumber: data.safetyEquipReceiptNumber,
         owners: Array.isArray(data.owners) ? data.owners.map(mapOwner) : [],
         proofOfOwnershipDocs: Array.isArray(data.proofOfOwnershipDocs) ? data.proofOfOwnershipDocs.map(mapProofDoc) : [],
-        craftMake: data.craftMake || '',
-        craftModel: data.craftModel || '',
+        craftMake: data.craftMake || "",
+        craftModel: data.craftModel || "",
         craftYear: data.craftYear || new Date().getFullYear(),
-        craftColor: data.craftColor || '',
-        hullIdNumber: data.hullIdNumber || '',
+        craftColor: data.craftColor || "",
+        hullIdNumber: data.hullIdNumber || "",
         craftLength: data.craftLength || 0,
         lengthUnits: data.lengthUnits || 'm',
         passengerCapacity: data.passengerCapacity,
@@ -229,7 +229,7 @@ export async function importRegistrations_serverAction(
           dob: Timestamp.fromDate(new Date(record.owner1_dob)),
           sex: record.owner1_sex || "Male",
           phone: record.owner1_phone,
-          email: record.owner1_email || undefined,
+          email: record.owner1_email ?? "", // Default to empty string
           postalAddress: record.owner1_postalAddress || "",
           townDistrict: record.owner1_townDistrict || "",
           llg: record.owner1_llg || "",
@@ -249,11 +249,11 @@ export async function importRegistrations_serverAction(
           dob: Timestamp.fromDate(new Date(record.owner2_dob)),
           sex: record.owner2_sex || "Male",
           phone: record.owner2_phone,
-          email: record.owner2_email || undefined,
-          postalAddress: record.owner2_postalAddress || "",
-          townDistrict: record.owner2_townDistrict || "",
-          llg: record.owner2_llg || "",
-          wardVillage: record.owner2_wardVillage || "",
+          email: record.owner2_email ?? "", // Default to empty string
+          postalAddress: record.owner2_postalAddress ?? "",
+          townDistrict: record.owner2_townDistrict ?? "",
+          llg: record.owner2_llg ?? "",
+          wardVillage: record.owner2_wardVillage ?? "",
         });
       }
       
@@ -261,24 +261,24 @@ export async function importRegistrations_serverAction(
       if (record.engine1_make || record.engine1_horsepower || record.engine1_serialNumber) {
         engines.push({
           engineId: crypto.randomUUID(),
-          make: record.engine1_make || undefined,
+          make: record.engine1_make ?? "",
           horsepower: record.engine1_horsepower ? parseInt(record.engine1_horsepower, 10) : undefined,
-          serialNumber: record.engine1_serialNumber || undefined,
+          serialNumber: record.engine1_serialNumber ?? "",
         });
       }
       if (record.engine2_make || record.engine2_horsepower || record.engine2_serialNumber) {
          engines.push({
           engineId: crypto.randomUUID(),
-          make: record.engine2_make || undefined,
+          make: record.engine2_make ?? "",
           horsepower: record.engine2_horsepower ? parseInt(record.engine2_horsepower, 10) : undefined,
-          serialNumber: record.engine2_serialNumber || undefined,
+          serialNumber: record.engine2_serialNumber ?? "",
         });
       }
 
 
       const registrationDoc: Omit<Registration, "registrationId"> = {
         registrationType: record.registrationType || "New",
-        previousScaRegoNo: record.previousScaRegoNo || undefined,
+        previousScaRegoNo: record.previousScaRegoNo ?? "",
         status: "Draft", // Default status for imported records
         owners,
         proofOfOwnershipDocs: [], // Not handled in this CSV import
@@ -290,18 +290,18 @@ export async function importRegistrations_serverAction(
         craftLength: record.craftLength ? parseFloat(record.craftLength) : 0,
         lengthUnits: record.lengthUnits || "m",
         passengerCapacity: record.passengerCapacity ? parseInt(record.passengerCapacity, 10) : undefined,
-        distinguishingFeatures: record.distinguishingFeatures || undefined,
+        distinguishingFeatures: record.distinguishingFeatures ?? "",
         engines,
         propulsionType: record.propulsionType || "Outboard",
-        propulsionOtherDesc: record.propulsionOtherDesc || undefined,
+        propulsionOtherDesc: record.propulsionOtherDesc ?? "",
         hullMaterial: record.hullMaterial || "Fiberglass",
-        hullMaterialOtherDesc: record.hullMaterialOtherDesc || undefined,
+        hullMaterialOtherDesc: record.hullMaterialOtherDesc ?? "",
         craftUse: record.craftUse || "Pleasure",
-        craftUseOtherDesc: record.craftUseOtherDesc || undefined,
+        craftUseOtherDesc: record.craftUseOtherDesc ?? "",
         fuelType: record.fuelType || "Petrol",
-        fuelTypeOtherDesc: record.fuelTypeOtherDesc || undefined,
+        fuelTypeOtherDesc: record.fuelTypeOtherDesc ?? "",
         vesselType: record.vesselType || "OpenBoat",
-        vesselTypeOtherDesc: record.vesselTypeOtherDesc || undefined,
+        vesselTypeOtherDesc: record.vesselTypeOtherDesc ?? "",
         createdAt: Timestamp.now(),
         createdByRef: createdByRef,
         lastUpdatedAt: Timestamp.now(),
@@ -312,7 +312,11 @@ export async function importRegistrations_serverAction(
       successfulCount++;
     } catch (error: any) {
       failedCount++;
-      errorMessages.push(`Row ${i + 2}: ${error.message || "Unknown error during import."}`);
+      let errorMessage = `Row ${i + 2}: ${error.message || "Unknown error during import."}`;
+      if (error.code === 'permission-denied') {
+          errorMessage = `Row ${i + 2}: Firestore permission denied. This usually means the server action's request to Firestore was not recognized as an authenticated active user with the necessary role. Original: ${error.message}`;
+      }
+      errorMessages.push(errorMessage);
       console.error(`Error importing record at row ${i + 2}:`, error, record);
     }
   }
