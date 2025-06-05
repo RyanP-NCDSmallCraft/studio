@@ -6,12 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, UploadCloud, List, AlertTriangle, CheckCircle } from 'lucide-react';
+import { ArrowLeft, UploadCloud, List, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { importRegistrations_serverAction, type RegistrationImportData } from '@/actions/registrations'; // Assuming type is exported
+import { importRegistrations_serverAction, type RegistrationImportData } from '@/actions/registrations';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { useAuth } from '@/hooks/useAuth'; // Import useAuth
 
 const CSV_HEADERS = [
   "registrationType","previousScaRegoNo","craftMake","craftModel","craftYear","craftColor","hullIdNumber","craftLength","lengthUnits","passengerCapacity","distinguishingFeatures",
@@ -24,6 +25,7 @@ const CSV_HEADERS = [
 export default function ImportRegistrationsPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const { currentUser, isAdmin, isRegistrar, loading: authLoading } = useAuth(); // Use useAuth
   const [file, setFile] = useState<File | null>(null);
   const [parsedData, setParsedData] = useState<RegistrationImportData[]>([]);
   const [isParsing, setIsParsing] = useState(false);
@@ -38,13 +40,12 @@ export default function ImportRegistrationsPage() {
         setFile(selectedFile);
         setParsedData([]);
         setImportResult(null);
-        // Show a snippet of the CSV content
         const reader = new FileReader();
         reader.onload = (e) => {
           const text = e.target?.result as string;
           setCsvContentPreview(text.substring(0, 500) + (text.length > 500 ? "..." : ""));
         };
-        reader.readAsText(selectedFile.slice(0, 500)); // Read only first 500 chars for preview
+        reader.readAsText(selectedFile.slice(0, 500));
       } else {
         toast({
           title: "Invalid File Type",
@@ -65,19 +66,17 @@ export default function ImportRegistrationsPage() {
     }
 
     const headers = lines[0].split(',').map(h => h.trim());
-    // Validate headers - simple check for now
     const missingHeaders = CSV_HEADERS.filter(h => !headers.includes(h));
-    if (missingHeaders.length > 0 && headers.length !== CSV_HEADERS.length) { // Allow if all are present even if order differs, or if it's an exact match
+    if (missingHeaders.length > 0 && headers.length !== CSV_HEADERS.length) {
       console.warn("CSV Headers Mismatch. Expected:", CSV_HEADERS, "Found:", headers);
       toast({ title: "CSV Header Mismatch", description: `Ensure your CSV headers match the template. Missing/extra: ${missingHeaders.join(', ')} or unexpected header count.`, variant: "destructive", duration: 10000 });
-      // return []; // Be less strict for now, server can handle missing optional fields
     }
     
     const dataRows = lines.slice(1).filter(line => line.trim() !== '');
     const records: RegistrationImportData[] = [];
 
-    dataRows.forEach((line, rowIndex) => {
-      const values = line.split(','); // Basic split, doesn't handle commas within quotes
+    dataRows.forEach((line) => {
+      const values = line.split(',');
       const record: any = {};
       headers.forEach((header, index) => {
         record[header] = values[index] ? values[index].trim() : undefined;
@@ -103,12 +102,11 @@ export default function ImportRegistrationsPage() {
           setParsedData(data);
           toast({ title: "CSV Parsed", description: `${data.length} records found. Review and click Import.` });
         } else if (text.trim() !== "" && data.length === 0) {
-          // parseCSV might have shown a toast if headers were bad or no data rows
-          // but if it returns empty for other reasons, show a generic message
-          if (lines.length < 2) { /* Already handled */ }
-          else {
+           const lines = text.split(/\r\n|\n/);
+           if (lines.length < 2) { /* Already handled by parseCSV */ }
+           else {
             toast({ title: "Parsing Issue", description: "Could not parse records from the CSV. Check format.", variant: "destructive" });
-          }
+           }
         }
       } catch (error) {
         console.error("Error parsing CSV:", error);
@@ -120,6 +118,10 @@ export default function ImportRegistrationsPage() {
   };
 
   const handleImportData = async () => {
+    if (!currentUser?.userId) {
+        toast({ title: "Authentication Error", description: "You must be logged in to import data.", variant: "destructive" });
+        return;
+    }
     if (parsedData.length === 0) {
       toast({ title: "No Data", description: "No data to import. Please parse a file first.", variant: "destructive" });
       return;
@@ -127,7 +129,7 @@ export default function ImportRegistrationsPage() {
     setIsImporting(true);
     setImportResult(null);
     try {
-      const result = await importRegistrations_serverAction(parsedData);
+      const result = await importRegistrations_serverAction(parsedData, currentUser.userId);
       setImportResult(result);
       if (result.success) {
         toast({ title: "Import Successful", description: result.message });
@@ -154,6 +156,30 @@ export default function ImportRegistrationsPage() {
     document.body.removeChild(link);
   };
 
+  if (authLoading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="ml-2">Loading user data...</p>
+      </div>
+    );
+  }
+
+  if (!currentUser || (!isAdmin && !isRegistrar)) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <AlertTriangle className="text-destructive" /> Access Denied
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p>You do not have permission to access the import registrations feature. This page is restricted to Administrators and Registrars.</p>
+          <Button onClick={() => router.back()} className="mt-4">Go Back</Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -184,6 +210,7 @@ export default function ImportRegistrationsPage() {
             </div>
           )}
           <Button onClick={handleParseFile} disabled={!file || isParsing || isImporting}>
+            {isParsing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <List className="mr-2 h-4 w-4" />}
             {isParsing ? 'Parsing...' : 'Parse CSV File'}
           </Button>
         </CardContent>
@@ -225,6 +252,7 @@ export default function ImportRegistrationsPage() {
             </div>
             <p className="text-sm text-muted-foreground mt-2">Total records parsed: {parsedData.length}</p>
             <Button onClick={handleImportData} disabled={isImporting || isParsing} className="mt-4">
+              {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
               {isImporting ? 'Importing...' : `Import All ${parsedData.length} Records`}
             </Button>
           </CardContent>
