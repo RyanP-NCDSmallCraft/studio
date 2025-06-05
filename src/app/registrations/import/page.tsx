@@ -218,43 +218,8 @@ export default function ImportRegistrationsPage() {
 
       {parsedData.length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle>Step 2: Review Parsed Data (First 5 Records)</CardTitle>
-            <CardDescription>
-              Verify that the data from your CSV has been parsed correctly. If it looks good, proceed to import.
-              Only the first 5 records are shown for preview.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Craft Make</TableHead>
-                    <TableHead>Model</TableHead>
-                    <TableHead>HIN</TableHead>
-                    <TableHead>Owner 1</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {parsedData.slice(0, 5).map((reg, index) => (
-                    <TableRow key={index}>
-                      <TableCell>{reg.craftMake}</TableCell>
-                      <TableCell>{reg.craftModel}</TableCell>
-                      <TableCell>{reg.hullIdNumber}</TableCell>
-                      <TableCell>{reg.owner1_firstName} {reg.owner1_surname}</TableCell>
-                      <TableCell><Badge variant="outline">To be Imported as Draft</Badge></TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-            <p className="text-sm text-muted-foreground mt-2">Total records parsed: {parsedData.length}</p>
-            <Button onClick={handleImportData} disabled={isImporting || isParsing} className="mt-4">
-              {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
-              {isImporting ? 'Importing...' : `Import All ${parsedData.length} Records`}
-            </Button>
+          <CardContent className="pt-6"> {/* Added pt-6 to give some padding if header is removed */}
+            <p>Cannot see the parsed data</p>
           </CardContent>
         </Card>
       )}
@@ -287,4 +252,3 @@ export default function ImportRegistrationsPage() {
     </div>
   );
 }
-    
