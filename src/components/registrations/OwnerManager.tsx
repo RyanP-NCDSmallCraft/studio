@@ -1,3 +1,4 @@
+
 "use client";
 import React, { useState } from "react";
 import type { Control, UseFormReturn } from "react-hook-form";
@@ -38,10 +39,10 @@ const ownerModalSchema = z.object({
   phone: z.string().min(1, "Phone number is required"),
   fax: z.string().optional().default(""),
   email: z.string().email("Invalid email address").optional().or(z.literal("")).default(""),
-  postalAddress: z.string().min(1, "Postal address is required"),
+  postalAddress: z.string().optional().default(""), // Made optional
   townDistrict: z.string().min(1, "Town/District is required"),
-  llg: z.string().min(1, "LLG is required"),
-  wardVillage: z.string().min(1, "Ward/Village is required"),
+  llg: z.string().optional().default(""), // Made optional
+  wardVillage: z.string().optional().default(""), // Made optional
 });
 type OwnerModalFormValues = z.infer<typeof ownerModalSchema>;
 
@@ -108,6 +109,9 @@ export function OwnerManager({ owners, setOwners, form: mainForm }: OwnerManager
         ...owner,
         fax: owner.fax || "",
         email: owner.email || "",
+        postalAddress: owner.postalAddress || "",
+        llg: owner.llg || "",
+        wardVillage: owner.wardVillage || "",
         dobString: isValid(new Date(dobToFormat)) ? format(new Date(dobToFormat), "yyyy-MM-dd") : "",
     });
     setIsModalOpen(true);
@@ -193,12 +197,12 @@ export function OwnerManager({ owners, setOwners, form: mainForm }: OwnerManager
                   <FormField control={modalForm.control} name="dobString" render={({ field }) => (<FormItem><FormLabel>Date of Birth *</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>)} />
                   <FormField control={modalForm.control} name="sex" render={({ field }) => (<FormItem><FormLabel>Sex *</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{["Male", "Female", "Other"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                   <FormField control={modalForm.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Phone *</FormLabel><FormControl><Input placeholder="e.g., +675 70000000" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                  <FormField control={modalForm.control} name="fax" render={({ field }) => (<FormItem><FormLabel>Fax</FormLabel><FormControl><Input placeholder="Optional" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                  <FormField control={modalForm.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="john.doe@example.com" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                  <FormField control={modalForm.control} name="postalAddress" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Postal Address *</FormLabel><FormControl><Input placeholder="P.O. Box 123, Waigani" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={modalForm.control} name="fax" render={({ field }) => (<FormItem><FormLabel>Fax</FormLabel><FormControl><Input placeholder="Optional" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={modalForm.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="john.doe@example.com" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={modalForm.control} name="postalAddress" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Postal Address</FormLabel><FormControl><Input placeholder="P.O. Box 123, Waigani" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
                   <FormField control={modalForm.control} name="townDistrict" render={({ field }) => (<FormItem><FormLabel>Town/District *</FormLabel><FormControl><Input placeholder="Port Moresby" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                  <FormField control={modalForm.control} name="llg" render={({ field }) => (<FormItem><FormLabel>LLG (Local Level Gov.) *</FormLabel><FormControl><Input placeholder="NCD" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                  <FormField control={modalForm.control} name="wardVillage" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Ward/Village *</FormLabel><FormControl><Input placeholder="Waigani Village" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={modalForm.control} name="llg" render={({ field }) => (<FormItem><FormLabel>LLG (Local Level Gov.)</FormLabel><FormControl><Input placeholder="NCD" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={modalForm.control} name="wardVillage" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Ward/Village</FormLabel><FormControl><Input placeholder="Waigani Village" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
                 </div>
                 <DialogFooter>
                     <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
@@ -212,3 +216,4 @@ export function OwnerManager({ owners, setOwners, form: mainForm }: OwnerManager
     </Card>
   );
 }
+

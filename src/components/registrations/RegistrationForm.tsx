@@ -45,10 +45,10 @@ const ownerSchema = z.object({
   phone: z.string().min(1, "Phone number is required"),
   fax: z.string().optional().default(""),
   email: z.string().email("Invalid email address").optional().or(z.literal("")).default(""),
-  postalAddress: z.string().min(1, "Postal address is required"),
+  postalAddress: z.string().optional().default(""), // Made optional
   townDistrict: z.string().min(1, "Town/District is required"),
-  llg: z.string().min(1, "LLG is required"),
-  wardVillage: z.string().min(1, "Ward/Village is required"),
+  llg: z.string().optional().default(""), // Made optional
+  wardVillage: z.string().optional().default(""), // Made optional
 });
 
 const proofOfOwnershipDocSchema = z.object({
@@ -62,7 +62,7 @@ const proofOfOwnershipDocSchema = z.object({
 const engineDetailSchema = z.object({
   engineId: z.string().uuid().optional(),
   make: z.string().optional().default(""),
-  horsepower: z.number({ invalid_type_error: "Horsepower must be a number" }).positive("Horsepower must be positive").optional(),
+  horsepower: z.number({ invalid_type_error: "Horsepower must be a number" }).positive("Horsepower must be positive").optional().nullable(),
   serialNumber: z.string().optional().default(""),
 });
 
@@ -74,34 +74,34 @@ const registrationFormSchema = z.object({
   proofOfOwnershipDocs: z.array(proofOfOwnershipDocSchema).min(1, "At least one proof of ownership document is required"),
 
   craftMake: z.string().min(1, "Craft make is required"),
-  craftModel: z.string().min(1, "Craft model is required"),
-  craftYear: z.number({invalid_type_error: "Year must be a number"}).int().min(1900, "Invalid year").max(new Date().getFullYear() + 1, "Invalid year"),
-  craftColor: z.string().min(1, "Craft color is required"),
-  hullIdNumber: z.string().min(1, "Hull ID number is required"),
+  craftModel: z.string().optional().default(""), // Made optional
+  craftYear: z.number({invalid_type_error: "Year must be a number"}).int().min(1900, "Invalid year").max(new Date().getFullYear() + 1, "Invalid year").optional().nullable(), // Made optional
+  craftColor: z.string().optional().default(""), // Made optional
+  hullIdNumber: z.string().optional().default(""), // Made optional
   craftLength: z.number({invalid_type_error: "Length must be a number"}).positive("Length must be positive"),
   lengthUnits: z.enum(["m", "ft"]),
-  passengerCapacity: z.number({invalid_type_error: "Capacity must be a number"}).int().positive("Passenger capacity must be a positive number").optional(),
+  passengerCapacity: z.number({invalid_type_error: "Capacity must be a number"}).int().positive("Passenger capacity must be a positive number").optional().nullable(),
   distinguishingFeatures: z.string().optional().default(""),
-  craftImageUrl: z.string().url().optional(),
+  craftImageUrl: z.string().url().optional().nullable(),
 
   engines: z.array(engineDetailSchema).optional().default([]),
 
   propulsionType: z.enum(["Inboard", "Outboard", "Both", "Sail", "Other"]),
   propulsionOtherDesc: z.string().optional().default(""),
-  hullMaterial: z.enum(["Wood", "Fiberglass", "Metal", "Inflatable", "Other"]),
+  hullMaterial: z.enum(["Wood", "Fiberglass", "Metal", "Inflatable", "Other"]).optional(), // Made optional
   hullMaterialOtherDesc: z.string().optional().default(""),
   craftUse: z.enum(["Pleasure", "Passenger", "Fishing", "Cargo", "Mixed Use", "Other"]),
   craftUseOtherDesc: z.string().optional().default(""),
   fuelType: z.enum(["Electric", "Petrol", "Diesel", "Other"]),
   fuelTypeOtherDesc: z.string().optional().default(""),
-  vesselType: z.enum(["OpenBoat", "CabinCruiser", "Sailboat", "PWC", "Other"]),
+  vesselType: z.enum(["OpenBoat", "CabinCruiser", "Sailboat", "PWC", "Other"]).optional(), // Made optional
   vesselTypeOtherDesc: z.string().optional().default(""),
 
   paymentMethod: z.enum(["Cash", "Card", "BankDeposit"]).optional(),
   paymentReceiptNumber: z.string().optional().default(""),
   bankStampRef: z.string().optional().default(""),
-  paymentAmount: z.number({invalid_type_error: "Amount must be a number"}).positive("Amount must be positive").optional(),
-  paymentDate: z.date().optional(),
+  paymentAmount: z.number({invalid_type_error: "Amount must be a number"}).positive("Amount must be positive").optional().nullable(),
+  paymentDate: z.date().optional().nullable(),
 
   safetyCertNumber: z.string().optional().default(""),
   safetyEquipIssued: z.boolean().optional().default(false),
@@ -180,37 +180,37 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       })),
       craftMake: existingRegistrationData.craftMake || "",
       craftModel: existingRegistrationData.craftModel || "",
-      craftYear: existingRegistrationData.craftYear || new Date().getFullYear(),
+      craftYear: existingRegistrationData.craftYear ?? null,
       craftColor: existingRegistrationData.craftColor || "",
       hullIdNumber: existingRegistrationData.hullIdNumber || "",
       craftLength: typeof existingRegistrationData.craftLength === 'number' ? existingRegistrationData.craftLength : 0,
       lengthUnits: existingRegistrationData.lengthUnits || "m",
-      passengerCapacity: existingRegistrationData.passengerCapacity === undefined ? undefined : (existingRegistrationData.passengerCapacity ?? undefined),
+      passengerCapacity: existingRegistrationData.passengerCapacity ?? null,
       distinguishingFeatures: existingRegistrationData.distinguishingFeatures || "",
-      craftImageUrl: existingRegistrationData.craftImageUrl || undefined,
+      craftImageUrl: existingRegistrationData.craftImageUrl || null,
       engines: (existingRegistrationData.engines || []).map(e => ({
         engineId: e.engineId || crypto.randomUUID(),
         make: e.make || "",
-        horsepower: e.horsepower === undefined ? undefined : (e.horsepower ?? undefined),
+        horsepower: e.horsepower ?? null,
         serialNumber: e.serialNumber || "",
       })),
       propulsionType: existingRegistrationData.propulsionType || "Outboard",
       propulsionOtherDesc: existingRegistrationData.propulsionOtherDesc || "",
-      hullMaterial: existingRegistrationData.hullMaterial || "Fiberglass",
+      hullMaterial: existingRegistrationData.hullMaterial || undefined, // Allow undefined for optional enum
       hullMaterialOtherDesc: existingRegistrationData.hullMaterialOtherDesc || "",
       craftUse: existingRegistrationData.craftUse || "Pleasure",
       craftUseOtherDesc: existingRegistrationData.craftUseOtherDesc || "",
       fuelType: existingRegistrationData.fuelType || "Petrol",
       fuelTypeOtherDesc: existingRegistrationData.fuelTypeOtherDesc || "",
-      vesselType: existingRegistrationData.vesselType || "OpenBoat",
+      vesselType: existingRegistrationData.vesselType || undefined, // Allow undefined for optional enum
       vesselTypeOtherDesc: existingRegistrationData.vesselTypeOtherDesc || "",
       paymentMethod: existingRegistrationData.paymentMethod || undefined,
       paymentReceiptNumber: existingRegistrationData.paymentReceiptNumber || "",
       bankStampRef: existingRegistrationData.bankStampRef || "",
-      paymentAmount: existingRegistrationData.paymentAmount === undefined ? undefined : (existingRegistrationData.paymentAmount ?? undefined),
-      paymentDate: existingRegistrationData.paymentDate instanceof Timestamp ? existingRegistrationData.paymentDate.toDate() : (existingRegistrationData.paymentDate ? new Date(existingRegistrationData.paymentDate as any) : undefined),
+      paymentAmount: existingRegistrationData.paymentAmount ?? null,
+      paymentDate: existingRegistrationData.paymentDate instanceof Timestamp ? existingRegistrationData.paymentDate.toDate() : (existingRegistrationData.paymentDate ? new Date(existingRegistrationData.paymentDate as any) : null),
       safetyCertNumber: existingRegistrationData.safetyCertNumber || "",
-      safetyEquipIssued: existingRegistrationData.safetyEquipIssued === undefined ? false : existingRegistrationData.safetyEquipIssued,
+      safetyEquipIssued: existingRegistrationData.safetyEquipIssued ?? false,
       safetyEquipReceiptNumber: existingRegistrationData.safetyEquipReceiptNumber || "",
       status: existingRegistrationData.status || "Draft",
     }
@@ -221,30 +221,30 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       proofOfOwnershipDocs: [],
       craftMake: "",
       craftModel: "",
-      craftYear: new Date().getFullYear(),
+      craftYear: null,
       craftColor: "",
       hullIdNumber: "",
       craftLength: 0,
       lengthUnits: "m",
-      passengerCapacity: undefined,
+      passengerCapacity: null,
       distinguishingFeatures: "",
-      craftImageUrl: undefined,
+      craftImageUrl: null,
       engines: [],
       propulsionType: "Outboard",
       propulsionOtherDesc: "",
-      hullMaterial: "Fiberglass",
+      hullMaterial: undefined,
       hullMaterialOtherDesc: "",
       craftUse: "Pleasure",
       craftUseOtherDesc: "",
       fuelType: "Petrol",
       fuelTypeOtherDesc: "",
-      vesselType: "OpenBoat",
+      vesselType: undefined,
       vesselTypeOtherDesc: "",
       paymentMethod: undefined,
       paymentReceiptNumber: "",
       bankStampRef: "",
-      paymentAmount: undefined,
-      paymentDate: undefined,
+      paymentAmount: null,
+      paymentDate: null,
       safetyCertNumber: "",
       safetyEquipIssued: false,
       safetyEquipReceiptNumber: "",
@@ -354,6 +354,9 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       owners: data.owners.map(owner => ({
         ...owner,
         dob: Timestamp.fromDate(owner.dob instanceof Date ? owner.dob : new Date(owner.dob as string)),
+        postalAddress: owner.postalAddress ?? "",
+        llg: owner.llg ?? "",
+        wardVillage: owner.wardVillage ?? "",
       })),
       proofOfOwnershipDocs: data.proofOfOwnershipDocs.map(docEntry => {
         let uploadedAtTimestamp: Timestamp;
@@ -367,10 +370,10 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
         return { ...docEntry, uploadedAt: uploadedAtTimestamp };
       }),
       craftMake: data.craftMake,
-      craftModel: data.craftModel,
-      craftYear: data.craftYear,
-      craftColor: data.craftColor,
-      hullIdNumber: data.hullIdNumber,
+      craftModel: data.craftModel ?? "",
+      craftYear: data.craftYear ?? null,
+      craftColor: data.craftColor ?? "",
+      hullIdNumber: data.hullIdNumber ?? "",
       craftLength: data.craftLength,
       lengthUnits: data.lengthUnits,
       passengerCapacity: data.passengerCapacity ?? null,
@@ -382,10 +385,10 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
         serialNumber: engine.serialNumber ?? "",
       })),
       propulsionType: data.propulsionType,
-      hullMaterial: data.hullMaterial,
+      hullMaterial: data.hullMaterial ?? null,
       craftUse: data.craftUse,
       fuelType: data.fuelType,
-      vesselType: data.vesselType,
+      vesselType: data.vesselType ?? null,
       safetyEquipIssued: data.safetyEquipIssued ?? false,
       lastUpdatedByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
       lastUpdatedAt: Timestamp.now(),
@@ -419,8 +422,6 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       registrationDataForFirestore.submittedAt = Timestamp.now();
     }
     
-    // console.log("Data being sent to Firestore:", JSON.stringify(registrationDataForFirestore, null, 2));
-
     try {
       if (mode === "create") {
         const registrationsCol = collection(db, "registrations");
@@ -506,10 +507,10 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
           <CardContent className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField control={form.control} name="craftMake" render={({ field }) => (<FormItem><FormLabel>Craft Make *</FormLabel><FormControl><Input placeholder="e.g., Yamaha" {...field} /></FormControl><FormMessage /></FormItem>)} />
-              <FormField control={form.control} name="craftModel" render={({ field }) => (<FormItem><FormLabel>Craft Model *</FormLabel><FormControl><Input placeholder="e.g., FX Cruiser HO" {...field} /></FormControl><FormMessage /></FormItem>)} />
+              <FormField control={form.control} name="craftModel" render={({ field }) => (<FormItem><FormLabel>Craft Model</FormLabel><FormControl><Input placeholder="e.g., FX Cruiser HO" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
               <FormField control={form.control} name="craftYear" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Craft Year *</FormLabel>
+                    <FormLabel>Craft Year</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
@@ -518,7 +519,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                         value={field.value === undefined || field.value === null || isNaN(Number(field.value)) ? '' : Number(field.value)}
                         onChange={e => {
                           const val = e.target.value;
-                          field.onChange(val === '' || isNaN(parseInt(val, 10)) ? undefined : parseInt(val, 10));
+                          field.onChange(val === '' || isNaN(parseInt(val, 10)) ? null : parseInt(val, 10));
                         }}
                       />
                     </FormControl>
@@ -526,8 +527,8 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                   </FormItem>
                 )}
               />
-              <FormField control={form.control} name="craftColor" render={({ field }) => (<FormItem><FormLabel>Craft Color *</FormLabel><FormControl><Input placeholder="e.g., Blue/White" {...field} /></FormControl><FormMessage /></FormItem>)} />
-              <FormField control={form.control} name="hullIdNumber" render={({ field }) => (<FormItem><FormLabel>Hull ID / Serial No. *</FormLabel><FormControl><Input placeholder="Enter HIN" {...field} /></FormControl><FormMessage /></FormItem>)} />
+              <FormField control={form.control} name="craftColor" render={({ field }) => (<FormItem><FormLabel>Craft Color</FormLabel><FormControl><Input placeholder="e.g., Blue/White" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
+              <FormField control={form.control} name="hullIdNumber" render={({ field }) => (<FormItem><FormLabel>Hull ID / Serial No.</FormLabel><FormControl><Input placeholder="Enter HIN" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
               <div className="grid grid-cols-2 gap-4">
                 <FormField control={form.control} name="craftLength" render={({ field }) => (
                     <FormItem>
@@ -562,7 +563,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                         value={field.value === undefined || field.value === null || isNaN(Number(field.value)) ? '' : Number(field.value)}
                         onChange={e => {
                           const val = e.target.value;
-                          field.onChange(val === '' || isNaN(parseInt(val, 10)) ? undefined : parseInt(val, 10));
+                           field.onChange(val === '' || isNaN(parseInt(val, 10)) ? null : parseInt(val, 10));
                         }}
                       />
                     </FormControl>
@@ -601,7 +602,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Engine Make</FormLabel>
-                        <FormControl><Input placeholder="e.g., Yamaha" {...field} /></FormControl>
+                        <FormControl><Input placeholder="e.g., Yamaha" {...field} value={field.value ?? ""} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -620,7 +621,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                             value={field.value === undefined || field.value === null || isNaN(Number(field.value)) ? '' : Number(field.value)}
                             onChange={e => {
                               const val = e.target.value;
-                              field.onChange(val === '' || isNaN(parseInt(val, 10)) ? undefined : parseInt(val, 10));
+                              field.onChange(val === '' || isNaN(parseInt(val, 10)) ? null : parseInt(val, 10));
                             }}
                           />
                         </FormControl>
@@ -634,7 +635,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Serial Number</FormLabel>
-                        <FormControl><Input placeholder="Engine S/N" {...field} /></FormControl>
+                        <FormControl><Input placeholder="Engine S/N" {...field} value={field.value ?? ""} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -661,7 +662,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
             </div>
 
             <Separator className="my-4" />
-            <FormField control={form.control} name="distinguishingFeatures" render={({ field }) => (<FormItem><FormLabel>Distinguishing Features</FormLabel><FormControl><Textarea placeholder="e.g., Custom decals, Bimini top" {...field} /></FormControl><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="distinguishingFeatures" render={({ field }) => (<FormItem><FormLabel>Distinguishing Features</FormLabel><FormControl><Textarea placeholder="e.g., Custom decals, Bimini top" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
           </CardContent>
         </Card>
 
@@ -671,19 +672,19 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
           <CardHeader><CardTitle>Technical Specifications</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FormField control={form.control} name="propulsionType" render={({ field }) => (<FormItem><FormLabel>Propulsion Type *</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{["Inboard", "Outboard", "Both", "Sail", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-            {watchPropulsionType === "Other" && <FormField control={form.control} name="propulsionOtherDesc" render={({ field }) => (<FormItem><FormLabel>Other Propulsion Desc. *</FormLabel><FormControl><Input placeholder="Specify other" {...field} /></FormControl><FormMessage /></FormItem>)} />}
+            {watchPropulsionType === "Other" && <FormField control={form.control} name="propulsionOtherDesc" render={({ field }) => (<FormItem><FormLabel>Other Propulsion Desc. *</FormLabel><FormControl><Input placeholder="Specify other" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
 
-            <FormField control={form.control} name="hullMaterial" render={({ field }) => (<FormItem><FormLabel>Hull Material *</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{["Wood", "Fiberglass", "Metal", "Inflatable", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-            {watchHullMaterial === "Other" && <FormField control={form.control} name="hullMaterialOtherDesc" render={({ field }) => (<FormItem><FormLabel>Other Hull Material Desc. *</FormLabel><FormControl><Input placeholder="Specify other" {...field} /></FormControl><FormMessage /></FormItem>)} />}
+            <FormField control={form.control} name="hullMaterial" render={({ field }) => (<FormItem><FormLabel>Hull Material</FormLabel><Select onValueChange={field.onChange} value={field.value || ""}><FormControl><SelectTrigger><SelectValue placeholder="Select material..." /></SelectTrigger></FormControl><SelectContent>{["Wood", "Fiberglass", "Metal", "Inflatable", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            {watchHullMaterial === "Other" && <FormField control={form.control} name="hullMaterialOtherDesc" render={({ field }) => (<FormItem><FormLabel>Other Hull Material Desc. *</FormLabel><FormControl><Input placeholder="Specify other" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
 
             <FormField control={form.control} name="craftUse" render={({ field }) => (<FormItem><FormLabel>Craft Use *</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{["Pleasure", "Passenger", "Fishing", "Cargo", "Mixed Use", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-            {watchCraftUse === "Other" && <FormField control={form.control} name="craftUseOtherDesc" render={({ field }) => (<FormItem><FormLabel>Other Craft Use Desc. *</FormLabel><FormControl><Input placeholder="Specify other" {...field} /></FormControl><FormMessage /></FormItem>)} />}
+            {watchCraftUse === "Other" && <FormField control={form.control} name="craftUseOtherDesc" render={({ field }) => (<FormItem><FormLabel>Other Craft Use Desc. *</FormLabel><FormControl><Input placeholder="Specify other" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
 
             <FormField control={form.control} name="fuelType" render={({ field }) => (<FormItem><FormLabel>Fuel Type *</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{["Electric", "Petrol", "Diesel", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-            {watchFuelType === "Other" && <FormField control={form.control} name="fuelTypeOtherDesc" render={({ field }) => (<FormItem><FormLabel>Other Fuel Type Desc. *</FormLabel><FormControl><Input placeholder="Specify other" {...field} /></FormControl><FormMessage /></FormItem>)} />}
+            {watchFuelType === "Other" && <FormField control={form.control} name="fuelTypeOtherDesc" render={({ field }) => (<FormItem><FormLabel>Other Fuel Type Desc. *</FormLabel><FormControl><Input placeholder="Specify other" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
 
-            <FormField control={form.control} name="vesselType" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Vessel Type *</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{["OpenBoat", "CabinCruiser", "Sailboat", "PWC", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-            {watchVesselType === "Other" && <FormField control={form.control} name="vesselTypeOtherDesc" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Other Vessel Type Desc. *</FormLabel><FormControl><Input placeholder="Specify other" {...field} /></FormControl><FormMessage /></FormItem>)} />}
+            <FormField control={form.control} name="vesselType" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Vessel Type</FormLabel><Select onValueChange={field.onChange} value={field.value || ""}><FormControl><SelectTrigger><SelectValue placeholder="Select vessel type..." /></SelectTrigger></FormControl><SelectContent>{["OpenBoat", "CabinCruiser", "Sailboat", "PWC", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            {watchVesselType === "Other" && <FormField control={form.control} name="vesselTypeOtherDesc" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Other Vessel Type Desc. *</FormLabel><FormControl><Input placeholder="Specify other" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
           </CardContent>
         </Card>
 
@@ -703,7 +704,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                       value={field.value === undefined || field.value === null || isNaN(Number(field.value)) ? '' : Number(field.value)}
                       onChange={e => {
                         const val = e.target.value;
-                         field.onChange(val === '' || isNaN(parseFloat(val)) ? undefined : parseFloat(val));
+                         field.onChange(val === '' || isNaN(parseFloat(val)) ? null : parseFloat(val));
                       }}
                     />
                   </FormControl>
@@ -711,18 +712,18 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                 </FormItem>
               )}
             />
-            <FormField control={form.control} name="paymentReceiptNumber" render={({ field }) => (<FormItem><FormLabel>Payment Receipt No.</FormLabel><FormControl><Input placeholder="Receipt number" {...field} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="bankStampRef" render={({ field }) => (<FormItem><FormLabel>Bank Stamp Ref.</FormLabel><FormControl><Input placeholder="Bank stamp reference" {...field} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="paymentDate" render={({ field }) => (<FormItem><FormLabel>Payment Date</FormLabel><FormControl><Input type="date" {...field} value={field.value ? new Date(field.value).toISOString().split('T')[0] : ''} onChange={e => field.onChange(e.target.value ? new Date(e.target.value) : undefined)} /></FormControl><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="paymentReceiptNumber" render={({ field }) => (<FormItem><FormLabel>Payment Receipt No.</FormLabel><FormControl><Input placeholder="Receipt number" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="bankStampRef" render={({ field }) => (<FormItem><FormLabel>Bank Stamp Ref.</FormLabel><FormControl><Input placeholder="Bank stamp reference" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="paymentDate" render={({ field }) => (<FormItem><FormLabel>Payment Date</FormLabel><FormControl><Input type="date" {...field} value={field.value ? new Date(field.value).toISOString().split('T')[0] : ''} onChange={e => field.onChange(e.target.value ? new Date(e.target.value) : null)} /></FormControl><FormMessage /></FormItem>)} />
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader><CardTitle>Safety Certificate (Optional)</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <FormField control={form.control} name="safetyCertNumber" render={({ field }) => (<FormItem><FormLabel>Safety Certificate No.</FormLabel><FormControl><Input placeholder="Certificate number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="safetyCertNumber" render={({ field }) => (<FormItem><FormLabel>Safety Certificate No.</FormLabel><FormControl><Input placeholder="Certificate number" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
             <FormField control={form.control} name="safetyEquipIssued" render={({ field }) => (<FormItem><FormLabel>Safety Equipment Issued?</FormLabel><Select onValueChange={val => field.onChange(val === "true")} value={field.value === undefined || field.value === null ? "" : String(field.value)}><FormControl><SelectTrigger><SelectValue placeholder="Select an option"/></SelectTrigger></FormControl><SelectContent><SelectItem value="true">Yes</SelectItem><SelectItem value="false">No</SelectItem></SelectContent></Select><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="safetyEquipReceiptNumber" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Safety Equipment Receipt No.</FormLabel><FormControl><Input placeholder="Equipment receipt number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="safetyEquipReceiptNumber" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Safety Equipment Receipt No.</FormLabel><FormControl><Input placeholder="Equipment receipt number" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
           </CardContent>
         </Card>
 
