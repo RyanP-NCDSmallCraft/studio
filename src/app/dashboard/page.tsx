@@ -49,7 +49,8 @@ export default function DashboardPage() {
 
       // Fetch pending registrations for Admin/Registrar/Supervisor
       if (isAdmin || isRegistrar || isSupervisor) {
-        const pendingRegsQuery = query(regsRef, where("status", "in", ["Submitted", "PendingReview", "RequiresInfo", "Draft"]));
+        // Reverted query to exclude "Draft"
+        const pendingRegsQuery = query(regsRef, where("status", "in", ["Submitted", "PendingReview", "RequiresInfo"]));
         const pendingRegsSnapshot = await getCountFromServer(pendingRegsQuery);
         setPendingRegistrationsCount(pendingRegsSnapshot.data().count);
 
@@ -57,7 +58,7 @@ export default function DashboardPage() {
         const approvedRegsSnapshot = await getCountFromServer(approvedRegsQuery);
         setApprovedRegistrationsCount(approvedRegsSnapshot.data().count);
         
-        // Separate count for Draft if still needed for its own card
+        // Separate count for Draft
         const draftRegsQuery = query(regsRef, where("status", "==", "Draft"));
         const draftRegsSnapshot = await getCountFromServer(draftRegsQuery);
         setDraftRegistrationsCount(draftRegsSnapshot.data().count);
@@ -233,9 +234,11 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{renderStat(pendingRegistrationsCount)}</div>
-              <p className="text-xs text-muted-foreground">Crafts awaiting review, info, or in draft (Submitted, PendingReview, RequiresInfo, Draft)</p>
+              {/* Reverted description text */}
+              <p className="text-xs text-muted-foreground">Crafts awaiting review or info (Submitted, PendingReview, RequiresInfo)</p>
               <Button asChild size="sm" className="mt-4">
-                <Link href="/registrations?status=Submitted,PendingReview,RequiresInfo,Draft">View Pending <ArrowRight className="ml-2 h-4 w-4" /></Link>
+                {/* Reverted link */}
+                <Link href="/registrations?status=Submitted,PendingReview,RequiresInfo">View Pending <ArrowRight className="ml-2 h-4 w-4" /></Link>
               </Button>
             </CardContent>
           </Card>
