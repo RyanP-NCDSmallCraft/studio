@@ -161,6 +161,16 @@ export default function InfringementDetailPage() {
     }
   };
 
+  const calculateFineAmount = (points: number | undefined | null): string => {
+    if (points === undefined || points === null || points < 0) {
+      return "N/A (Invalid Points)";
+    }
+    if (points <= 20) return "K100";
+    if (points <= 40) return "K200";
+    if (points <= 100) return "K500";
+    return "K1,000";
+  };
+
   if (loading) return <div className="flex h-64 justify-center items-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /> <p>Loading infringement details...</p></div>;
   if (error) return <p className="text-red-500 text-center">Error: {error}</p>;
   if (!infringement) return <p className="text-center">Infringement not found.</p>;
@@ -206,6 +216,7 @@ export default function InfringementDetailPage() {
           <div><strong>Date Issued:</strong> {formatFirebaseTimestamp(infringement.issuedAt, "PPpp")}</div>
           <div><strong>Location:</strong> {infringement.locationDescription}</div>
           <div><strong>Total Points:</strong> {infringement.totalPoints || 0} points</div>
+          <div><strong>Calculated Fine Amount:</strong> <span className="font-semibold">{calculateFineAmount(infringement.totalPoints)}</span></div>
           {infringement.approvedAt && <div><strong>Approved At:</strong> {formatFirebaseTimestamp(infringement.approvedAt, "PPpp")}</div>}
           {infringement.approvedByRef && <div><strong>Approved By:</strong> {(typeof infringement.approvedByRef === 'object' && 'displayName' in infringement.approvedByRef ? (infringement.approvedByRef as any).displayName : infringement.approvedByRef as string) || infringement.approvedByRef as string}</div>}
         </CardContent>
