@@ -32,6 +32,7 @@ import { FileUploadManager } from "./FileUploadManager";
 import { Separator } from "@/components/ui/separator";
 import Image from "next/image";
 import { Progress } from "@/components/ui/progress";
+import { format } from "date-fns";
 
 
 // Define Zod schema for validation
@@ -45,10 +46,10 @@ const ownerSchema = z.object({
   phone: z.string().min(1, "Phone number is required"),
   fax: z.string().optional().default(""),
   email: z.string().email("Invalid email address").optional().or(z.literal("")).default(""),
-  postalAddress: z.string().optional().default(""), // Made optional
+  postalAddress: z.string().optional().default(""),
   townDistrict: z.string().min(1, "Town/District is required"),
-  llg: z.string().optional().default(""), // Made optional
-  wardVillage: z.string().optional().default(""), // Made optional
+  llg: z.string().optional().default(""),
+  wardVillage: z.string().optional().default(""),
 });
 
 const proofOfOwnershipDocSchema = z.object({
@@ -74,10 +75,10 @@ const registrationFormSchema = z.object({
   proofOfOwnershipDocs: z.array(proofOfOwnershipDocSchema).min(1, "At least one proof of ownership document is required"),
 
   craftMake: z.string().min(1, "Craft make is required"),
-  craftModel: z.string().optional().default(""), // Made optional
-  craftYear: z.number({invalid_type_error: "Year must be a number"}).int().min(1900, "Invalid year").max(new Date().getFullYear() + 1, "Invalid year").optional().nullable(), // Made optional
-  craftColor: z.string().optional().default(""), // Made optional
-  hullIdNumber: z.string().optional().default(""), // Made optional
+  craftModel: z.string().optional().default(""),
+  craftYear: z.number({invalid_type_error: "Year must be a number"}).int().min(1900, "Invalid year").max(new Date().getFullYear() + 1, "Invalid year").optional().nullable(),
+  craftColor: z.string().optional().default(""),
+  hullIdNumber: z.string().optional().default(""),
   craftLength: z.number({invalid_type_error: "Length must be a number"}).positive("Length must be positive"),
   lengthUnits: z.enum(["m", "ft"]),
   passengerCapacity: z.number({invalid_type_error: "Capacity must be a number"}).int().positive("Passenger capacity must be a positive number").optional().nullable(),
@@ -88,13 +89,13 @@ const registrationFormSchema = z.object({
 
   propulsionType: z.enum(["Inboard", "Outboard", "Both", "Sail", "Other"]),
   propulsionOtherDesc: z.string().optional().default(""),
-  hullMaterial: z.enum(["Wood", "Fiberglass", "Metal", "Inflatable", "Other"]).optional(), // Made optional
+  hullMaterial: z.enum(["Wood", "Fiberglass", "Metal", "Inflatable", "Other"]).optional(),
   hullMaterialOtherDesc: z.string().optional().default(""),
   craftUse: z.enum(["Pleasure", "Passenger", "Fishing", "Cargo", "Mixed Use", "Other"]),
   craftUseOtherDesc: z.string().optional().default(""),
   fuelType: z.enum(["Electric", "Petrol", "Diesel", "Other"]),
   fuelTypeOtherDesc: z.string().optional().default(""),
-  vesselType: z.enum(["OpenBoat", "CabinCruiser", "Sailboat", "PWC", "Other"]).optional(), // Made optional
+  vesselType: z.enum(["OpenBoat", "CabinCruiser", "Sailboat", "PWC", "Other"]).optional(),
   vesselTypeOtherDesc: z.string().optional().default(""),
 
   paymentMethod: z.enum(["Cash", "Card", "BankDeposit"]).optional(),
@@ -107,6 +108,9 @@ const registrationFormSchema = z.object({
   safetyEquipIssued: z.boolean().optional().default(false),
   safetyEquipReceiptNumber: z.string().optional().default(""),
   status: z.enum(["Draft", "Submitted", "PendingReview", "Approved", "Rejected", "Expired", "RequiresInfo", "Suspended", "Revoked"]).optional(),
+
+  effectiveDate: z.date().optional().nullable(),
+  expiryDate: z.date().optional().nullable(),
 }).superRefine((data, ctx) => {
   if (data.registrationType === "Renewal" && !data.previousScaRegoNo) {
     ctx.addIssue({
@@ -141,7 +145,7 @@ interface RegistrationFormProps {
 }
 
 export function RegistrationForm({ mode, registrationId, existingRegistrationData }: RegistrationFormProps) {
-  const { currentUser } = useAuth();
+  const { currentUser, isAdmin, isRegistrar } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
 
@@ -196,13 +200,13 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       })),
       propulsionType: existingRegistrationData.propulsionType || "Outboard",
       propulsionOtherDesc: existingRegistrationData.propulsionOtherDesc || "",
-      hullMaterial: existingRegistrationData.hullMaterial || undefined, // Allow undefined for optional enum
+      hullMaterial: existingRegistrationData.hullMaterial || undefined,
       hullMaterialOtherDesc: existingRegistrationData.hullMaterialOtherDesc || "",
       craftUse: existingRegistrationData.craftUse || "Pleasure",
       craftUseOtherDesc: existingRegistrationData.craftUseOtherDesc || "",
       fuelType: existingRegistrationData.fuelType || "Petrol",
       fuelTypeOtherDesc: existingRegistrationData.fuelTypeOtherDesc || "",
-      vesselType: existingRegistrationData.vesselType || undefined, // Allow undefined for optional enum
+      vesselType: existingRegistrationData.vesselType || undefined,
       vesselTypeOtherDesc: existingRegistrationData.vesselTypeOtherDesc || "",
       paymentMethod: existingRegistrationData.paymentMethod || undefined,
       paymentReceiptNumber: existingRegistrationData.paymentReceiptNumber || "",
@@ -213,6 +217,8 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       safetyEquipIssued: existingRegistrationData.safetyEquipIssued ?? false,
       safetyEquipReceiptNumber: existingRegistrationData.safetyEquipReceiptNumber || "",
       status: existingRegistrationData.status || "Draft",
+      effectiveDate: existingRegistrationData.effectiveDate ? (existingRegistrationData.effectiveDate instanceof Timestamp ? existingRegistrationData.effectiveDate.toDate() : new Date(existingRegistrationData.effectiveDate as any)) : null,
+      expiryDate: existingRegistrationData.expiryDate ? (existingRegistrationData.expiryDate instanceof Timestamp ? existingRegistrationData.expiryDate.toDate() : new Date(existingRegistrationData.expiryDate as any)) : null,
     }
   : {
       registrationType: "New",
@@ -249,6 +255,8 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       safetyEquipIssued: false,
       safetyEquipReceiptNumber: "",
       status: "Draft",
+      effectiveDate: null,
+      expiryDate: null,
     };
 
   const form = useForm<RegistrationFormValues>({
@@ -407,6 +415,8 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       craftUseOtherDesc: data.craftUseOtherDesc ?? "",
       fuelTypeOtherDesc: data.fuelTypeOtherDesc ?? "",
       vesselTypeOtherDesc: data.vesselTypeOtherDesc ?? "",
+      effectiveDate: data.effectiveDate ? Timestamp.fromDate(data.effectiveDate) : null,
+      expiryDate: data.expiryDate ? Timestamp.fromDate(data.expiryDate) : null,
     };
 
     if (mode === "create") {
@@ -688,6 +698,52 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
           </CardContent>
         </Card>
 
+        {(isAdmin || isRegistrar) && (
+          <Card>
+            <CardHeader><CardTitle>Administrative Dates (Optional Pre-set)</CardTitle></CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <FormField
+                control={form.control}
+                name="effectiveDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Effective Date</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="date"
+                        {...field}
+                        value={field.value ? format(new Date(field.value), 'yyyy-MM-dd') : ''}
+                        onChange={e => field.onChange(e.target.value ? new Date(e.target.value) : null)}
+                      />
+                    </FormControl>
+                    <FormDescription>Can be set here or during approval.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="expiryDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Expiry Date</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="date"
+                        {...field}
+                        value={field.value ? format(new Date(field.value), 'yyyy-MM-dd') : ''}
+                        onChange={e => field.onChange(e.target.value ? new Date(e.target.value) : null)}
+                      />
+                    </FormControl>
+                    <FormDescription>Can be set here or during approval.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
+        )}
+
          <Card>
           <CardHeader><CardTitle>Payment Information (Optional)</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -740,5 +796,3 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
     </Form>
   );
 }
-
-    

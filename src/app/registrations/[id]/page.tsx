@@ -26,7 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import React, { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { format, parseISO, isValid, addDays } from "date-fns";
+import { format, parseISO, isValid, addDays, addYears } from "date-fns";
 import { doc, getDoc, updateDoc, Timestamp, collection, query, where, getDocs, DocumentReference } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Textarea } from "@/components/ui/textarea";
@@ -74,7 +74,7 @@ export default function RegistrationDetailPage() {
   const [approveModalOpen, setApproveModalOpen] = useState(false);
   const [scaRegoNo, setScaRegoNo] = useState("");
   const [effectiveDate, setEffectiveDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [expiryDate, setExpiryDate] = useState(format(addDays(new Date(), 365), "yyyy-MM-dd"));
+  const [expiryDate, setExpiryDate] = useState(format(addYears(new Date(), 1), "yyyy-MM-dd"));
 
   const [suspendModalOpen, setSuspendModalOpen] = useState(false);
   const [suspensionReason, setSuspensionReason] = useState("");
@@ -160,9 +160,20 @@ export default function RegistrationDetailPage() {
           createdAt: ensureDateObject(data.createdAt),
         };
         setRegistration(processedData);
+        
+        // Pre-fill modal states based on fetched registration data
         setScaRegoNo(processedData.scaRegoNo || "");
-        if (processedData.effectiveDate) setEffectiveDate(format(new Date(processedData.effectiveDate as Date), "yyyy-MM-dd"));
-        if (processedData.expiryDate) setExpiryDate(format(new Date(processedData.expiryDate as Date), "yyyy-MM-dd"));
+        
+        const currentEffectiveDate = processedData.effectiveDate ? 
+            (processedData.effectiveDate instanceof Date ? processedData.effectiveDate : new Date(processedData.effectiveDate as any))
+            : new Date();
+        setEffectiveDate(format(currentEffectiveDate, "yyyy-MM-dd"));
+
+        const currentExpiryDate = processedData.expiryDate ?
+            (processedData.expiryDate instanceof Date ? processedData.expiryDate : new Date(processedData.expiryDate as any))
+            : addYears(currentEffectiveDate, 1);
+        setExpiryDate(format(currentExpiryDate, "yyyy-MM-dd"));
+
 
         try {
           const inspectionsQuery = query(
@@ -274,6 +285,24 @@ export default function RegistrationDetailPage() {
       toast({ title: "Approval Failed", description: e.message || "Could not update registration.", variant: "destructive" });
     }
   };
+  
+  const openApprovalModalWithPrefilledDates = () => {
+    if (!registration) return;
+    setScaRegoNo(registration.scaRegoNo || "");
+    
+    const currentEffective = registration.effectiveDate 
+      ? (registration.effectiveDate instanceof Date ? registration.effectiveDate : new Date(registration.effectiveDate as any))
+      : new Date();
+    setEffectiveDate(format(currentEffective, "yyyy-MM-dd"));
+
+    const currentExpiry = registration.expiryDate
+      ? (registration.expiryDate instanceof Date ? registration.expiryDate : new Date(registration.expiryDate as any))
+      : addYears(currentEffective, 1);
+    setExpiryDate(format(currentExpiry, "yyyy-MM-dd"));
+    
+    setApproveModalOpen(true);
+  };
+
 
   const handleReject = async () => {
     if (!currentUser?.userId || !registration) return;
@@ -382,7 +411,7 @@ export default function RegistrationDetailPage() {
   };
 
 
-  const canEdit = (isRegistrar || isAdmin) && (registration.status === "Submitted" || registration.status === "RequiresInfo" || registration.status === "Draft");
+  const canEdit = (isRegistrar || isAdmin) && (registration.status === "Submitted" || registration.status === "RequiresInfo" || registration.status === "Draft" || registration.status === "Approved");
   const canApproveReject = (isRegistrar || isAdmin) && (registration.status === "Submitted" || registration.status === "RequiresInfo" || registration.status === "PendingReview");
   const canSuspendRevoke = (isRegistrar || isAdmin) && (registration.status === "Approved" || registration.status === "Expired" || registration.status === "Suspended");
   const canUnsuspend = (isRegistrar || isAdmin) && registration.status === "Suspended";
@@ -421,7 +450,7 @@ export default function RegistrationDetailPage() {
               <>
               <AlertDialog open={approveModalOpen} onOpenChange={setApproveModalOpen}>
                 <AlertDialogTrigger asChild>
-                  <Button variant="default"><CheckCircle className="mr-2 h-4 w-4" /> Approve</Button>
+                  <Button variant="default" onClick={openApprovalModalWithPrefilledDates}><CheckCircle className="mr-2 h-4 w-4" /> Approve</Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
@@ -711,7 +740,7 @@ export default function RegistrationDetailPage() {
                 <li key={insp.inspectionId} className="p-3 border rounded-md hover:bg-muted/50 transition-colors">
                   <Link href={`/inspections/${insp.inspectionId}`} className="block">
                     <div className="flex justify-between items-center">
-                      <p className="font-semibold">{insp.inspectionType} Inspection ({insp.inspectionId})</p>
+                      <p className="font-semibold">{insp.inspectionType} Inspection ({insp.displayId || insp.inspectionId})</p>
                       <Badge variant={getStatusBadgeVariant(insp.status)}>{insp.status}</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground mt-1">
@@ -730,5 +759,3 @@ export default function RegistrationDetailPage() {
     </div>
   );
 }
-
-    
