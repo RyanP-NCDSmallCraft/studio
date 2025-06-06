@@ -49,7 +49,7 @@ export default function DashboardPage() {
 
       // Fetch pending registrations for Admin/Registrar/Supervisor
       if (isAdmin || isRegistrar || isSupervisor) {
-        const pendingRegsQuery = query(regsRef, where("status", "in", ["Submitted", "PendingReview", "RequiresInfo"]));
+        const pendingRegsQuery = query(regsRef, where("status", "in", ["Submitted", "PendingReview", "RequiresInfo", "Draft"]));
         const pendingRegsSnapshot = await getCountFromServer(pendingRegsQuery);
         setPendingRegistrationsCount(pendingRegsSnapshot.data().count);
 
@@ -57,6 +57,7 @@ export default function DashboardPage() {
         const approvedRegsSnapshot = await getCountFromServer(approvedRegsQuery);
         setApprovedRegistrationsCount(approvedRegsSnapshot.data().count);
         
+        // Separate count for Draft if still needed for its own card
         const draftRegsQuery = query(regsRef, where("status", "==", "Draft"));
         const draftRegsSnapshot = await getCountFromServer(draftRegsQuery);
         setDraftRegistrationsCount(draftRegsSnapshot.data().count);
@@ -232,16 +233,16 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{renderStat(pendingRegistrationsCount)}</div>
-              <p className="text-xs text-muted-foreground">Crafts awaiting review or info (Submitted, PendingReview, RequiresInfo)</p>
+              <p className="text-xs text-muted-foreground">Crafts awaiting review, info, or in draft (Submitted, PendingReview, RequiresInfo, Draft)</p>
               <Button asChild size="sm" className="mt-4">
-                <Link href="/registrations?status=Submitted,PendingReview,RequiresInfo">View Pending <ArrowRight className="ml-2 h-4 w-4" /></Link>
+                <Link href="/registrations?status=Submitted,PendingReview,RequiresInfo,Draft">View Pending <ArrowRight className="ml-2 h-4 w-4" /></Link>
               </Button>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Draft Registrations</CardTitle>
+              <CardTitle className="text-sm font-medium">Draft Registrations (Alone)</CardTitle>
               <FileEdit className="h-5 w-5 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -372,5 +373,7 @@ export default function DashboardPage() {
   );
 }
 
+
+    
 
     
