@@ -171,22 +171,6 @@ export default function InfringementDetailPage() {
     return "K1,000";
   };
 
-  const handlePrint = () => {
-    console.log("Print Notice button clicked. Attempting to call window.print().");
-    try {
-      window.print();
-      console.log("window.print() called successfully.");
-    } catch (e) {
-      console.error("Error calling window.print():", e);
-      // It's unlikely `window.print()` itself throws an error that can be caught this way,
-      // but this is here for completeness.
-      toast({
-        title: "Print Error",
-        description: "There was an error trying to open the print dialog. Please check the console.",
-        variant: "destructive"
-      });
-    }
-  };
 
   if (loading) return <div className="flex h-64 justify-center items-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /> <p>Loading infringement details...</p></div>;
   if (error) return <p className="text-red-500 text-center">Error: {error}</p>;
@@ -197,8 +181,8 @@ export default function InfringementDetailPage() {
 
 
   return (
-    <div className="print-section">
-      <div className="hide-on-print flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
             <Button variant="outline" size="icon" onClick={() => router.push('/infringements')} className="mr-1 h-9 w-9">
                 <ArrowLeft className="h-5 w-5" />
@@ -219,7 +203,11 @@ export default function InfringementDetailPage() {
            {canApprove && (
              <Button onClick={handleApprove}><CheckCircle className="mr-2 h-4 w-4" /> Approve Infringement</Button>
            )}
-          <Button variant="outline" onClick={handlePrint}><Printer className="mr-2 h-4 w-4" /> Print Notice</Button>
+          <Button asChild variant="outline">
+            <Link href={`/infringements/${infringementId}/print`} target="_blank" rel="noopener noreferrer">
+              <Printer className="mr-2 h-4 w-4" /> Print Notice
+            </Link>
+          </Button>
         </div>
       </div>
 
@@ -276,3 +264,4 @@ export default function InfringementDetailPage() {
     </div>
   );
 }
+
