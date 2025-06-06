@@ -171,6 +171,10 @@ export default function InfringementDetailPage() {
     return "K1,000";
   };
 
+  const handlePrint = () => {
+    window.print();
+  };
+
   if (loading) return <div className="flex h-64 justify-center items-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /> <p>Loading infringement details...</p></div>;
   if (error) return <p className="text-red-500 text-center">Error: {error}</p>;
   if (!infringement) return <p className="text-center">Infringement not found.</p>;
@@ -180,8 +184,8 @@ export default function InfringementDetailPage() {
 
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+    <div className="print-section">
+      <div className="hide-on-print flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
             <Button variant="outline" size="icon" onClick={() => router.push('/infringements')} className="mr-1 h-9 w-9">
                 <ArrowLeft className="h-5 w-5" />
@@ -202,7 +206,7 @@ export default function InfringementDetailPage() {
            {canApprove && (
              <Button onClick={handleApprove}><CheckCircle className="mr-2 h-4 w-4" /> Approve Infringement</Button>
            )}
-          <Button variant="outline" disabled><Printer className="mr-2 h-4 w-4" /> Print Notice</Button>
+          <Button variant="outline" onClick={handlePrint}><Printer className="mr-2 h-4 w-4" /> Print Notice</Button>
         </div>
       </div>
 
@@ -222,7 +226,7 @@ export default function InfringementDetailPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="mt-6">
         <CardHeader><CardTitle>Infringement Items</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           {infringement.infringementItems.map((item, index) => (
@@ -238,14 +242,14 @@ export default function InfringementDetailPage() {
       </Card>
 
       {infringement.officerNotes && (
-        <Card>
+        <Card className="mt-6">
           <CardHeader><CardTitle>Officer Notes</CardTitle></CardHeader>
           <CardContent><p className="whitespace-pre-wrap text-sm">{infringement.officerNotes}</p></CardContent>
         </Card>
       )}
 
       {infringement.paymentDetails && ( // This section might need to be re-evaluated for a points system
-         <Card>
+         <Card className="mt-6">
           <CardHeader><CardTitle>Resolution Details (Placeholder)</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             {/* This section may need adjustment if points don't involve monetary payment */}
@@ -259,3 +263,4 @@ export default function InfringementDetailPage() {
     </div>
   );
 }
+
