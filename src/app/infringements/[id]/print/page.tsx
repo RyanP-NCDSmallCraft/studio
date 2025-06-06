@@ -115,6 +115,7 @@ export default function InfringementPrintPage() {
           approvedByRef: (data.approvedByRef instanceof DocumentReference) ? data.approvedByRef.id : data.approvedByRef,
           createdByRef: (data.createdByRef instanceof DocumentReference) ? data.createdByRef.id : data.createdByRef,
           lastUpdatedByRef: (data.lastUpdatedByRef instanceof DocumentReference) ? data.lastUpdatedByRef.id : data.lastUpdatedByRef,
+          offenderSignatureUrl: data.offenderSignatureUrl, // Fetch signature URL
         } as Infringement);
       } else {
         setError("Infringement not found.");
@@ -225,8 +226,14 @@ export default function InfringementPrintPage() {
                         <div className="h-16 w-full border-b border-gray-400"></div>
                         <p className="text-center text-xs mt-1">Issuing Officer's Signature</p>
                     </div>
-                     <div>
-                        <div className="h-16 w-full border-b border-gray-400"></div>
+                    <div>
+                        {infringement.offenderSignatureUrl ? (
+                            <div className="flex justify-center items-end h-20">
+                                <Image src={infringement.offenderSignatureUrl} alt="Offender Signature" width={150} height={75} className="max-h-[75px] object-contain" data-ai-hint="signature document" />
+                            </div>
+                        ) : (
+                            <div className="h-16 w-full border-b border-gray-400"></div>
+                        )}
                         <p className="text-center text-xs mt-1">Offender/Representative's Signature</p>
                     </div>
                 </div>
@@ -239,3 +246,4 @@ export default function InfringementPrintPage() {
     </div>
   );
 }
+

@@ -25,13 +25,14 @@ import type { Infringement, InfringementItemDetail, Registration, User } from "@
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
-import { Save, Send, Ship, CalendarDays, DollarSign, PlusCircle, Trash2, ChevronsUpDown, Check } from "lucide-react";
+import { Save, Send, Ship, CalendarDays, DollarSign, PlusCircle, Trash2, ChevronsUpDown, Check, Edit2 } from "lucide-react"; // Added Edit2 for signature
 import React, { useState, useEffect, useCallback } from "react";
 import { Timestamp, addDoc, collection, doc, getDocs, DocumentReference, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { format, parseISO, isValid } from "date-fns";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import Image from "next/image"; // For displaying existing signature
 
 const infringementItemDetailSchema = z.object({
   itemId: z.string(),
@@ -51,6 +52,7 @@ const infringementFormSchema = z.object({
       path: ["infringementItems"],
     }),
   officerNotes: z.string().optional(),
+  offenderSignatureUrl: z.string().url("Must be a valid URL if provided").optional().or(z.literal("")),
 });
 
 type InfringementFormValues = z.infer<typeof infringementFormSchema>;
@@ -104,6 +106,7 @@ export function InfringementForm({ mode, infringementId, existingInfringementDat
         selected: existingInfringementData?.infringementItems.some(ei => ei.itemId === item.itemId) || false,
       })),
       officerNotes: existingInfringementData?.officerNotes || "",
+      offenderSignatureUrl: existingInfringementData?.offenderSignatureUrl || "",
     },
   });
 
@@ -113,6 +116,7 @@ export function InfringementForm({ mode, infringementId, existingInfringementDat
   });
 
   const watchRegistrationRefId = form.watch("registrationRefId");
+  const watchOffenderSignatureUrl = form.watch("offenderSignatureUrl");
 
   useEffect(() => {
     const fetchRegs = async () => {
@@ -182,6 +186,7 @@ export function InfringementForm({ mode, infringementId, existingInfringementDat
       totalPoints,
       status,
       officerNotes: data.officerNotes,
+      offenderSignatureUrl: data.offenderSignatureUrl || undefined, // Save if present
       lastUpdatedAt: Timestamp.now(),
       lastUpdatedByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
     };
@@ -356,6 +361,34 @@ export function InfringementForm({ mode, infringementId, existingInfringementDat
           </CardContent>
         </Card>
 
+        <Card>
+          <CardHeader><CardTitle>Offender Signature</CardTitle></CardHeader>
+          <CardContent>
+            {watchOffenderSignatureUrl ? (
+              <>
+                <p className="text-sm text-muted-foreground mb-2">Signature on file:</p>
+                <Image src={watchOffenderSignatureUrl} alt="Offender Signature" width={300} height={150} className="border rounded-md bg-white" data-ai-hint="signature document" />
+                <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => alert("Signature editing/clearing component to be implemented.")}>
+                    <Edit2 className="mr-2 h-3 w-3"/> Change/Clear Signature (Placeholder)
+                </Button>
+              </>
+            ) : (
+              <div className="p-6 text-center text-muted-foreground border-2 border-dashed rounded-md min-h-[150px] flex flex-col justify-center items-center">
+                <Edit2 className="h-10 w-10 mb-2 text-muted-foreground/50" />
+                <p className="font-semibold">Signature Pad Area</p>
+                <p className="text-xs">(A signature capture component would be integrated here)</p>
+                 <Button type="button" variant="secondary" size="sm" className="mt-3" onClick={() => alert("Signature capture component to be implemented.")}>
+                    Capture Signature (Placeholder)
+                </Button>
+              </div>
+            )}
+             <FormDescription className="mt-2">
+                To capture a new signature, a dedicated signature pad component is required. This field currently shows an existing signature or a placeholder.
+             </FormDescription>
+          </CardContent>
+        </Card>
+
+
         <CardFooter className="flex justify-end gap-4 p-0 pt-8">
           <Button type="button" variant="outline" onClick={form.handleSubmit(data => onSubmit(data, "Draft"))} disabled={form.formState.isSubmitting}>
             <Save className="mr-2 h-4 w-4" /> Save Draft
@@ -368,3 +401,4 @@ export function InfringementForm({ mode, infringementId, existingInfringementDat
     </Form>
   );
 }
+

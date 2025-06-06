@@ -315,6 +315,7 @@ export interface Infringement {
   totalPoints?: number;
   status: "Draft" | "Issued" | "PendingReview" | "Approved" | "Voided" | "Paid" | "Overdue"; // 'Paid' might change to 'Resolved' or similar
   officerNotes?: string;
+  offenderSignatureUrl?: string; // URL to the offender's signature image
   paymentDetails?: { // This might become 'resolutionDetails' if not monetary
     receiptNumber?: string;
     paymentDate?: Timestamp | Date | string;
