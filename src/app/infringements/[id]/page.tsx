@@ -172,7 +172,20 @@ export default function InfringementDetailPage() {
   };
 
   const handlePrint = () => {
-    window.print();
+    console.log("Print Notice button clicked. Attempting to call window.print().");
+    try {
+      window.print();
+      console.log("window.print() called successfully.");
+    } catch (e) {
+      console.error("Error calling window.print():", e);
+      // It's unlikely `window.print()` itself throws an error that can be caught this way,
+      // but this is here for completeness.
+      toast({
+        title: "Print Error",
+        description: "There was an error trying to open the print dialog. Please check the console.",
+        variant: "destructive"
+      });
+    }
   };
 
   if (loading) return <div className="flex h-64 justify-center items-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /> <p>Loading infringement details...</p></div>;
@@ -263,4 +276,3 @@ export default function InfringementDetailPage() {
     </div>
   );
 }
-
