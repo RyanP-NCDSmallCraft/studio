@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { FileSpreadsheet, Download, Ship, CalendarX, ClipboardList, UserCheck, Loader2 } from "lucide-react";
+import { FileSpreadsheet, Download, Ship, CalendarX, ClipboardList, UserCheck, Loader2, CalendarClock } from "lucide-react";
 import React, { useState } from "react";
 import { collection, getDocs, query, where, Timestamp, doc, getDoc, type DocumentReference } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -36,6 +36,12 @@ export default function InspectionReportsPage() {
       description: "Export a list of all craft registrations that have expired.", 
       reportKey: "expired_registrations",
       icon: <CalendarX className="h-6 w-6 text-destructive" />
+    },
+    { 
+      title: "Upcoming Expirations (3 Months)", 
+      description: "Export a list of registrations expiring within the next 3 months, with owner contact details.", 
+      reportKey: "upcoming_expirations",
+      icon: <CalendarClock className="h-6 w-6 text-amber-500" />
     },
     { 
       title: "Inspections Data", 
@@ -71,6 +77,35 @@ export default function InspectionReportsPage() {
         EffectiveDate: formatFirebaseTimestamp(data.effectiveDate, "yyyy-MM-dd"),
         ExpiryDate: formatFirebaseTimestamp(data.expiryDate, "yyyy-MM-dd"),
         LastUpdated: formatFirebaseTimestamp(data.lastUpdatedAt, "yyyy-MM-dd HH:mm"),
+      };
+    });
+  };
+
+  const fetchUpcomingExpirationsForCSV = async () => {
+    const now = Timestamp.now();
+    const threeMonthsFromNow = new Date();
+    threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3);
+    const threeMonthsFromNowTimestamp = Timestamp.fromDate(threeMonthsFromNow);
+
+    const q = query(
+      collection(db, "registrations"), 
+      where("status", "==", "Approved"),
+      where("expiryDate", ">=", now),
+      where("expiryDate", "<=", threeMonthsFromNowTimestamp)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(docSnap => {
+      const data = docSnap.data() as Registration;
+      const primaryOwner = data.owners.find(o => o.role === "Primary") || data.owners[0];
+      return {
+        RegistrationID: docSnap.id,
+        SCARegoNo: data.scaRegoNo || "N/A",
+        CraftMake: data.craftMake,
+        CraftModel: data.craftModel,
+        ExpiryDate: formatFirebaseTimestamp(data.expiryDate, "yyyy-MM-dd"),
+        PrimaryOwnerName: primaryOwner ? `${primaryOwner.firstName} ${primaryOwner.surname}` : "N/A",
+        PrimaryOwnerPhone: primaryOwner?.phone || "N/A",
+        PrimaryOwnerEmail: primaryOwner?.email || "N/A",
       };
     });
   };
@@ -126,6 +161,10 @@ export default function InspectionReportsPage() {
         case "current_registrations":
           dataToExport = await fetchCurrentRegistrationsForCSV();
           columns = ["RegistrationID", "SCARegoNo", "Status", "CraftMake", "CraftModel", "CraftYear", "HullIDNumber", "PrimaryOwnerName", "PrimaryOwnerPhone", "PrimaryOwnerEmail", "EffectiveDate", "ExpiryDate", "LastUpdated"];
+          break;
+        case "upcoming_expirations":
+          dataToExport = await fetchUpcomingExpirationsForCSV();
+          columns = ["RegistrationID", "SCARegoNo", "CraftMake", "CraftModel", "ExpiryDate", "PrimaryOwnerName", "PrimaryOwnerPhone", "PrimaryOwnerEmail"];
           break;
         case "inspections_data":
           dataToExport = await fetchInspectionsDataForCSV();
