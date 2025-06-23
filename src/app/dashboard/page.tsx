@@ -6,11 +6,11 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { 
   Users, Ship, ClipboardList, ArrowRight, Info, Loader2, AlertTriangle, 
-  CheckCircle, FileEdit, Ban, PauseCircle, AlertOctagon, UserCheck, Siren 
+  CheckCircle, FileEdit, Ban, PauseCircle, AlertOctagon, UserCheck, Siren, CalendarClock
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import React, { useState, useEffect, useCallback } from "react";
-import { collection, query, where, getCountFromServer, doc } from "firebase/firestore";
+import { collection, query, where, getCountFromServer, doc, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 
@@ -29,6 +29,7 @@ export default function DashboardPage() {
   const [suspendedRegistrationsCount, setSuspendedRegistrationsCount] = useState<number | null>(null);
   const [revokedRegistrationsCount, setRevokedRegistrationsCount] = useState<number | null>(null);
   const [pendingInfringementsCount, setPendingInfringementsCount] = useState<number | null>(null);
+  const [expiringRegistrationsCount, setExpiringRegistrationsCount] = useState<number | null>(null);
   
   const [loadingStats, setLoadingStats] = useState(true);
   const [statsError, setStatsError] = useState<string | null>(null);
@@ -75,6 +76,18 @@ export default function DashboardPage() {
         const pendingInfringementsSnapshot = await getCountFromServer(pendingInfringementsQuery);
         setPendingInfringementsCount(pendingInfringementsSnapshot.data().count);
 
+        // Upcoming expirations query
+        const threeMonthsFromNow = new Date();
+        threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3);
+        const expiringRegsQuery = query(
+          regsRef,
+          where("status", "==", "Approved"),
+          where("expiryDate", ">=", Timestamp.now()),
+          where("expiryDate", "<=", Timestamp.fromDate(threeMonthsFromNow))
+        );
+        const expiringRegsSnapshot = await getCountFromServer(expiringRegsQuery);
+        setExpiringRegistrationsCount(expiringRegsSnapshot.data().count);
+
       } else {
         setPendingRegistrationsCount(0);
         setApprovedRegistrationsCount(0);
@@ -82,6 +95,7 @@ export default function DashboardPage() {
         setSuspendedRegistrationsCount(0);
         setRevokedRegistrationsCount(0);
         setPendingInfringementsCount(0);
+        setExpiringRegistrationsCount(0);
       }
 
       // Fetch general pending inspections for Admin/Supervisor/Registrar
@@ -125,6 +139,7 @@ export default function DashboardPage() {
       setPendingInfringementsCount(null);
       setGeneralPendingInspectionsCount(null);
       setUserInspectionsCount(null);
+      setExpiringRegistrationsCount(null);
     } finally {
       setLoadingStats(false);
     }
@@ -213,6 +228,20 @@ export default function DashboardPage() {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {(isAdmin || isRegistrar || isSupervisor) && (
           <>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Upcoming Expirations</CardTitle>
+              <CalendarClock className="h-5 w-5 text-amber-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{renderStat(expiringRegistrationsCount)}</div>
+              <p className="text-xs text-muted-foreground">Registrations expiring in the next 3 months</p>
+              <Button asChild size="sm" className="mt-4">
+                <Link href="/registrations?status=Approved">View Approved <ArrowRight className="ml-2 h-4 w-4" /></Link>
+              </Button>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Registered Craft</CardTitle>
@@ -380,3 +409,4 @@ export default function DashboardPage() {
     
 
     
+
