@@ -11,8 +11,19 @@ import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
 import React, { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { collection, getDocs, query, where, doc, getDoc, Timestamp, DocumentReference } from 'firebase/firestore'; 
+import { collection, getDocs, query, where, doc, getDoc, Timestamp, DocumentReference, type QueryConstraint } from 'firebase/firestore'; 
 import { db, auth as firebaseAuth } from '@/lib/firebase';
+import { useRouter, useSearchParams } from "next/navigation";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuCheckboxItem,
+} from "@/components/ui/dropdown-menu";
+import { Separator } from "@/components/ui/separator";
+
 
 // Helper function to safely convert Firestore Timestamps or other date forms to JS Date objects
 const ensureSerializableDate = (dateValue: any): Date | undefined => {
@@ -41,55 +52,65 @@ const ensureSerializableDate = (dateValue: any): Date | undefined => {
   return undefined;
 };
 
+const INSPECTION_STATUSES: Inspection['status'][] = ["Scheduled", "InProgress", "PendingReview", "Passed", "Failed", "Cancelled"];
+
 
 export default function InspectionListPage() {
   const { currentUser, isAdmin, isRegistrar, isSupervisor, isInspector, loading: authLoading } = useAuth();
   const { toast } = useToast();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [assignedToMeFilter, setAssignedToMeFilter] = useState(false);
+
+  useEffect(() => {
+    const statusesFromUrl = searchParams.get('status')?.split(',') || [];
+    setStatusFilter(statusesFromUrl.filter(s => s));
+    setAssignedToMeFilter(searchParams.get('assignedTo') === 'me');
+  }, [searchParams]);
+
+
   const loadInspections = useCallback(async () => {
     if (authLoading) {
-      // console.log("InspectionsPage (Client): Auth is loading. Waiting to fetch inspections.");
       setIsLoading(true);
       return;
     }
     if (!currentUser) {
-      // console.log("InspectionsPage (Client): No current user. Clearing inspections, not fetching.");
       setInspections([]);
       setIsLoading(false);
       setFetchError("Please log in to view inspections.");
       return;
     }
 
-    // const currentUserIdForLog = currentUser.userId;
-    // const currentUserRoleForLog = currentUser.role;
-    // const currentUserIsActiveForLog = currentUser.isActive;
-    // const authSdkUidForLog = firebaseAuth.currentUser?.uid;
-
-    // console.log(`InspectionsPage (Client): loadInspections called. User ID: ${currentUserIdForLog}, Role: ${currentUserRoleForLog}, Active: ${currentUserIsActiveForLog}`);
-    // console.log(`InspectionsPage (Client): Firebase SDK currentUser (auth.currentUser) UID at call time: ${authSdkUidForLog}`);
-
-
     setIsLoading(true);
     setFetchError(null);
-    let inspectionsQuery;
-
-    if (currentUser.role === "Inspector" && !isAdmin && !isRegistrar && !isSupervisor) {
-      const userDocRef = doc(db, "users", currentUser.userId);
-      // console.log("InspectionsPage (Client): Querying for Inspector:", currentUser.userId, "with userDocRef path:", userDocRef.path);
-      inspectionsQuery = query(collection(db, "inspections"), where("inspectorRef", "==", userDocRef));
-    } else {
-      // console.log("InspectionsPage (Client): Querying for Admin/Registrar/Supervisor (all inspections).");
-      inspectionsQuery = query(collection(db, "inspections"));
-    }
-    // console.log("InspectionsPage (Client): Constructed Firestore query:", inspectionsQuery);
-
-
+    
     try {
+      const queryConstraints: QueryConstraint[] = [];
+      const assignedToMe = searchParams.get('assignedTo') === 'me';
+      const statusParam = searchParams.get('status');
+
+      if (assignedToMe) {
+          const userDocRef = doc(db, "users", currentUser.userId);
+          queryConstraints.push(where("inspectorRef", "==", userDocRef));
+      } else if (isInspector && !isAdmin && !isRegistrar && !isSupervisor) {
+          const userDocRef = doc(db, "users", currentUser.userId);
+          queryConstraints.push(where("inspectorRef", "==", userDocRef));
+      }
+
+      if (statusParam) {
+          const statusArray = statusParam.split(',').filter(s => s);
+          if (statusArray.length > 0) {
+              queryConstraints.push(where("status", "in", statusArray));
+          }
+      }
+
+      const inspectionsQuery = query(collection(db, "inspections"), ...queryConstraints);
       const inspectionSnapshot = await getDocs(inspectionsQuery);
-      // console.log(`InspectionsPage (Client): Fetched ${inspectionSnapshot.docs.length} inspection documents.`);
 
       const inspectionsPromises = inspectionSnapshot.docs.map(async (docSnapshot) => {
         const data = docSnapshot.data();
@@ -106,7 +127,6 @@ export default function InspectionListPage() {
             } else if (data.registrationRef.id && typeof data.registrationRef.id === 'string') { 
                 regRef = doc(db, "registrations", data.registrationRef.id) as DocumentReference<Registration>;
             } else {
-                //  console.warn(`InspectionsPage (Client): Malformed registrationRef for inspection ${docSnapshot.id}:`, data.registrationRef);
                  throw new Error("Malformed registrationRef");
             }
 
@@ -121,11 +141,8 @@ export default function InspectionListPage() {
                 craftModel: regData.craftModel,
                 craftType: regData.vesselType,
               };
-            } else {
-              // console.warn(`InspectionsPage (Client): Linked registration document ${regRef.path} not found for inspection ${docSnapshot.id}`);
             }
           } catch (regError: any) {
-            // console.warn(`InspectionsPage (Client): Failed to fetch related registration for inspection ${docSnapshot.id}: Code: ${regError.code}, Msg: ${regError.message}`, regError);
           }
         }
 
@@ -139,7 +156,6 @@ export default function InspectionListPage() {
             } else if (data.inspectorRef.id && typeof data.inspectorRef.id === 'string') { 
                 inspRef = doc(db, "users", data.inspectorRef.id) as DocumentReference<User>;
             } else {
-                // console.warn(`InspectionsPage (Client): Malformed inspectorRef for inspection ${docSnapshot.id}:`, data.inspectorRef);
                 throw new Error("Malformed inspectorRef");
             }
             const inspectorDocSnap = await getDoc(inspRef);
@@ -149,11 +165,8 @@ export default function InspectionListPage() {
                 id: inspectorDocSnap.id,
                 displayName: inspData.displayName || inspData.email,
               };
-            } else {
-              // console.warn(`InspectionsPage (Client): Linked inspector document ${inspRef.path} not found for inspection ${docSnapshot.id}`);
             }
           } catch (inspError: any) {
-            // console.warn(`InspectionsPage (Client): Failed to fetch related inspector for inspection ${docSnapshot.id}: Code: ${inspError.code}, Msg: ${inspError.message}`, inspError);
           }
         }
         
@@ -196,14 +209,6 @@ export default function InspectionListPage() {
       const originalErrorMessage = error.message || "Unknown Firebase error";
       const originalErrorCode = error.code || "N/A";
       const detailedError = `Failed to fetch inspections from server. Original error: [${originalErrorCode}] ${originalErrorMessage}`;
-      // console.error("Failed to load inspections:", detailedError, error);
-      // console.error(
-      //   "Current user at time of error (InspectionsPage):",
-      //   currentUser
-      //     ? `UID: ${currentUser.userId}, Email: ${currentUser.email}, Role: ${currentUser.role}, Active: ${currentUser.isActive}, DisplayName: ${currentUser.displayName}`
-      //     : "null_or_undefined"
-      // );
-      // console.error("Auth SDK currentUser at time of error (InspectionsPage):", firebaseAuth.currentUser?.uid || "null");
       setFetchError(detailedError);
       toast({
         title: "Error Loading Inspections",
@@ -213,7 +218,7 @@ export default function InspectionListPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [currentUser, isAdmin, isRegistrar, isSupervisor, toast, authLoading]);
+  }, [currentUser, isAdmin, isRegistrar, isSupervisor, isInspector, toast, authLoading, searchParams]);
 
   useEffect(() => {
     if (authLoading) {
@@ -250,6 +255,30 @@ export default function InspectionListPage() {
     }
   };
 
+  const handleStatusFilterChange = (status: string, checked: boolean) => {
+    const newStatusFilter = checked
+      ? [...statusFilter, status]
+      : statusFilter.filter((s) => s !== status);
+    
+    const params = new URLSearchParams(searchParams.toString());
+    if (newStatusFilter.length > 0) {
+      params.set('status', newStatusFilter.join(','));
+    } else {
+      params.delete('status');
+    }
+    router.push(`/inspections?${params.toString()}`);
+  };
+
+  const handleAssignedToMeChange = (checked: boolean) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (checked) {
+      params.set('assignedTo', 'me');
+    } else {
+      params.delete('assignedTo');
+    }
+    router.push(`/inspections?${params.toString()}`);
+  };
+
   if (authLoading && isLoading) {
     return (
       <div className="flex h-64 justify-center items-center py-10">
@@ -261,7 +290,7 @@ export default function InspectionListPage() {
   
   const canManageInspections = isAdmin || isRegistrar || isSupervisor;
   const canConductInspections = isInspector || canManageInspections;
-
+  const activeFilterCount = statusFilter.length + (assignedToMeFilter ? 1 : 0);
 
   return (
     <div className="space-y-6">
@@ -271,9 +300,44 @@ export default function InspectionListPage() {
           <h1 className="text-3xl font-bold">Craft Inspections</h1>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" disabled>
-            <Filter className="mr-2 h-4 w-4" /> Filter
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <Filter className="mr-2 h-4 w-4" />
+                Filter
+                {activeFilterCount > 0 && (
+                  <>
+                    <Separator orientation="vertical" className="mx-2 h-4" />
+                    <Badge variant="secondary" className="rounded-sm px-1 font-normal">
+                      {activeFilterCount}
+                    </Badge>
+                  </>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[200px]">
+              <DropdownMenuLabel>Filter by</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuCheckboxItem
+                checked={assignedToMeFilter}
+                onCheckedChange={handleAssignedToMeChange}
+              >
+                Assigned to me
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuSeparator />
+               <DropdownMenuLabel>Status</DropdownMenuLabel>
+              {INSPECTION_STATUSES.map((status) => (
+                <DropdownMenuCheckboxItem
+                  key={status}
+                  checked={statusFilter.includes(status)}
+                  onCheckedChange={(checked) => handleStatusFilterChange(status, !!checked)}
+                >
+                  {status}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           {canConductInspections && (
              <Button asChild variant="secondary">
               <Link href="/inspections/conduct-new">

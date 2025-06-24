@@ -16,7 +16,16 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { collection, getDocs, query, where, Timestamp, DocumentReference, QueryConstraint } from 'firebase/firestore'; // Corrected import
 import { db } from '@/lib/firebase';
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuCheckboxItem,
+} from "@/components/ui/dropdown-menu";
+import { Separator } from "@/components/ui/separator";
 
 // Helper function to safely convert Firestore Timestamps or other date forms to JS Date
 // This is moved here as it's now used directly in this client component
@@ -52,15 +61,23 @@ const ensureSerializableDate = (dateValue: any): Date | undefined => {
   return undefined;
 };
 
+const REGISTRATION_STATUSES: Registration['status'][] = ["Draft", "Submitted", "PendingReview", "RequiresInfo", "Approved", "Rejected", "Expired", "Suspended", "Revoked"];
 
 export default function RegistrationsPage() {
   const { currentUser, isAdmin, isRegistrar, loading: authLoading } = useAuth();
   const { toast } = useToast();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [searchTerm, setSearchTerm] = useState("");
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+
+  useEffect(() => {
+      const statusesFromUrl = searchParams.get('status')?.split(',') || [];
+      setStatusFilter(statusesFromUrl.filter(s => s)); // filter out empty strings
+  }, [searchParams]);
 
   const loadRegistrations = useCallback(async () => {
     if (!currentUser) {
@@ -212,7 +229,7 @@ export default function RegistrationsPage() {
       setFetchError("Please log in to view registrations.");
       setRegistrations([]); 
     }
-  }, [currentUser, authLoading, loadRegistrations, searchParams]);
+  }, [currentUser, authLoading, loadRegistrations]);
 
 
   const getStatusBadgeVariant = (status?: Registration["status"]): BadgeProps["variant"] => {
@@ -271,6 +288,20 @@ export default function RegistrationsPage() {
     }
   };
 
+  const handleStatusFilterChange = (status: string, checked: boolean) => {
+    const newStatusFilter = checked 
+      ? [...statusFilter, status]
+      : statusFilter.filter(s => s !== status);
+    
+    const params = new URLSearchParams(searchParams.toString());
+    if (newStatusFilter.length > 0) {
+      params.set('status', newStatusFilter.join(','));
+    } else {
+      params.delete('status');
+    }
+    router.push(`/registrations?${params.toString()}`);
+  };
+
 
   if (authLoading && isLoading) { 
     return (
@@ -301,9 +332,35 @@ export default function RegistrationsPage() {
               disabled={!currentUser || isLoading}
             />
           </div>
-          <Button variant="outline" disabled>
-            <Filter className="mr-2 h-4 w-4" /> Filter
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <Filter className="mr-2 h-4 w-4" />
+                Filter
+                {statusFilter.length > 0 && (
+                  <>
+                    <Separator orientation="vertical" className="mx-2 h-4" />
+                    <Badge variant="secondary" className="rounded-sm px-1 font-normal">
+                      {statusFilter.length}
+                    </Badge>
+                  </>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Filter by Status</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {REGISTRATION_STATUSES.map((status) => (
+                <DropdownMenuCheckboxItem
+                  key={status}
+                  checked={statusFilter.includes(status)}
+                  onCheckedChange={(checked) => handleStatusFilterChange(status, !!checked)}
+                >
+                  {status}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           {(isRegistrar || isAdmin) && (
             <Button asChild>
               <Link href="/registrations/new">
