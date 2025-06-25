@@ -3,10 +3,9 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Registration, Owner, User } from "@/types"; 
-import { FileSpreadsheet, Download, Sailboat, ArrowLeft, Loader2, AlertTriangle } from "lucide-react";
+import { FileSpreadsheet, Printer, Sailboat, ArrowLeft, Loader2, AlertTriangle } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { formatFirebaseTimestamp } from '@/lib/utils';
-import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
 import Image from "next/image";
 import React, { useState, useEffect, useCallback } from "react";
@@ -48,7 +47,6 @@ export default function CertificatePreviewPage() {
   const params = useParams();
   const router = useRouter();
   const registrationId = params.id as string;
-  const { toast } = useToast();
 
   const [registration, setRegistration] = useState<Registration | null>(null);
   const [approvedByName, setApprovedByName] = useState<string | null>(null);
@@ -184,19 +182,6 @@ export default function CertificatePreviewPage() {
     fetchCertificateData();
   }, [fetchCertificateData]);
 
-  const handleDownloadPlaceholder = () => {
-    if (!registration) return;
-    toast({
-      title: "Download Initiated (Placeholder)",
-      description: "In a real application, a PDF certificate would be downloaded.",
-    });
-    if (registration.certificateFileUrl) {
-        window.open(registration.certificateFileUrl, '_blank');
-    } else {
-        console.log("Triggering certificate generation for", registrationId);
-    }
-  };
-
   if (loading) {
     return (
       <div className="flex h-64 justify-center items-center">
@@ -227,7 +212,7 @@ export default function CertificatePreviewPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 no-print-on-page">
         <div className="flex items-center gap-2">
          <Button variant="outline" size="icon" onClick={() => router.back()} className="mr-2 h-9 w-9">
             <ArrowLeft className="h-5 w-5" />
@@ -236,8 +221,8 @@ export default function CertificatePreviewPage() {
           <FileSpreadsheet className="h-8 w-8 text-primary" />
           <h1 className="text-3xl font-bold">Certificate Preview</h1>
         </div>
-        <Button onClick={handleDownloadPlaceholder}>
-          <Download className="mr-2 h-4 w-4" /> Download Placeholder
+        <Button onClick={() => window.print()}>
+          <Printer className="mr-2 h-4 w-4" /> Print Certificate
         </Button>
       </div>
 
@@ -326,5 +311,3 @@ export default function CertificatePreviewPage() {
     </div>
   );
 }
-
-

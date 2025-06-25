@@ -3,10 +3,9 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import type { Registration, Inspection, User, Owner } from "@/types"; 
-import { FileSpreadsheet, Download, Sailboat, ArrowLeft, Loader2, AlertTriangle } from "lucide-react";
+import { FileSpreadsheet, Printer, Sailboat, ArrowLeft, Loader2, AlertTriangle } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { formatFirebaseTimestamp } from '@/lib/utils';
-import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
 import Image from "next/image";
 import React, { useState, useEffect, useCallback } from "react";
@@ -46,7 +45,6 @@ export default function SafetyCertificatePage() {
   const params = useParams();
   const router = useRouter();
   const inspectionId = params.id as string;
-  const { toast } = useToast();
 
   const [inspection, setInspection] = useState<Inspection | null>(null);
   const [registration, setRegistration] = useState<Registration | null>(null);
@@ -172,13 +170,6 @@ export default function SafetyCertificatePage() {
     fetchCertificateData();
   }, [fetchCertificateData]);
 
-  const handleDownloadPlaceholder = () => {
-    toast({
-      title: "Download Initiated (Placeholder)",
-      description: "In a real application, a PDF certificate would be generated and downloaded.",
-    });
-  };
-
   if (loading) {
     return (
       <div className="flex h-64 justify-center items-center">
@@ -213,7 +204,7 @@ export default function SafetyCertificatePage() {
 
   return (
     <div className="space-y-6 p-4 md:p-8">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 no-print-on-page">
         <div className="flex items-center gap-2">
          <Button variant="outline" size="icon" onClick={() => router.back()} className="mr-2 h-9 w-9">
             <ArrowLeft className="h-5 w-5" />
@@ -222,8 +213,8 @@ export default function SafetyCertificatePage() {
           <FileSpreadsheet className="h-8 w-8 text-primary" />
           <h1 className="text-2xl md:text-3xl font-bold">Safety Certificate</h1>
         </div>
-        <Button onClick={handleDownloadPlaceholder}>
-          <Download className="mr-2 h-4 w-4" /> Download
+        <Button onClick={() => window.print()}>
+          <Printer className="mr-2 h-4 w-4" /> Print Certificate
         </Button>
       </div>
 

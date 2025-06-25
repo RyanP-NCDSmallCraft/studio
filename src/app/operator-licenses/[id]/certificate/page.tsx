@@ -4,10 +4,9 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import type { OperatorLicense, Operator, User } from "@/types"; 
-import { FileImage, Download, UserCircle2, ArrowLeft, Loader2, AlertTriangle, Printer } from "lucide-react"; // Changed Download to Printer
+import { FileImage, UserCircle2, ArrowLeft, Loader2, AlertTriangle, Printer } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { formatFirebaseTimestamp } from '@/lib/utils';
-// Removed useToast as it's no longer used for the print action
 import { Separator } from "@/components/ui/separator";
 import Image from "next/image";
 import React, { useState, useEffect, useCallback } from "react";
@@ -36,7 +35,6 @@ export default function OperatorLicenseCertificatePage() {
   const params = useParams();
   const router = useRouter();
   const licenseApplicationId = params.id as string;
-  // const { toast } = useToast(); // Removed
 
   const [license, setLicense] = useState<OperatorLicense | null>(null);
   const [operator, setOperator] = useState<Operator | null>(null);
@@ -125,10 +123,6 @@ export default function OperatorLicenseCertificatePage() {
     fetchCertificateData();
   }, [fetchCertificateData]);
 
-  const handlePrintCertificate = () => {
-    window.print();
-  };
-
   if (loading) {
     return (
       <div className="flex h-64 justify-center items-center">
@@ -171,7 +165,7 @@ export default function OperatorLicenseCertificatePage() {
           <FileImage className="h-8 w-8 text-primary" />
           <h1 className="text-2xl md:text-3xl font-bold">Operator License Card</h1>
         </div>
-        <Button onClick={handlePrintCertificate}>
+        <Button onClick={() => window.print()}>
           <Printer className="mr-2 h-4 w-4" /> Print License Card
         </Button>
       </div>
@@ -255,5 +249,3 @@ export default function OperatorLicenseCertificatePage() {
     </div>
   );
 }
-
-    
