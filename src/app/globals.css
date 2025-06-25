@@ -93,81 +93,76 @@
     margin: 1.5cm;
   }
 
+  body, html {
+    background-color: white !important;
+    font-size: 10pt !important;
+  }
+
   body * {
     visibility: hidden !important;
   }
-  .print-section, .print-section * {
+
+  .print-area, .print-area * {
     visibility: visible !important;
   }
-  .print-section {
-    position: static !important; /* Ensure normal flow for multi-card notices */
+
+  .print-area {
+    position: static !important;
+    display: block !important;
     width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
     margin: 0 !important;
-    padding: 20px !important;
+    padding: 0 !important;
     box-shadow: none !important;
     border: none !important;
     background-color: white !important;
-    font-size: 10pt !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+    color: black !important;
+    aspect-ratio: auto !important;
   }
-  .print-section .card { /* Basic styling for cards within printed notice */
-    border: 1px solid #ccc !important;
-    box-shadow: none !important;
-    margin-bottom: 15px !important; /* Space between cards */
-    padding: 10px !important;
+
+  .print-area .text-xs { font-size: 8pt !important; }
+  .print-area .text-sm { font-size: 9pt !important; }
+  .print-area .text-base { font-size: 10pt !important; }
+  .print-area .text-lg { font-size: 11pt !important; }
+  .print-area .text-xl { font-size: 12pt !important; }
+  .print-area .text-2xl { font-size: 14pt !important; }
+  .print-area .text-3xl { font-size: 16pt !important; }
+  .print-area .text-4xl { font-size: 18pt !important; }
+  .print-area .text-5xl { font-size: 24pt !important; }
+  .print-area .font-bold { font-weight: bold !important; }
+  
+  .print-area h1, .print-area h2, .print-area h3, .print-area p, .print-area div, .print-area span, .print-area strong, .print-area li, .print-area footer {
+    color: black !important;
   }
-  .print-section .card-header,
-  .print-section .card-content,
-  .print-section .card-footer {
-    padding: 10px !important; /* Adjust padding for cards in print */
+  
+  .print-area .text-primary, .print-area .text-muted-foreground {
+    color: black !important;
   }
-  .print-section .text-primary {
-    color: black !important; /* Ensure primary color text is black for legibility */
+  
+  .print-area .opacity-10, .print-area .opacity-20 {
+    opacity: 0.1 !important; 
   }
-  .print-section .text-xs { font-size: 8pt !important; }
-  .print-section .text-sm { font-size: 9pt !important; }
-  .print-section .text-lg { font-size: 11pt !important; }
-  .print-section .text-xl { font-size: 12pt !important; }
-  .print-section .text-2xl { font-size: 14pt !important; }
-  .print-section .text-3xl { font-size: 16pt !important; }
-  .print-section .font-bold { font-weight: bold !important; }
-  .print-section img { max-width: 100% !important; }
-  .print-section .badge {
+  
+  .print-area .bg-gradient-to-br, .print-area .from-primary\/10, .print-area .via-background, .print-area .to-primary\/5 {
+    background-image: none !important;
+    background-color: white !important;
+  }
+  
+  .print-area img {
+    max-width: 100% !important;
+    page-break-inside: avoid;
+  }
+
+  .print-area .badge {
     border: 1px solid #666 !important;
     color: black !important;
     background-color: white !important;
   }
 
-  .hide-on-print {
-    display: none !important;
-  }
-
-  /* Existing certificate-preview styles for registration/safety certs */
-  .certificate-preview, .certificate-preview * {
-    visibility: visible !important;
-  }
-  .certificate-preview {
-    position: static !important; /* Changed from absolute */
-    left: 0 !important;
-    top: 0 !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    height: auto !important;
-    margin: 0 !important;
-    padding: 0 !important; /* Padding is handled by the Card's own classes and @page margin */
-    border: none !important;
-    box-shadow: none !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-    background-color: white !important;
-    font-size: 10pt !important;
-  }
-  .certificate-preview .text-xs { font-size: 8pt !important; }
-  .certificate-preview .text-sm { font-size: 9pt !important; }
-  .certificate-preview .text-primary { color: black !important; }
-  .certificate-preview img { max-width: 100% !important; }
-  .no-print-on-page { /* General class to hide elements on specific cert pages */
+  .hide-on-print, .no-print-on-page {
     display: none !important;
   }
 }

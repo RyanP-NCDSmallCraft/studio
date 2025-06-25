@@ -234,7 +234,7 @@ export default function CertificatePreviewPage() {
         </Button>
       </div>
 
-      <Card className="shadow-lg p-6 md:p-10 certificate-preview relative overflow-hidden" data-ai-hint="document certificate">
+      <Card className="shadow-lg p-6 md:p-10 print-area relative overflow-hidden" data-ai-hint="document certificate">
         <Sailboat className="absolute inset-0 m-auto h-1/2 w-1/2 text-primary/5 opacity-20 z-0" />
         
         <div className="relative z-10">
