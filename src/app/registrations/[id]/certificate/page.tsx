@@ -182,6 +182,14 @@ export default function CertificatePreviewPage() {
     fetchCertificateData();
   }, [fetchCertificateData]);
 
+  useEffect(() => {
+    if (!loading && registration && !error) {
+      setTimeout(() => {
+        window.print();
+      }, 500);
+    }
+  }, [loading, registration, error]);
+
   if (loading) {
     return (
       <div className="flex h-64 justify-center items-center">

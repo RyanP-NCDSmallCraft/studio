@@ -123,6 +123,14 @@ export default function OperatorLicenseCertificatePage() {
     fetchCertificateData();
   }, [fetchCertificateData]);
 
+  useEffect(() => {
+    if (!loading && license && operator && !error) {
+      setTimeout(() => {
+        window.print();
+      }, 500);
+    }
+  }, [loading, license, operator, error]);
+
   if (loading) {
     return (
       <div className="flex h-64 justify-center items-center">

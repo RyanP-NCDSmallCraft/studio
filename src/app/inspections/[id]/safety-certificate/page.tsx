@@ -170,6 +170,14 @@ export default function SafetyCertificatePage() {
     fetchCertificateData();
   }, [fetchCertificateData]);
 
+  useEffect(() => {
+    if (!loading && inspection && !error) {
+      setTimeout(() => {
+        window.print();
+      }, 500);
+    }
+  }, [loading, inspection, error]);
+
   if (loading) {
     return (
       <div className="flex h-64 justify-center items-center">
