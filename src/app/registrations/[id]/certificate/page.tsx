@@ -248,7 +248,8 @@ export default function CertificatePreviewPage() {
               className="mx-auto mb-2 h-16 w-16"
             />
             <h2 className="text-3xl md:text-4xl font-bold text-primary">Certificate of Registration</h2>
-            <p className="text-base text-muted-foreground">Small Craft Safety Program</p>
+            <p className="text-sm text-muted-foreground">Small Craft Act 2011</p>
+            <p className="text-sm text-muted-foreground">Amended Schedules SI 190/2016</p>
           </header>
 
           <CardContent className="space-y-4 md:space-y-6 text-sm md:text-base">
