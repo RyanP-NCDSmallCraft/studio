@@ -57,15 +57,6 @@ const inspectionFormSchema = z.object({
   followUpRequired: z.boolean().default(false),
   checklistItems: z.array(checklistItemSchema).optional().default([]),
   overallResult: z.enum(["Pass", "PassWithRecommendations", "Fail", "N/A"]).optional(),
-}).refine(data => {
-    // In schedule mode, registration is not mandatory anymore to allow linking later.
-    // However, if the user is *submitting for review*, it might be desirable.
-    // For now, we only enforce it on initial scheduling if we want to.
-    // Let's remove the strict requirement for now.
-    return true;
-}, {
-    message: "A craft registration must be linked to schedule an inspection.",
-    path: ["registrationRefId"],
 });
 
 
@@ -408,54 +399,31 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     let finalStatus: Inspection['status'];
     let submissionPayload: Partial<InspectionFormValues> = { ...data };
 
-    const baseInspectionData: Omit<Inspection, 
-      'inspectionId' | 
-      'createdAt' | 'createdByRef' | 
-      'inspectionDate' | 'findings' | 'correctiveActions' | 'overallResult' | 
-      'completedAt' | 'reviewedAt' | 'reviewedByRef' | 'checklistItems'
-    > & {
-      registrationRef?: string | null;
-      inspectorRef?: string;
-      scheduledDate: Date;
-    } = {
-      registrationRef: data.registrationRefId || null,
-      inspectorRef: data.inspectorRefId,
+    const baseInspectionData = {
+      registrationRef: data.registrationRefId ? doc(db, "registrations", data.registrationRefId) : null,
+      inspectorRef: data.inspectorRefId ? doc(db, "users", data.inspectorRefId) as DocumentReference<User> : undefined,
       inspectionType: data.inspectionType,
-      scheduledDate: data.scheduledDate, 
+      scheduledDate: Timestamp.fromDate(new Date(data.scheduledDate)),
       followUpRequired: data.followUpRequired || false,
       lastUpdatedAt: Timestamp.now(),
       lastUpdatedByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
-      status: "Scheduled" 
     };
 
-
     if (action === "schedule") {
-      finalStatus = "Scheduled";
+        if (mode === "edit" && existingInspectionData?.status === "Passed" && existingInspectionData?.registrationRef !== data.registrationRefId) {
+            finalStatus = "PendingReview"; // Reset status if linking a new registration to a passed inspection
+            toast({ title: "Status Reset", description: "Inspection status has been reset to 'PendingReview' due to registration change."});
+        } else {
+            finalStatus = "Scheduled";
+        }
+
       const schedulePayload: Partial<Inspection> = {
-        registrationRef: data.registrationRefId ? doc(db, "registrations", data.registrationRefId) as DocumentReference<Registration> : null,
-        inspectorRef: data.inspectorRefId ? doc(db, "users", data.inspectorRefId) as DocumentReference<User> : undefined,
-        inspectionType: data.inspectionType,
-        scheduledDate: Timestamp.fromDate(new Date(data.scheduledDate)),
+        ...baseInspectionData,
         status: finalStatus,
-        followUpRequired: false,
-        checklistItems: [],
-        findings: null,
-        correctiveActions: null,
-        overallResult: null,
-        inspectionDate: null,
-        completedAt: null,
-        reviewedAt: null,
-        reviewedByRef: null,
-        lastUpdatedAt: Timestamp.now(),
-        lastUpdatedByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
+        // When re-scheduling, we don't clear out conducted inspection data, we just update schedule-related fields.
+        // If it was already passed, changing rego resets it to pending review, but keeps conducted data.
       };
-      if (mode === 'create') {
-        schedulePayload.createdAt = Timestamp.now();
-        schedulePayload.createdByRef = doc(db, "users", currentUser.userId) as DocumentReference<User>;
-      } else if (mode === 'edit' && existingInspectionData) {
-         schedulePayload.createdAt = existingInspectionData.createdAt as Timestamp; 
-         schedulePayload.createdByRef = existingInspectionData.createdByRef as DocumentReference<User>; 
-      }
+      
       submissionPayload = schedulePayload as any;
 
     } else if (action === "saveProgress") {
@@ -472,17 +440,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
         overallResult: data.overallResult || null,
         followUpRequired: data.followUpRequired,
         checklistItems: data.checklistItems || [],
-        registrationRef: data.registrationRefId ? doc(db, "registrations", data.registrationRefId) as DocumentReference<Registration> : null,
-        inspectorRef: data.inspectorRefId ? doc(db, "users", data.inspectorRefId) as DocumentReference<User> : undefined,
-        scheduledDate: Timestamp.fromDate(new Date(data.scheduledDate)),
       } as any;
-      if (mode === 'create' && !existingInspectionData?.createdAt) { 
-        (submissionPayload as Partial<Inspection>).createdAt = Timestamp.now();
-        (submissionPayload as Partial<Inspection>).createdByRef = doc(db, "users", currentUser.userId) as DocumentReference<User>;
-      } else if (existingInspectionData) {
-        (submissionPayload as Partial<Inspection>).createdAt = existingInspectionData.createdAt as Timestamp;
-        (submissionPayload as Partial<Inspection>).createdByRef = existingInspectionData.createdByRef as DocumentReference<User>;
-      }
 
 
     } else if (action === "submitReview") {
@@ -504,23 +462,20 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
         overallResult: data.overallResult || null,
         followUpRequired: data.followUpRequired,
         checklistItems: data.checklistItems || [],
-        completedAt: Timestamp.now(), 
-        registrationRef: data.registrationRefId ? doc(db, "registrations", data.registrationRefId) as DocumentReference<Registration> : null,
-        inspectorRef: data.inspectorRefId ? doc(db, "users", data.inspectorRefId) as DocumentReference<User> : undefined,
-        scheduledDate: Timestamp.fromDate(new Date(data.scheduledDate)),
+        completedAt: Timestamp.now(),
       } as any;
-       if (mode === 'create' && !existingInspectionData?.createdAt) {
-        (submissionPayload as Partial<Inspection>).createdAt = Timestamp.now();
-        (submissionPayload as Partial<Inspection>).createdByRef = doc(db, "users", currentUser.userId) as DocumentReference<User>;
-      } else if (existingInspectionData) {
-        (submissionPayload as Partial<Inspection>).createdAt = existingInspectionData.createdAt as Timestamp;
-        (submissionPayload as Partial<Inspection>).createdByRef = existingInspectionData.createdByRef as DocumentReference<User>;
-      }
-
-
     } else {
       toast({ title: "Error", description: "Invalid action.", variant: "destructive" });
       return;
+    }
+    
+    // Add creation timestamp only for new documents
+    if (mode === 'create' && !submissionPayload.createdAt) {
+      submissionPayload.createdAt = Timestamp.now();
+      submissionPayload.createdByRef = doc(db, "users", currentUser.userId) as DocumentReference<User>;
+    } else if (mode === 'edit' && existingInspectionData) {
+       submissionPayload.createdAt = existingInspectionData.createdAt;
+       submissionPayload.createdByRef = existingInspectionData.createdByRef;
     }
 
     console.log("Submitting inspection data:", { id: inspectionId || `new_insp_${Date.now()}`, ...submissionPayload });
@@ -616,7 +571,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
               name="registrationRefId"
               render={({ field }) => (
                 <FormItem className="flex flex-col">
-                  <FormLabel>Linked Craft Registration</FormLabel>
+                  <FormLabel>Linked Craft Registration (Optional)</FormLabel>
                   <Popover open={openRegistrationPopover} onOpenChange={setOpenRegistrationPopover}>
                     <PopoverTrigger asChild>
                       <FormControl>
@@ -912,7 +867,5 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     </Form>
   );
 }
-
-    
 
     

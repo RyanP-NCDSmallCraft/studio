@@ -223,7 +223,7 @@ export default function InspectionDetailPage() {
     (isInspector && inspection?.inspectorData?.id === currentUser?.userId && (inspection?.status === "Scheduled" || inspection?.status === "InProgress")) ||
     ((isAdmin || isRegistrar || isSupervisor) && (inspection?.status === "Scheduled" || inspection?.status === "InProgress"));
 
-  const canEditSchedule = (isAdmin || isRegistrar || isSupervisor) && (inspection?.status === "Scheduled" || inspection?.status === "InProgress");
+  const canEditSchedule = (isAdmin || isRegistrar || isSupervisor) && ["Scheduled", "InProgress", "Passed"].includes(inspection?.status || "");
 
   const canReview = (isRegistrar || isAdmin || isSupervisor) && inspection?.status === "PendingReview";
 
@@ -452,4 +452,6 @@ export default function InspectionDetailPage() {
     </div>
   );
 }
+    
+
     
