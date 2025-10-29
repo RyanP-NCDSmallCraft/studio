@@ -47,7 +47,7 @@ const checklistItemSchema = z.object({
 });
 
 const inspectionFormSchema = z.object({
-  registrationRefId: z.string().min(1, "Registration ID is required"),
+  registrationRefId: z.string().optional(),
   inspectorRefId: z.string().min(1, "Inspector assignment is required"),
   inspectionType: z.enum(["Initial", "Annual", "Compliance", "FollowUp"]),
   scheduledDate: z.date({ required_error: "Scheduled date is required" }),
@@ -57,7 +57,17 @@ const inspectionFormSchema = z.object({
   followUpRequired: z.boolean().default(false),
   checklistItems: z.array(checklistItemSchema).optional().default([]),
   overallResult: z.enum(["Pass", "PassWithRecommendations", "Fail", "N/A"]).optional(),
+}).refine(data => {
+    // In schedule mode, registration must be selected.
+    if (typeof window !== 'undefined' && window.location.pathname.includes('/inspections/new')) {
+        return !!data.registrationRefId;
+    }
+    return true;
+}, {
+    message: "A craft registration must be linked to schedule an inspection.",
+    path: ["registrationRefId"],
 });
+
 
 type InspectionFormValues = z.infer<typeof inspectionFormSchema>;
 
@@ -405,11 +415,11 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
       'inspectionDate' | 'findings' | 'correctiveActions' | 'overallResult' | 
       'completedAt' | 'reviewedAt' | 'reviewedByRef' | 'checklistItems'
     > & {
-      registrationRef?: string;
+      registrationRef?: string | null;
       inspectorRef?: string;
       scheduledDate: Date;
     } = {
-      registrationRef: data.registrationRefId,
+      registrationRef: data.registrationRefId || null,
       inspectorRef: data.inspectorRefId,
       inspectionType: data.inspectionType,
       scheduledDate: data.scheduledDate, 
@@ -423,7 +433,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     if (action === "schedule") {
       finalStatus = "Scheduled";
       const schedulePayload: Partial<Inspection> = {
-        registrationRef: doc(db, "registrations", data.registrationRefId) as DocumentReference<Registration>,
+        registrationRef: data.registrationRefId ? doc(db, "registrations", data.registrationRefId) as DocumentReference<Registration> : null,
         inspectorRef: data.inspectorRefId ? doc(db, "users", data.inspectorRefId) as DocumentReference<User> : undefined,
         inspectionType: data.inspectionType,
         scheduledDate: Timestamp.fromDate(new Date(data.scheduledDate)),
@@ -463,7 +473,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
         overallResult: data.overallResult || null,
         followUpRequired: data.followUpRequired,
         checklistItems: data.checklistItems || [],
-        registrationRef: doc(db, "registrations", data.registrationRefId) as DocumentReference<Registration>,
+        registrationRef: data.registrationRefId ? doc(db, "registrations", data.registrationRefId) as DocumentReference<Registration> : null,
         inspectorRef: data.inspectorRefId ? doc(db, "users", data.inspectorRefId) as DocumentReference<User> : undefined,
         scheduledDate: Timestamp.fromDate(new Date(data.scheduledDate)),
       } as any;
@@ -496,7 +506,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
         followUpRequired: data.followUpRequired,
         checklistItems: data.checklistItems || [],
         completedAt: Timestamp.now(), 
-        registrationRef: doc(db, "registrations", data.registrationRefId) as DocumentReference<Registration>,
+        registrationRef: data.registrationRefId ? doc(db, "registrations", data.registrationRefId) as DocumentReference<Registration> : null,
         inspectorRef: data.inspectorRefId ? doc(db, "users", data.inspectorRefId) as DocumentReference<User> : undefined,
         scheduledDate: Timestamp.fromDate(new Date(data.scheduledDate)),
       } as any;
@@ -607,7 +617,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
               name="registrationRefId"
               render={({ field }) => (
                 <FormItem className="flex flex-col">
-                  <FormLabel>Linked Craft Registration *</FormLabel>
+                  <FormLabel>Linked Craft Registration {usageContext === 'schedule' ? '*' : '(Optional)'}</FormLabel>
                   <Popover open={openRegistrationPopover} onOpenChange={setOpenRegistrationPopover}>
                     <PopoverTrigger asChild>
                       <FormControl>
@@ -903,4 +913,3 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     </Form>
   );
 }
-
