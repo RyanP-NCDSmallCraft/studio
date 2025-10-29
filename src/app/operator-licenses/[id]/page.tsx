@@ -4,7 +4,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
-import type { OperatorLicense, Operator, OperatorLicenseAttachedDoc, User, CompetencyTest } from "@/types";
+import type { CommercialLicense, Operator, CommercialLicenseAttachedDoc, User, CompetencyTest } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
 import { useParams, useRouter } from "next/navigation";
@@ -62,14 +62,14 @@ function generateRandomSixDigitNumber(): string {
 }
 
 
-export default function OperatorLicenseDetailPage() {
+export default function CommercialLicenseDetailPage() {
   const params = useParams();
   const licenseApplicationId = params.id as string;
   const { currentUser, isAdmin, isRegistrar, isSupervisor, isInspector } = useAuth(); 
   const router = useRouter();
   const { toast } = useToast();
 
-  const [application, setApplication] = useState<OperatorLicense | null>(null);
+  const [application, setApplication] = useState<CommercialLicense | null>(null);
   const [operator, setOperator] = useState<Operator | null>(null);
   const [completedTest, setCompletedTest] = useState<CompetencyTest | null>(null);
   const [loading, setLoading] = useState(true);
@@ -80,7 +80,7 @@ export default function OperatorLicenseDetailPage() {
   const [officeLicenseNumber, setOfficeLicenseNumber] = useState("");
   const [officeReceiptNo, setOfficeReceiptNo] = useState("");
   const [officePlaceIssued, setOfficePlaceIssued] = useState("");
-  const [officePaymentMethod, setOfficePaymentMethod] = useState<OperatorLicense["methodOfPayment"]>(undefined);
+  const [officePaymentMethod, setOfficePaymentMethod] = useState<CommercialLicense["methodOfPayment"]>(undefined);
   const [officePaymentBy, setOfficePaymentBy] = useState("");
   const [officePaymentDate, setOfficePaymentDate] = useState("");
   const [officePaymentAmount, setOfficePaymentAmount] = useState<number | string>("");
@@ -117,12 +117,12 @@ export default function OperatorLicenseDetailPage() {
         return;
       }
       
-      const licenseDataRaw = licenseSnap.data() as Omit<OperatorLicense, 'operatorRef' | 'competencyTestRef'> & { 
+      const licenseDataRaw = licenseSnap.data() as Omit<CommercialLicense, 'operatorRef' | 'competencyTestRef'> & { 
         operatorRef: DocumentReference<Operator> | string,
         competencyTestRef?: DocumentReference<CompetencyTest> | string 
       };
 
-      const appData: OperatorLicense = {
+      const appData: CommercialLicense = {
         ...licenseDataRaw,
         licenseApplicationId: licenseSnap.id,
         operatorRef: licenseDataRaw.operatorRef, 
@@ -245,7 +245,7 @@ export default function OperatorLicenseDetailPage() {
   };
 
 
-  const handleStatusUpdate = async (newStatus: OperatorLicense["status"], extraData?: Partial<OperatorLicense>) => {
+  const handleStatusUpdate = async (newStatus: CommercialLicense["status"], extraData?: Partial<CommercialLicense>) => {
     if (!currentUser?.userId || !application) return;
     setIsUpdating(true);
     try {
@@ -270,7 +270,7 @@ export default function OperatorLicenseDetailPage() {
     setIsUpdating(true);
     try {
         const licenseDocRef = doc(db, "operatorLicenseApplications", application.licenseApplicationId);
-        const updatePayload: Partial<OperatorLicense> = {
+        const updatePayload: Partial<CommercialLicense> = {
             assignedLicenseNumber: officeLicenseNumber || undefined,
             receiptNo: officeReceiptNo || undefined,
             placeIssued: officePlaceIssued || undefined,
@@ -315,7 +315,7 @@ export default function OperatorLicenseDetailPage() {
       return;
     }
     setIsUpdating(true);
-    const updatePayload: Partial<OperatorLicense> = {
+    const updatePayload: Partial<CommercialLicense> = {
       status: "Suspended",
       suspensionReason: suspensionReason,
       suspensionStartDate: Timestamp.now(),
@@ -334,7 +334,7 @@ export default function OperatorLicenseDetailPage() {
       return;
     }
     setIsUpdating(true);
-    const updatePayload: Partial<OperatorLicense> = {
+    const updatePayload: Partial<CommercialLicense> = {
       status: "Revoked",
       revocationReason: revocationReason,
       revokedAt: Timestamp.now(),
@@ -348,7 +348,7 @@ export default function OperatorLicenseDetailPage() {
   const handleUnsuspend = async () => {
     if (!currentUser?.userId || !application) return;
     setIsUpdating(true);
-    const updatePayload: Partial<OperatorLicense> = {
+    const updatePayload: Partial<CommercialLicense> = {
       status: "Approved", 
       suspensionReason: null,
       suspensionStartDate: null,
@@ -358,7 +358,7 @@ export default function OperatorLicenseDetailPage() {
     setIsUpdating(false);
   };
 
-  const getStatusBadgeVariant = (status?: OperatorLicense["status"]): BadgeProps["variant"] => {
+  const getStatusBadgeVariant = (status?: CommercialLicense["status"]): BadgeProps["variant"] => {
     if (!status) return "outline";
     switch (status) {
       case "Approved": return "default";
@@ -380,7 +380,7 @@ export default function OperatorLicenseDetailPage() {
   const canManageApplication = isAdmin || isRegistrar || isSupervisor;
   const canAdministerTest = isAdmin || isRegistrar || isSupervisor || isInspector;
   
-  const testLink = `/operator-licenses/${licenseApplicationId}/test`;
+  const testLink = `/commercial-licenses/${licenseApplicationId}/test`;
   let testButtonText = "Take Competency Test";
   let showTestButton = false;
 
@@ -388,7 +388,7 @@ export default function OperatorLicenseDetailPage() {
     testButtonText = `View Test (${completedTest.result} - ${completedTest.percentageAchieved?.toFixed(0) || 0}%)`;
     showTestButton = true;
   } else {
-      const canTakeTestStatuses: OperatorLicense['status'][] = ["Submitted", "PendingReview", "AwaitingTest", "RequiresInfo", "TestScheduled"];
+      const canTakeTestStatuses: CommercialLicense['status'][] = ["Submitted", "PendingReview", "AwaitingTest", "RequiresInfo", "TestScheduled"];
       if (canTakeTestStatuses.includes(application.status)) {
           testButtonText = "Take Competency Test";
           showTestButton = true;
@@ -400,9 +400,9 @@ export default function OperatorLicenseDetailPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="icon" onClick={() => router.push('/operator-licenses')} className="mr-1 h-9 w-9">
+          <Button variant="outline" size="icon" onClick={() => router.push('/commercial-licenses')} className="mr-1 h-9 w-9">
             <ArrowLeft className="h-5 w-5" />
-            <span className="sr-only">Back to Operator Licenses</span>
+            <span className="sr-only">Back to Commercial Licenses</span>
           </Button>
           <BookUser className="h-10 w-10 text-primary" />
           <div>
@@ -413,7 +413,7 @@ export default function OperatorLicenseDetailPage() {
         <div className="flex flex-wrap gap-2">
           {canEditApplication && (
             <Button asChild variant="outline">
-              <Link href={`/operator-licenses/${licenseApplicationId}/edit`}><Edit className="mr-2 h-4 w-4" /> Edit Application</Link>
+              <Link href={`/commercial-licenses/${licenseApplicationId}/edit`}><Edit className="mr-2 h-4 w-4" /> Edit Application</Link>
             </Button>
           )}
           {canManageApplication && (
@@ -421,7 +421,7 @@ export default function OperatorLicenseDetailPage() {
           )}
           {application.status === "Approved" && canManageApplication && (
             <Button asChild>
-                <Link href={`/operator-licenses/${licenseApplicationId}/certificate`}><FileImage className="mr-2 h-4 w-4"/> View License Card</Link>
+                <Link href={`/commercial-licenses/${licenseApplicationId}/certificate`}><FileImage className="mr-2 h-4 w-4"/> View License Card</Link>
             </Button>
           )}
         </div>
@@ -584,7 +584,7 @@ export default function OperatorLicenseDetailPage() {
             <CardContent>
               {application.attachedDocuments && application.attachedDocuments.length > 0 ? (
                 <ul className="space-y-2">
-                  {application.attachedDocuments.map((doc: OperatorLicenseAttachedDoc) => (
+                  {application.attachedDocuments.map((doc: CommercialLicenseAttachedDoc) => (
                     <li key={doc.docId || doc.fileName} className="flex items-center justify-between p-2 border rounded-md">
                       <div className="flex items-center gap-2">
                         <FileText className="h-5 w-5 text-muted-foreground" />
@@ -662,7 +662,7 @@ export default function OperatorLicenseDetailPage() {
             <FormItem><Label htmlFor="officeReceiptNo">Receipt No.</Label><Input id="officeReceiptNo" value={officeReceiptNo} onChange={e => setOfficeReceiptNo(e.target.value)} /></FormItem>
             <FormItem><Label htmlFor="officePlaceIssued">Place Issued</Label><Input id="officePlaceIssued" value={officePlaceIssued} onChange={e => setOfficePlaceIssued(e.target.value)} /></FormItem>
             <FormItem><Label htmlFor="officePaymentMethod">Payment Method</Label>
-                <Select onValueChange={(value) => setOfficePaymentMethod(value as OperatorLicense["methodOfPayment"])} value={officePaymentMethod}>
+                <Select onValueChange={(value) => setOfficePaymentMethod(value as CommercialLicense["methodOfPayment"])} value={officePaymentMethod}>
                     <SelectTrigger><SelectValue placeholder="Select method..."/></SelectTrigger>
                     <SelectContent>{["Cash", "Card", "BankDeposit", "Other"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                 </Select>
@@ -694,4 +694,3 @@ export default function OperatorLicenseDetailPage() {
     </div>
   );
 }
-

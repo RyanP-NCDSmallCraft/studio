@@ -12,7 +12,8 @@ import {
   FileSpreadsheet, 
   Contact, 
   AlertOctagon,
-  UploadCloud // Added for import
+  UploadCloud, // Added for import
+  Briefcase, // New Icon
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
@@ -35,7 +36,7 @@ const navItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["Admin", "Registrar", "Inspector", "Supervisor", "ReadOnly"] },
   { href: "/registrations", label: "Registrations", icon: Ship, roles: ["Admin", "Registrar", "Inspector", "Supervisor", "ReadOnly"] },
   { href: "/registrations/import", label: "Import Registrations", icon: UploadCloud, roles: ["Admin", "Registrar"] }, // Updated Roles
-  { href: "/operator-licenses", label: "Operator Licenses", icon: Contact, roles: ["Admin", "Registrar", "Supervisor"] },
+  { href: "/commercial-licenses", label: "Commercial Licenses", icon: Briefcase, roles: ["Admin", "Registrar", "Inspector", "Supervisor", "ReadOnly"] },
   { href: "/inspections", label: "Inspections", icon: ClipboardList, roles: ["Admin", "Registrar", "Inspector", "Supervisor", "ReadOnly"] },
   { href: "/infringements", label: "Infringements", icon: AlertOctagon, roles: ["Admin", "Registrar", "Inspector", "Supervisor"] },
   { href: "/inspections/reports", label: "Reports", icon: FileSpreadsheet, roles: ["Admin", "Registrar"] },

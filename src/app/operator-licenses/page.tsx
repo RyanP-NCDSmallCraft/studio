@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { PlusCircle, Eye, Filter, Search, Contact, ArrowLeft, Loader2, AlertTriangle } from "lucide-react";
-import type { OperatorLicense, Operator, User } from "@/types";
+import type { CommercialLicense, Operator, User } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
 import type { BadgeProps } from "@/components/ui/badge";
@@ -36,20 +36,20 @@ const ensureSerializableDate = (dateValue: any): Date | undefined => {
 };
 
 
-export default function OperatorLicenseListPage() {
+export default function CommercialLicenseListPage() {
   const { currentUser, isAdmin, isRegistrar, isSupervisor, loading: authLoading } = useAuth();
   const { toast } = useToast(); // Assuming useToast is available
   const router = useRouter();
   const searchParamsHook = useSearchParams(); // Renamed to avoid conflict
 
-  const [licenses, setLicenses] = useState<OperatorLicense[]>([]);
+  const [licenses, setLicenses] = useState<CommercialLicense[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
   const loadLicenses = useCallback(async () => {
     if (!currentUser) {
-      setFetchError("Please log in to view operator licenses.");
+      setFetchError("Please log in to view commercial licenses.");
       setIsLoading(false);
       return;
     }
@@ -65,7 +65,7 @@ export default function OperatorLicenseListPage() {
       const snapshot = await getDocs(licensesQuery);
       
       const fetchedLicensesPromises = snapshot.docs.map(async docSnap => {
-        const data = docSnap.data() as Omit<OperatorLicense, 'operatorRef'> & { operatorRef: DocumentReference<Operator> | string };
+        const data = docSnap.data() as Omit<CommercialLicense, 'operatorRef'> & { operatorRef: DocumentReference<Operator> | string };
         
         let operatorData: Partial<Operator> | undefined = data.operatorData; // Use denormalized first
         if (!operatorData && data.operatorRef) { // If not denormalized, fetch
@@ -105,12 +105,12 @@ export default function OperatorLicenseListPage() {
             uploadedAt: ensureSerializableDate(d.uploadedAt) as Date,
             verifiedAt: ensureSerializableDate(d.verifiedAt)
           })),
-        } as OperatorLicense;
+        } as CommercialLicense;
       });
       const fetchedLicenses = await Promise.all(fetchedLicensesPromises);
       setLicenses(fetchedLicenses);
     } catch (error: any) {
-      console.error("Error fetching operator licenses:", error);
+      console.error("Error fetching commercial licenses:", error);
       setFetchError(error.message || "Failed to load licenses.");
       if (toast) toast({ title: "Error", description: error.message, variant: "destructive" });
     } finally {
@@ -124,7 +124,7 @@ export default function OperatorLicenseListPage() {
     }
   }, [authLoading, loadLicenses]);
 
-  const getStatusBadgeVariant = (status?: OperatorLicense["status"]): BadgeProps["variant"] => {
+  const getStatusBadgeVariant = (status?: CommercialLicense["status"]): BadgeProps["variant"] => {
     switch (status) {
       case "Approved": return "default";
       case "Submitted": case "PendingReview": case "AwaitingTest": case "TestScheduled": case "TestPassed": return "secondary";
@@ -134,7 +134,7 @@ export default function OperatorLicenseListPage() {
     }
   };
 
-  const getApplicantName = (license: OperatorLicense): string => {
+  const getApplicantName = (license: CommercialLicense): string => {
     return license.operatorData ? `${license.operatorData.firstName || ''} ${license.operatorData.surname || ''}`.trim() : "N/A";
   };
   
@@ -167,7 +167,7 @@ export default function OperatorLicenseListPage() {
             <span className="sr-only">Back</span>
           </Button>
           <Contact className="h-8 w-8 text-primary" />
-          <h1 className="text-3xl font-bold">Operator Licenses</h1>
+          <h1 className="text-3xl font-bold">Commercial Licenses</h1>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
           <div className="relative w-full sm:max-w-xs">
@@ -185,7 +185,7 @@ export default function OperatorLicenseListPage() {
           </Button>
           {canAddNew && (
             <Button asChild>
-              <Link href="/operator-licenses/new">
+              <Link href="/commercial-licenses/new">
                 <PlusCircle className="mr-2 h-4 w-4" /> New Application
               </Link>
             </Button>
@@ -196,7 +196,7 @@ export default function OperatorLicenseListPage() {
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle>License Overview</CardTitle>
-          <CardDescription>Manage and track all operator license applications and issued licenses.</CardDescription>
+          <CardDescription>Manage and track all commercial license applications and issued licenses.</CardDescription>
         </CardHeader>
         <CardContent>
            {isLoading ? (
@@ -236,7 +236,7 @@ export default function OperatorLicenseListPage() {
                     <TableCell>{formatFirebaseTimestamp(lic.expiryDate, "PP")}</TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="icon" asChild title="View Details">
-                        <Link href={`/operator-licenses/${lic.licenseApplicationId}`}><Eye className="h-4 w-4" /></Link>
+                        <Link href={`/commercial-licenses/${lic.licenseApplicationId}`}><Eye className="h-4 w-4" /></Link>
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -255,5 +255,3 @@ export default function OperatorLicenseListPage() {
     </div>
   );
 }
-
-    

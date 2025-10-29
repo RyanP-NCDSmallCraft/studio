@@ -209,7 +209,7 @@ export interface Operator {
   lastUpdatedByRef?: DocumentReference<User> | string;
 }
 
-export interface OperatorLicenseAttachedDoc {
+export interface CommercialLicenseAttachedDoc {
   docId: string; // Auto-generated or from a predefined list
   docType: "PoliceClearance" | "PreviousLicenseCopy" | "BirthCertificateCopy" | "NIDCardCopy" | "IDPhoto" | "Other";
   docOtherDescription?: string;
@@ -222,7 +222,7 @@ export interface OperatorLicenseAttachedDoc {
   notes?: string;
 }
 
-export interface OperatorLicense {
+export interface CommercialLicense {
   licenseApplicationId: string; // Firestore document ID
   operatorRef: DocumentReference<Operator> | string; // Reference to Operator document
   operatorData?: Partial<Operator>; // Denormalized operator data for quick display
@@ -241,7 +241,7 @@ export interface OperatorLicense {
   paymentBy?: string; // Name of person who paid
   paymentDate?: Timestamp | Date | string;
   paymentAmount?: number;
-  attachedDocuments: OperatorLicenseAttachedDoc[]; // Array of document details
+  attachedDocuments: CommercialLicenseAttachedDoc[]; // Array of document details
   competencyTestRef?: DocumentReference<CompetencyTest> | string; // Ref to test result
   notes?: string; // General notes about the application
   createdByUserRef: DocumentReference<User> | string;
@@ -283,7 +283,7 @@ export interface CompetencyTestAnswer {
 
 export interface CompetencyTest {
   testId: string;
-  licenseApplicationRef: DocumentReference<OperatorLicense> | string;
+  licenseApplicationRef: DocumentReference<CommercialLicense> | string;
   operatorRef: DocumentReference<Operator> | string;
   testTemplateRef: DocumentReference<CompetencyTestTemplate> | string;
   testTemplateVersion?: number;

@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import type { Operator, OperatorLicense, OperatorLicenseAttachedDoc, User } from "@/types";
+import type { Operator, CommercialLicense, CommercialLicenseAttachedDoc, User } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
@@ -94,7 +94,7 @@ type OperatorLicenseFormValues = z.infer<typeof operatorLicenseFormSchema>;
 interface OperatorLicenseFormProps {
   mode: "create" | "edit";
   licenseApplicationId?: string;
-  existingLicenseData?: Partial<OperatorLicense>;
+  existingLicenseData?: Partial<CommercialLicense>;
   existingOperatorData?: Partial<Operator>;
 }
 
@@ -201,7 +201,7 @@ export function OperatorLicenseForm({
     }
   };
 
-  const onSubmit = async (data: OperatorLicenseFormValues, submissionStatus: OperatorLicense["status"]) => {
+  const onSubmit = async (data: OperatorLicenseFormValues, submissionStatus: CommercialLicense["status"]) => {
     if (!currentUser?.userId) {
       toast({ title: "Error", description: "You must be logged in.", variant: "destructive" });
       return;
@@ -284,7 +284,7 @@ export function OperatorLicenseForm({
       }
       const finalOperatorRef = doc(db, "operators", operatorId!) as DocumentReference<Operator>;
 
-      const licenseDocData: Partial<OperatorLicense> = {
+      const licenseDocData: Partial<CommercialLicense> = {
         operatorRef: finalOperatorRef,
         applicationType: data.applicationType,
         previousLicenseNumber: data.previousLicenseNumber ?? "",
@@ -337,10 +337,10 @@ export function OperatorLicenseForm({
             lastUpdatedAt: Timestamp.now(),
             lastUpdatedByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
         };
-        const newLicenseDocRef = await addDoc(licenseColRef, finalLicenseDataForCreate as OperatorLicense);
+        const newLicenseDocRef = await addDoc(licenseColRef, finalLicenseDataForCreate as CommercialLicense);
         finalLicenseApplicationId = newLicenseDocRef.id;
         toast({ title: "Application Saved", description: `Status: ${submissionStatus}. ID: ${finalLicenseApplicationId}` });
-        router.push(`/operator-licenses/${finalLicenseApplicationId}`);
+        router.push(`/commercial-licenses/${finalLicenseApplicationId}`);
       } else if (finalLicenseApplicationId) {
         const licenseDocRef = doc(db, "operatorLicenseApplications", finalLicenseApplicationId);
         const finalLicenseDataForUpdate = {
@@ -350,19 +350,19 @@ export function OperatorLicenseForm({
         };
         await updateDoc(licenseDocRef, finalLicenseDataForUpdate);
         toast({ title: "Application Updated", description: `Status: ${submissionStatus}.` });
-        router.push(`/operator-licenses/${finalLicenseApplicationId}`);
+        router.push(`/commercial-licenses/${finalLicenseApplicationId}`);
       }
       router.refresh();
 
     } catch (error: any) {
-      console.error("Error saving operator license:", error);
-      toast({ title: "Save Failed", description: error.message || "Could not save operator license.", variant: "destructive" });
+      console.error("Error saving commercial license:", error);
+      toast({ title: "Save Failed", description: error.message || "Could not save commercial license.", variant: "destructive" });
     } finally {
         setIdPhotoUploadProgress(null); // Reset progress after attempt
     }
   };
   
-  const documentTypes: Array<OperatorLicenseAttachedDoc['docType']> = ["PoliceClearance", "PreviousLicenseCopy", "BirthCertificateCopy", "NIDCardCopy", "IDPhoto", "Other"];
+  const documentTypes: Array<CommercialLicenseAttachedDoc['docType']> = ["PoliceClearance", "PreviousLicenseCopy", "BirthCertificateCopy", "NIDCardCopy", "IDPhoto", "Other"];
 
   return (
     <Form {...form}>
@@ -538,5 +538,3 @@ export function OperatorLicenseForm({
     </Form>
   );
 }
-
-    

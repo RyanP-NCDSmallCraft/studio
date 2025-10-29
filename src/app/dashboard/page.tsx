@@ -392,7 +392,7 @@ export default function DashboardPage() {
           {(isAdmin || isRegistrar || isSupervisor) && (
             <>
             <Button asChild variant="secondary">
-                <Link href="/operator-licenses">Manage Operator Licenses</Link>
+                <Link href="/commercial-licenses">Manage Commercial Licenses</Link>
             </Button>
             <Button asChild variant="secondary">
                 <Link href="/infringements">Manage Infringements</Link>
@@ -409,4 +409,5 @@ export default function DashboardPage() {
     
 
     
+
 
