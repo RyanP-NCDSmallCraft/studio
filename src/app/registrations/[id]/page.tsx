@@ -6,7 +6,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
 import type { Registration, Owner, ProofOfOwnershipDoc, Inspection, User, EngineDetail } from "@/types";
-import { Ship, User as UserIconLucide, FileText, ClipboardCheck, CalendarDays, DollarSign, Edit, CheckCircle, XCircle, Info, FileSpreadsheet, ListChecks, AlertTriangle, Loader2, ArrowLeft, Ban, AlertCircle, CalendarClock, Cog } from "lucide-react";
+import { Ship, User as UserIconLucide, FileText, ClipboardCheck, CalendarDays, DollarSign, Edit, CheckCircle, XCircle, Info, FileSpreadsheet, ListChecks, AlertTriangle, Loader2, ArrowLeft, Ban, AlertCircle, CalendarClock, Cog, Building } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { formatFirebaseTimestamp } from '@/lib/utils';
@@ -122,7 +122,6 @@ export default function RegistrationDetailPage() {
           paymentDate: ensureDateObject(data.paymentDate),
           safetyCertNumber: data.safetyCertNumber,
           safetyEquipIssued: data.safetyEquipIssued,
-          safetyEquipReceiptNumber: data.safetyEquipReceiptNumber,
           owners: (data.owners || []).map((o: any) => ({ ...o, dob: ensureDateObject(o.dob) })),
           proofOfOwnershipDocs: (data.proofOfOwnershipDocs || []).map((d: any) => ({ ...d, uploadedAt: ensureDateObject(d.uploadedAt) })),
           craftMake: data.craftMake,
@@ -648,10 +647,20 @@ export default function RegistrationDetailPage() {
             <CardContent className="space-y-4">
               {registration.owners.map((owner: Owner, index: number) => (
                 <div key={owner.ownerId || index} className="p-3 border rounded-md bg-muted/30">
-                  <div className="font-semibold text-md">{owner.firstName} {owner.surname} <Badge variant="secondary">{owner.role}</Badge></div>
+                  <div className="font-semibold text-md flex items-center gap-2">
+                    {owner.ownerType === 'Company' ? <Building className="h-5 w-5 text-muted-foreground"/> : <UserIconLucide className="h-5 w-5 text-muted-foreground"/>}
+                    {owner.ownerType === 'Company' ? owner.companyName : `${owner.firstName} ${owner.surname}`}
+                    <Badge variant="secondary">{owner.role}</Badge>
+                  </div>
+                  {owner.ownerType === 'Company' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm mt-1">
+                      {owner.companyRegNo && <p><strong>Reg. No:</strong> {owner.companyRegNo}</p>}
+                      {owner.companyAddress && <p><strong>Address:</strong> {owner.companyAddress}</p>}
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm mt-1">
-                    <p><strong>DOB:</strong> {formatFirebaseTimestamp(owner.dob, "PP")}</p>
-                    <p><strong>Sex:</strong> {owner.sex}</p>
+                    {owner.ownerType === 'Private' && <p><strong>DOB:</strong> {formatFirebaseTimestamp(owner.dob, "PP")}</p>}
+                    {owner.ownerType === 'Private' && <p><strong>Sex:</strong> {owner.sex}</p>}
                     <p><strong>Phone:</strong> {owner.phone}</p>
                     {owner.email && <p><strong>Email:</strong> {owner.email}</p>}
                     <div className="sm:col-span-2"><strong>Address:</strong> {owner.postalAddress}, {owner.wardVillage}, {owner.llg}, {owner.townDistrict}</div>

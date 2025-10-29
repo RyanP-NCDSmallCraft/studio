@@ -39,10 +39,17 @@ import { format } from "date-fns";
 const ownerSchema = z.object({
   ownerId: z.string().uuid().optional(),
   role: z.enum(["Primary", "CoOwner"]),
-  surname: z.string().min(1, "Surname is required"),
-  firstName: z.string().min(1, "First name is required"),
-  dob: z.date({ required_error: "Date of birth is required"}),
-  sex: z.enum(["Male", "Female", "Other"]),
+  ownerType: z.enum(["Private", "Company"]),
+  // Private
+  surname: z.string().optional(),
+  firstName: z.string().optional(),
+  dob: z.date().optional(),
+  sex: z.enum(["Male", "Female", "Other"]).optional(),
+  // Company
+  companyName: z.string().optional(),
+  companyRegNo: z.string().optional(),
+  companyAddress: z.string().optional(),
+  // Common
   phone: z.string().min(1, "Phone number is required"),
   fax: z.string().optional().default(""),
   email: z.string().email("Invalid email address").optional().or(z.literal("")).default(""),
@@ -162,10 +169,14 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
         ...o,
         ownerId: o.ownerId || crypto.randomUUID(),
         role: o.role || "Primary",
+        ownerType: o.ownerType || "Private",
         surname: o.surname || "",
         firstName: o.firstName || "",
-        dob: o.dob instanceof Timestamp ? o.dob.toDate() : (o.dob ? new Date(o.dob as any) : new Date()),
-        sex: o.sex || "Male",
+        dob: o.dob instanceof Timestamp ? o.dob.toDate() : (o.dob ? new Date(o.dob as any) : undefined),
+        sex: o.sex || undefined,
+        companyName: o.companyName || "",
+        companyRegNo: o.companyRegNo || "",
+        companyAddress: o.companyAddress || "",
         phone: o.phone || "",
         fax: o.fax || "",
         email: o.email || "",
@@ -180,7 +191,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
         description: d.description || "",
         fileName: d.fileName || "",
         fileUrl: d.fileUrl || "",
-        uploadedAt: d.uploadedAt instanceof Timestamp ? d.uploadedAt : (d.uploadedAt ? ( (d.uploadedAt as any) instanceof Date ? d.uploadedAt : new Date(d.uploadedAt as string)) : Timestamp.now()),
+        uploadedAt: d.uploadedAt instanceof Timestamp ? d.uploadedAt : (d.uploadedAt ? ( (d.uploadedAt as any) instanceof Date ? d.uploadedAt : new Date(d.uploadedAt as string)) : Timestamp.now() )
       })),
       craftMake: existingRegistrationData.craftMake || "",
       craftModel: existingRegistrationData.craftModel || "",
@@ -274,7 +285,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
   const [ownersData, setOwnersData] = useState<Owner[]>(() =>
     (defaultValues.owners || []).map(o => ({
       ...o,
-      dob: o.dob instanceof Timestamp ? o.dob.toDate() : (o.dob ? new Date(o.dob as any) : new Date()),
+      dob: o.dob instanceof Timestamp ? o.dob.toDate() : (o.dob ? new Date(o.dob as any) : undefined),
     })) as Owner[]
   );
 
@@ -361,7 +372,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       status: submissionStatus,
       owners: data.owners.map(owner => ({
         ...owner,
-        dob: Timestamp.fromDate(owner.dob instanceof Date ? owner.dob : new Date(owner.dob as string)),
+        dob: owner.dob ? Timestamp.fromDate(owner.dob instanceof Date ? owner.dob : new Date(owner.dob as string)) : null,
         postalAddress: owner.postalAddress ?? "",
         llg: owner.llg ?? "",
         wardVillage: owner.wardVillage ?? "",

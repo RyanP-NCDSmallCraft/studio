@@ -19,31 +19,45 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { PlusCircle, Trash2, Edit, UserPlus } from "lucide-react";
+import { PlusCircle, Trash2, Edit, UserPlus, Building } from "lucide-react";
 import type { Owner } from "@/types";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { format, parseISO, isValid } from "date-fns"; // parseISO for robust date string parsing
 import { Badge } from "@/components/ui/badge";
 
-// Simplified Zod schema for the modal form
 const ownerModalSchema = z.object({
   role: z.enum(["Primary", "CoOwner"]),
-  surname: z.string().min(1, "Surname is required"),
-  firstName: z.string().min(1, "First name is required"),
-  dobString: z.string().min(1, "Date of birth is required").refine(val => {
-    const date = parseISO(val); // Use parseISO for better compatibility
-    return isValid(date);
-  }, { message: "Invalid date format. Use YYYY-MM-DD."}),
-  sex: z.enum(["Male", "Female", "Other"]),
+  ownerType: z.enum(["Private", "Company"]),
+  // Private
+  surname: z.string().optional(),
+  firstName: z.string().optional(),
+  dobString: z.string().optional(),
+  sex: z.enum(["Male", "Female", "Other"]).optional(),
+  // Company
+  companyName: z.string().optional(),
+  companyRegNo: z.string().optional(),
+  companyAddress: z.string().optional(),
+  // Common
   phone: z.string().min(1, "Phone number is required"),
   fax: z.string().optional().default(""),
   email: z.string().email("Invalid email address").optional().or(z.literal("")).default(""),
-  postalAddress: z.string().optional().default(""), // Made optional
+  postalAddress: z.string().optional().default(""),
   townDistrict: z.string().min(1, "Town/District is required"),
-  llg: z.string().optional().default(""), // Made optional
-  wardVillage: z.string().optional().default(""), // Made optional
+  llg: z.string().optional().default(""),
+  wardVillage: z.string().optional().default(""),
+}).superRefine((data, ctx) => {
+    if (data.ownerType === 'Private') {
+        if (!data.surname) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["surname"], message: "Surname is required for private owners." });
+        if (!data.firstName) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["firstName"], message: "First name is required for private owners." });
+        if (!data.dobString || !isValid(parseISO(data.dobString))) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["dobString"], message: "A valid date of birth is required for private owners." });
+        if (!data.sex) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["sex"], message: "Sex is required for private owners." });
+    }
+    if (data.ownerType === 'Company') {
+        if (!data.companyName) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["companyName"], message: "Company name is required." });
+    }
 });
+
 type OwnerModalFormValues = z.infer<typeof ownerModalSchema>;
 
 
@@ -62,36 +76,18 @@ export function OwnerManager({ owners, setOwners, form: mainForm }: OwnerManager
     resolver: zodResolver(ownerModalSchema),
     defaultValues: { 
         role: "Primary",
-        surname: "",
-        firstName: "",
-        dobString: "",
-        sex: "Male",
-        phone: "",
-        fax: "",
-        email: "",
-        postalAddress: "",
-        townDistrict: "",
-        llg: "",
-        wardVillage: "",
+        ownerType: "Private",
     }
   });
+
+  const watchOwnerType = modalForm.watch("ownerType");
   
   const handleAddOwner = () => {
     setEditingOwner(null);
     setEditingIndex(null);
     modalForm.reset({
         role: "Primary",
-        surname: "",
-        firstName: "",
-        dobString: "",
-        sex: "Male",
-        phone: "",
-        fax: "",
-        email: "",
-        postalAddress: "",
-        townDistrict: "",
-        llg: "",
-        wardVillage: "",
+        ownerType: "Private",
     });
     setIsModalOpen(true);
   };
@@ -112,7 +108,10 @@ export function OwnerManager({ owners, setOwners, form: mainForm }: OwnerManager
         postalAddress: owner.postalAddress || "",
         llg: owner.llg || "",
         wardVillage: owner.wardVillage || "",
-        dobString: isValid(new Date(dobToFormat)) ? format(new Date(dobToFormat), "yyyy-MM-dd") : "",
+        dobString: owner.dob && isValid(new Date(dobToFormat)) ? format(new Date(dobToFormat), "yyyy-MM-dd") : "",
+        companyName: owner.companyName || "",
+        companyRegNo: owner.companyRegNo || "",
+        companyAddress: owner.companyAddress || "",
     });
     setIsModalOpen(true);
   };
@@ -122,16 +121,24 @@ export function OwnerManager({ owners, setOwners, form: mainForm }: OwnerManager
   };
 
   const onModalSubmit = (data: OwnerModalFormValues) => {
-    const dobDate = parseISO(data.dobString); 
-    if (!isValid(dobDate)) {
-        modalForm.setError("dobString", { type: "manual", message: "Invalid date entered." });
-        return;
-    }
-
     const ownerData: Owner = {
-      ...data,
       ownerId: editingOwner?.ownerId || crypto.randomUUID(), 
-      dob: dobDate as any, 
+      role: data.role,
+      ownerType: data.ownerType,
+      surname: data.surname,
+      firstName: data.firstName,
+      dob: data.dobString && isValid(parseISO(data.dobString)) ? parseISO(data.dobString) as any : undefined,
+      sex: data.sex,
+      companyName: data.companyName,
+      companyRegNo: data.companyRegNo,
+      companyAddress: data.companyAddress,
+      phone: data.phone,
+      fax: data.fax,
+      email: data.email,
+      postalAddress: data.postalAddress,
+      townDistrict: data.townDistrict,
+      llg: data.llg,
+      wardVillage: data.wardVillage,
     };
 
     if (editingIndex !== null) {
@@ -166,8 +173,12 @@ export function OwnerManager({ owners, setOwners, form: mainForm }: OwnerManager
             {owners.map((owner, index) => (
               <li key={owner.ownerId || index} className="flex items-center justify-between p-3 border rounded-md bg-background">
                 <div>
-                  <div className="font-medium">{owner.firstName} {owner.surname} <Badge variant="secondary">{owner.role}</Badge></div>
-                  <p className="text-xs text-muted-foreground">{owner.email || owner.phone}</p>
+                  <div className="font-medium flex items-center gap-2">
+                    {owner.ownerType === 'Company' ? <Building className="h-4 w-4 text-muted-foreground"/> : <UserPlus className="h-4 w-4 text-muted-foreground"/>}
+                    {owner.ownerType === 'Company' ? owner.companyName : `${owner.firstName} ${owner.surname}`}
+                    <Badge variant="secondary">{owner.role}</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground pl-6">{owner.email || owner.phone}</p>
                 </div>
                 <div className="flex gap-2">
                   <Button type="button" variant="ghost" size="icon" onClick={() => handleEditOwner(index)} title="Edit Owner">
@@ -192,13 +203,30 @@ export function OwnerManager({ owners, setOwners, form: mainForm }: OwnerManager
               <form onSubmit={modalForm.handleSubmit(onModalSubmit)} className="space-y-4 py-2">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField control={modalForm.control} name="role" render={({ field }) => (<FormItem><FormLabel>Role *</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="Primary">Primary</SelectItem><SelectItem value="CoOwner">Co-Owner</SelectItem></SelectContent></Select><FormMessage /></FormItem>)} />
-                  <FormField control={modalForm.control} name="firstName" render={({ field }) => (<FormItem><FormLabel>First Name *</FormLabel><FormControl><Input placeholder="John" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                  <FormField control={modalForm.control} name="surname" render={({ field }) => (<FormItem><FormLabel>Surname *</FormLabel><FormControl><Input placeholder="Doe" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                  <FormField control={modalForm.control} name="dobString" render={({ field }) => (<FormItem><FormLabel>Date of Birth *</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                  <FormField control={modalForm.control} name="sex" render={({ field }) => (<FormItem><FormLabel>Sex *</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{["Male", "Female", "Other"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                  <FormField control={modalForm.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Phone *</FormLabel><FormControl><Input placeholder="e.g., +675 70000000" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={modalForm.control} name="ownerType" render={({ field }) => (<FormItem><FormLabel>Owner Type *</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="Private">Private Individual</SelectItem><SelectItem value="Company">Company</SelectItem></SelectContent></Select><FormMessage /></FormItem>)} />
+                </div>
+                
+                {watchOwnerType === "Private" && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-md">
+                        <FormField control={modalForm.control} name="firstName" render={({ field }) => (<FormItem><FormLabel>First Name *</FormLabel><FormControl><Input placeholder="John" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
+                        <FormField control={modalForm.control} name="surname" render={({ field }) => (<FormItem><FormLabel>Surname *</FormLabel><FormControl><Input placeholder="Doe" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
+                        <FormField control={modalForm.control} name="dobString" render={({ field }) => (<FormItem><FormLabel>Date of Birth *</FormLabel><FormControl><Input type="date" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
+                        <FormField control={modalForm.control} name="sex" render={({ field }) => (<FormItem><FormLabel>Sex *</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger></FormControl><SelectContent>{["Male", "Female", "Other"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                    </div>
+                )}
+
+                {watchOwnerType === "Company" && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-md">
+                        <FormField control={modalForm.control} name="companyName" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Company Name *</FormLabel><FormControl><Input placeholder="e.g., Global Marine Services Ltd." {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
+                        <FormField control={modalForm.control} name="companyRegNo" render={({ field }) => (<FormItem><FormLabel>Company Reg. No.</FormLabel><FormControl><Input placeholder="e.g., 1-12345" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
+                        <FormField control={modalForm.control} name="companyAddress" render={({ field }) => (<FormItem><FormLabel>Company Address</FormLabel><FormControl><Input placeholder="e.g., Sec 1, Lot 2, Gerehu" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
+                    </div>
+                )}
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                  <FormField control={modalForm.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Contact Phone *</FormLabel><FormControl><Input placeholder="e.g., +675 70000000" {...field} /></FormControl><FormMessage /></FormItem>)} />
                   <FormField control={modalForm.control} name="fax" render={({ field }) => (<FormItem><FormLabel>Fax</FormLabel><FormControl><Input placeholder="Optional" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
-                  <FormField control={modalForm.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="john.doe@example.com" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={modalForm.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="contact@example.com" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
                   <FormField control={modalForm.control} name="postalAddress" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Postal Address</FormLabel><FormControl><Input placeholder="P.O. Box 123, Waigani" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
                   <FormField control={modalForm.control} name="townDistrict" render={({ field }) => (<FormItem><FormLabel>Town/District *</FormLabel><FormControl><Input placeholder="Port Moresby" {...field} /></FormControl><FormMessage /></FormItem>)} />
                   <FormField control={modalForm.control} name="llg" render={({ field }) => (<FormItem><FormLabel>LLG (Local Level Gov.)</FormLabel><FormControl><Input placeholder="NCD" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
@@ -216,4 +244,3 @@ export function OwnerManager({ owners, setOwners, form: mainForm }: OwnerManager
     </Card>
   );
 }
-

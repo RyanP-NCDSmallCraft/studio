@@ -17,10 +17,20 @@ export interface User {
 export interface Owner {
   ownerId: string;
   role: "Primary" | "CoOwner";
-  surname: string;
-  firstName: string;
-  dob: Timestamp | Date | string;
-  sex: "Male" | "Female" | "Other";
+  ownerType: "Private" | "Company";
+
+  // Private owner fields
+  surname?: string;
+  firstName?: string;
+  dob?: Timestamp | Date | string;
+  sex?: "Male" | "Female" | "Other";
+
+  // Company owner fields
+  companyName?: string;
+  companyRegNo?: string;
+  companyAddress?: string;
+
+  // Common fields
   phone: string;
   fax?: string;
   email?: string;
@@ -29,6 +39,7 @@ export interface Owner {
   llg: string;
   wardVillage: string;
 }
+
 
 export interface ProofOfOwnershipDoc {
   docId: string;

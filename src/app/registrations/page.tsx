@@ -127,6 +127,10 @@ export default function RegistrationsPage() {
           townDistrict: ownerData.townDistrict || '',
           llg: ownerData.llg || '',
           wardVillage: ownerData.wardVillage || '',
+          ownerType: ownerData.ownerType || 'Private',
+          companyName: ownerData.companyName,
+          companyRegNo: ownerData.companyRegNo,
+          companyAddress: ownerData.companyAddress,
         });
 
         const mapProofDoc = (docData: any): ProofOfOwnershipDoc => ({
@@ -255,7 +259,10 @@ export default function RegistrationsPage() {
   const getPrimaryOwnerName = (owners: Owner[] | undefined): string => {
     if (!owners || owners.length === 0) return "N/A";
     const primaryOwner = owners.find(o => o.role === "Primary");
-    return primaryOwner ? `${primaryOwner.firstName} ${primaryOwner.surname}` : `${owners[0].firstName} ${owners[0].surname}`;
+    if (!primaryOwner) return "N/A";
+    return primaryOwner.ownerType === 'Company' 
+      ? primaryOwner.companyName || 'N/A' 
+      : `${primaryOwner.firstName || ''} ${primaryOwner.surname || ''}`.trim();
   };
 
   const canEditRegistration = (regStatus?: Registration["status"]): boolean => {
