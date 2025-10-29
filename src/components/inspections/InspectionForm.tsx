@@ -59,7 +59,7 @@ const inspectionFormSchema = z.object({
   overallResult: z.enum(["Pass", "PassWithRecommendations", "Fail", "N/A"]).optional(),
 }).refine(data => {
     // In schedule mode, registration must be selected.
-    if (typeof window !== 'undefined' && window.location.pathname.includes('/inspections/new')) {
+    if (typeof window !== 'undefined' && (window.location.pathname.includes('/inspections/new') || window.location.pathname.includes('/inspections/edit-schedule')) ) {
         return !!data.registrationRefId;
     }
     return true;
@@ -202,6 +202,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
       checklistItems: (existingInspectionData.checklistItems || []).map(item => ({...item, category: item.category || ncdChecklistTemplate.items.find(t => t.itemId === item.itemId)?.category, result: item.result || "N/A" })),
       findings: existingInspectionData.findings || "",
       correctiveActions: existingInspectionData.correctiveActions || "",
+      followUpRequired: existingInspectionData.followUpRequired || false,
       overallResult: existingInspectionData.overallResult || undefined,
     }
   : {
@@ -296,7 +297,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
         setLoadingInspectors(true);
         try {
           const usersCol = collection(db, "users");
-          const q = query(usersCol, where("isActive", "==", true), where("role", "in", ["Inspector", "Admin", "Supervisor"]));
+          const q = query(usersCol, where("isActive", "==", true), where("role", "in", ["Inspector", "Admin", "Supervisor", "Registrar"]));
           const querySnapshot = await getDocs(q);
           const inspectorsData = querySnapshot.docs.map(docSnap => {
             const data = docSnap.data() as User;
@@ -913,3 +914,5 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     </Form>
   );
 }
+
+    
