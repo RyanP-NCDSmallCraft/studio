@@ -72,7 +72,7 @@ export default function SafetyCertificatePage() {
       }
 
       const inspectionData = inspectionSnap.data() as Omit<Inspection, 'inspectionId' | 'registrationRef' | 'inspectorRef' | 'createdAt' | 'lastUpdatedAt' | 'reviewedByRef' | 'createdByRef' | 'lastUpdatedByRef'> & {
-        registrationRef: string | DocumentReference<Registration>;
+        registrationRef: string | DocumentReference<Registration> | null;
         inspectorRef?: string | DocumentReference<User>;
         reviewedByRef?: string | DocumentReference<User>;
         createdByRef?: string | DocumentReference<User>;
@@ -90,12 +90,18 @@ export default function SafetyCertificatePage() {
         setLoading(false);
         return;
       }
+
+      if (!inspectionData.registrationRef) {
+        setError("Cannot generate certificate. This inspection is not linked to a craft registration. Please edit the inspection to link a craft.");
+        setLoading(false);
+        return;
+      }
       
       const currentInspection: Inspection = {
         inspectionId: inspectionSnap.id,
         ...inspectionData,
         displayId: inspectionData.displayId, // Added displayId
-        registrationRef: (inspectionData.registrationRef instanceof DocumentReference) ? inspectionData.registrationRef.id : inspectionData.registrationRef,
+        registrationRef: (inspectionData.registrationRef instanceof DocumentReference) ? inspectionData.registrationRef.id : inspectionData.registrationRef as string,
         inspectorRef: inspectionData.inspectorRef ? ((inspectionData.inspectorRef instanceof DocumentReference) ? inspectionData.inspectorRef.id : inspectionData.inspectorRef) : undefined,
         reviewedByRef: inspectionData.reviewedByRef ? ((inspectionData.reviewedByRef instanceof DocumentReference) ? inspectionData.reviewedByRef.id : inspectionData.reviewedByRef) : undefined,
         createdByRef: (inspectionData.createdByRef instanceof DocumentReference) ? inspectionData.createdByRef.id : inspectionData.createdByRef,
