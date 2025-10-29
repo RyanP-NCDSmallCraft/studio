@@ -58,10 +58,10 @@ const inspectionFormSchema = z.object({
   checklistItems: z.array(checklistItemSchema).optional().default([]),
   overallResult: z.enum(["Pass", "PassWithRecommendations", "Fail", "N/A"]).optional(),
 }).refine(data => {
-    // In schedule mode, registration must be selected.
-    if (typeof window !== 'undefined' && (window.location.pathname.includes('/inspections/new') || window.location.pathname.includes('/inspections/edit-schedule')) ) {
-        return !!data.registrationRefId;
-    }
+    // In schedule mode, registration is not mandatory anymore to allow linking later.
+    // However, if the user is *submitting for review*, it might be desirable.
+    // For now, we only enforce it on initial scheduling if we want to.
+    // Let's remove the strict requirement for now.
     return true;
 }, {
     message: "A craft registration must be linked to schedule an inspection.",
@@ -280,10 +280,8 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
       setLoadingRegistrations(false);
     };
 
-    if (usageContext === 'schedule' && (mode === 'create' || (mode === 'edit' && !form.getValues('registrationRefId')))) {
-      fetchRegs();
-    }
-  }, [usageContext, mode, form, toast]);
+    fetchRegs();
+  }, [toast]);
 
 
   useEffect(() => {
@@ -618,7 +616,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
               name="registrationRefId"
               render={({ field }) => (
                 <FormItem className="flex flex-col">
-                  <FormLabel>Linked Craft Registration {usageContext === 'schedule' ? '*' : '(Optional)'}</FormLabel>
+                  <FormLabel>Linked Craft Registration</FormLabel>
                   <Popover open={openRegistrationPopover} onOpenChange={setOpenRegistrationPopover}>
                     <PopoverTrigger asChild>
                       <FormControl>
@@ -630,7 +628,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
                             "w-full justify-between",
                             !field.value && "text-muted-foreground"
                           )}
-                           disabled={!!prefilledRegistrationId || (mode === 'edit' && usageContext === 'conduct')}
+                           disabled={loadingRegistrations}
                         >
                           {field.value
                             ? registrationsForSelect.find(
@@ -914,5 +912,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     </Form>
   );
 }
+
+    
 
     
