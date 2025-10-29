@@ -269,6 +269,7 @@ export default function InspectionDetailPage() {
     return <div className="text-center py-10 text-muted-foreground">Inspection details could not be loaded.</div>;
   }
 
+  const checklistPhotos = inspection.checklistItems.map(item => item.photoUrl).filter(Boolean) as string[];
 
   return (
     <div className="space-y-6">
@@ -408,17 +409,30 @@ export default function InspectionDetailPage() {
         </div>
         <div className="lg:col-span-1 space-y-6">
             <Card>
-                <CardHeader><CardTitle>Craft Quick View</CardTitle></CardHeader>
-                <CardContent className="text-sm">
-                    {typeof inspection.registrationRef === 'string' ? (
-                       <p>Details for craft <Button variant="link" asChild className="p-0 h-auto"><Link href={`/registrations/${inspection.registrationRef}`}>{inspection.registrationData?.scaRegoNo || inspection.registrationRef}</Link></Button></p>
+                <CardHeader><CardTitle>Craft & Inspection Media</CardTitle></CardHeader>
+                <CardContent className="text-sm space-y-4">
+                     {typeof inspection.registrationRef === 'string' ? (
+                       <p>Showing media for craft <Button variant="link" asChild className="p-0 h-auto"><Link href={`/registrations/${inspection.registrationRef}`}>{inspection.registrationData?.scaRegoNo || inspection.registrationRef}</Link></Button></p>
                     ) : (
-                        <p>Craft details unavailable.</p>
+                        <p>No craft linked. Showing inspection photos only.</p>
                     )}
-                    {inspection.registrationData?.craftImageUrl ? (
-                        <Image src={inspection.registrationData.craftImageUrl} alt="Craft Image" width={600} height={400} className="mt-2 rounded-md aspect-video object-cover" data-ai-hint="boat yacht"/>
-                    ) : (
-                        <Image src="https://placehold.co/600x400.png?text=Craft+Image" alt="Craft Image Placeholder" width={600} height={400} className="mt-2 rounded-md aspect-video object-cover" data-ai-hint="boat generic"/>
+                    <div className="grid grid-cols-2 gap-2">
+                        {inspection.registrationData?.craftImageUrl && (
+                             <a href={inspection.registrationData.craftImageUrl} target="_blank" rel="noopener noreferrer">
+                                <Image src={inspection.registrationData.craftImageUrl} alt="Craft Image" width={200} height={150} className="rounded-md aspect-video object-cover" data-ai-hint="boat yacht"/>
+                             </a>
+                        )}
+                        {checklistPhotos.map((url, index) => (
+                           <a key={index} href={url} target="_blank" rel="noopener noreferrer">
+                             <Image src={url} alt={`Checklist photo ${index + 1}`} width={200} height={150} className="rounded-md aspect-video object-cover" data-ai-hint="boat inspection" />
+                           </a>
+                        ))}
+                    </div>
+                     {(checklistPhotos.length === 0 && !inspection.registrationData?.craftImageUrl) && (
+                        <div className="text-center text-muted-foreground p-4 border-2 border-dashed rounded-md">
+                            <ImageIcon className="mx-auto h-8 w-8 text-muted-foreground/50"/>
+                            <p>No images available.</p>
+                        </div>
                     )}
                 </CardContent>
             </Card>
@@ -433,14 +447,22 @@ export default function InspectionDetailPage() {
             <div className="space-y-4">
               {inspection.checklistItems.map((item) => (
                 <Card key={item.itemId} className="p-4">
-                  <div className="flex items-start justify-between">
-                    <h4 className="font-medium flex items-center gap-2">{getItemResultIcon(item.result)} {item.itemDescription}</h4>
-                    <Badge variant={item.result === "Pass" || item.result === "Yes" ? "default" : item.result === "Fail" || item.result === "No" ? "destructive" : "secondary"}>
-                      {item.result}
-                    </Badge>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <h4 className="font-medium flex items-center gap-2">{getItemResultIcon(item.result)} {item.itemDescription}</h4>
+                      {item.comments && <p className="text-sm text-muted-foreground mt-1 ml-7 pl-1 border-l-2 border-muted"><strong>Comments:</strong> {item.comments}</p>}
+                    </div>
+                    <div className="flex-shrink-0 flex flex-col items-end gap-2">
+                      <Badge variant={item.result === "Pass" || item.result === "Yes" ? "default" : item.result === "Fail" || item.result === "No" ? "destructive" : "secondary"}>
+                        {item.result}
+                      </Badge>
+                      {item.photoUrl && (
+                        <a href={item.photoUrl} target="_blank" rel="noopener noreferrer">
+                           <Image src={item.photoUrl} alt={`Photo for ${item.itemDescription}`} width={60} height={60} className="h-16 w-16 object-cover rounded-md border" />
+                        </a>
+                      )}
+                    </div>
                   </div>
-                  {item.comments && <p className="text-sm text-muted-foreground mt-1 ml-7 pl-1 border-l-2 border-muted"><strong>Comments:</strong> {item.comments}</p>}
-
                 </Card>
               ))}
             </div>
@@ -452,6 +474,3 @@ export default function InspectionDetailPage() {
     </div>
   );
 }
-    
-
-    

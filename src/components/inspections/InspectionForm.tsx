@@ -23,10 +23,11 @@ import type { Inspection, ChecklistItemResult as ChecklistItemResultType, Checkl
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
-import { Save, Send, Ship, User as UserIcon, CalendarDays, Trash2, PlusCircle, Lightbulb, Loader2, ImageUp, Settings, Play, Info, ChevronsUpDown, Check } from "lucide-react";
-import React, { useState, useEffect } from "react";
+import { Save, Send, Ship, User as UserIcon, CalendarDays, Trash2, PlusCircle, Lightbulb, Loader2, ImageUp, Settings, Play, Info, ChevronsUpDown, Check, X } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
 import { Timestamp, addDoc, updateDoc, collection, getDocs, doc, query, where, type DocumentReference } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db, storage } from "@/lib/firebase";
+import { ref as storageRef, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { suggestChecklistItems } from "@/ai/flows/suggest-checklist-items";
 import Link from "next/link";
 import { format } from 'date-fns';
@@ -36,6 +37,8 @@ import { formatFirebaseTimestamp } from "@/lib/utils";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Command, CommandInput, CommandEmpty, CommandList, CommandGroup, CommandItem } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
+import Image from "next/image";
+import { Progress } from "@/components/ui/progress";
 
 
 const checklistItemSchema = z.object({
@@ -44,6 +47,7 @@ const checklistItemSchema = z.object({
   category: z.string().optional(),
   result: z.enum(["Yes", "No", "N/A"]),
   comments: z.string().optional(),
+  photoUrl: z.string().url().optional(),
 });
 
 const inspectionFormSchema = z.object({
@@ -63,7 +67,7 @@ const inspectionFormSchema = z.object({
 type InspectionFormValues = z.infer<typeof inspectionFormSchema>;
 
 // NCD Small Craft Inspection Checklist Items
-const ncdChecklistTemplateItems: Array<Omit<ChecklistItemResultType, 'result' | 'comments'> & {order?: number}> = [
+const ncdChecklistTemplateItems: Array<Omit<ChecklistItemResultType, 'result' | 'comments' | 'photoUrl'> & {order?: number}> = [
   // A. Marking and Load Line Requirements (Schedule 1)
   { itemId: "A_1_a", itemDescription: "Registration Number Marking: Legibly & permanently printed on BOTH sides?", category: "A. Marking: Registration Number" },
   { itemId: "A_1_b", itemDescription: "Registration Number Marking: Located approx. 120cm from bow center, near top of hull?", category: "A. Marking: Registration Number" },
@@ -108,7 +112,7 @@ const ncdChecklistTemplateItems: Array<Omit<ChecklistItemResultType, 'result' | 
   { itemId: "C_2_b", itemDescription: "Builder's Plate (if fitted/required): Plate shows max power, load, persons capacity?", category: "C. Construction: Builder's Plate" },
   { itemId: "C_2_c", itemDescription: "Builder's Plate (if fitted/required): Plate shows constructor's serial number & completion date?", category: "C. Construction: Builder's Plate" },
   { itemId: "C_3_a", itemDescription: "Flotation & Buoyancy: Evidence of built-in flotation (material/air chambers)?", category: "C. Construction: Flotation & Buoyancy" },
-  { itemId: "C_3_b", itemDescription: "Flotation & Buoyancy: Air compartments (if used for buoyancy) marked with \"Caution...\" label?", category: "C. Construction: Flotation & Buoyancy" },
+  { itemId: "C_3_b", itemDescription: "Flotation & Buoyancy: Air compartments (if used for buoyancy) marked with \"Caution...\" label?", category: "C.Construction: Flotation & Buoyancy" },
   { itemId: "C_4_a", itemDescription: "Hull Integrity & Fittings: Bilge pump functional OR bucket/bailer present?", category: "C. Construction: Hull Integrity & Fittings" },
   { itemId: "C_4_b", itemDescription: "Hull Integrity & Fittings: Drain plugs appear secure, in good condition, and lockable?", category: "C. Construction: Hull Integrity & Fittings" },
   { itemId: "C_4_c", itemDescription: "Hull Integrity & Fittings: Deck surfaces intended for walking appear slip-resistant?", category: "C. Construction: Hull Integrity & Fittings" },
@@ -165,6 +169,8 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
   
   const [availableInspectors, setAvailableInspectors] = useState<Array<Pick<User, 'userId' | 'displayName' | 'email'>>>([]);
   const [loadingInspectors, setLoadingInspectors] = useState(false);
+  const fileInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<Record<number, number | null>>({});
 
   const canAssignInspector = isAdmin || isRegistrar || isSupervisor;
 
@@ -214,7 +220,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     defaultValues,
   });
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields, append, remove, update } = useFieldArray({
     control: form.control,
     name: "checklistItems",
   });
@@ -234,8 +240,9 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
             category: templateItem.category,
             result: "N/A" as "Yes" | "No" | "N/A", 
             comments: "",
+            photoUrl: "",
         }));
-        form.setValue("checklistItems", ncdItemsToLoad);
+        form.setValue("checklistItems", ncdItemsToLoad as any);
         console.log("InspectionForm: NCD checklist loaded with", ncdItemsToLoad.length, "items.");
     }
 }, [mode, usageContext, existingInspectionData, form, fields.length]); 
@@ -387,6 +394,36 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     } finally {
       setIsAISuggesting(false);
     }
+  };
+
+  const handleChecklistPhotoUpload = (event: React.ChangeEvent<HTMLInputElement>, index: number) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const currentItem = fields[index];
+    setUploadProgress(prev => ({ ...prev, [index]: 0 }));
+
+    const photoPath = `inspections/${inspectionId || `new_${Date.now()}`}/checklist_${currentItem.itemId}_${Date.now()}`;
+    const photoStorageRef = storageRef(storage, photoPath);
+    const uploadTask = uploadBytesResumable(photoStorageRef, file);
+
+    uploadTask.on('state_changed',
+      (snapshot) => {
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        setUploadProgress(prev => ({ ...prev, [index]: progress }));
+      },
+      (error) => {
+        console.error("Checklist photo upload error:", error);
+        toast({ title: "Upload Failed", description: `Could not upload photo for item: ${currentItem.itemDescription}`, variant: "destructive" });
+        setUploadProgress(prev => ({ ...prev, [index]: null }));
+      },
+      async () => {
+        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+        update(index, { ...currentItem, photoUrl: downloadURL });
+        setUploadProgress(prev => ({ ...prev, [index]: 100 }));
+        toast({ title: "Photo Uploaded", description: `Photo added for item: ${currentItem.itemDescription}`});
+      }
+    );
   };
 
 
@@ -571,7 +608,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
               name="registrationRefId"
               render={({ field }) => (
                 <FormItem className="flex flex-col">
-                  <FormLabel>Linked Craft Registration (Optional)</FormLabel>
+                  <FormLabel>Linked Craft Registration {usageContext === 'conduct' && '(Optional)'}</FormLabel>
                   <Popover open={openRegistrationPopover} onOpenChange={setOpenRegistrationPopover}>
                     <PopoverTrigger asChild>
                       <FormControl>
@@ -693,34 +730,10 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
               )}
             />
 
-            <FormField control={form.control} name="inspectionType" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Inspection Type *</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value} disabled={usageContext === 'conduct' && mode === 'edit'}>
-                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                    <SelectContent>{["Initial", "Annual", "Compliance", "FollowUp"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField control={form.control} name="scheduledDate" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Scheduled Date *</FormLabel>
-                  <FormControl><Input type="date" {...field} value={field.value ? format(field.value instanceof Date ? field.value : new Date(field.value), 'yyyy-MM-dd') : ''} onChange={e => field.onChange(e.target.value ? new Date(e.target.value) : undefined)} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <FormField control={form.control} name="inspectionType" render={({ field }) => (<FormItem><FormLabel>Inspection Type *</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={usageContext === 'conduct' && mode === 'edit'}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{["Initial", "Annual", "Compliance", "FollowUp"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="scheduledDate" render={({ field }) => (<FormItem><FormLabel>Scheduled Date *</FormLabel><FormControl><Input type="date" {...field} value={field.value ? format(field.value instanceof Date ? field.value : new Date(field.value), 'yyyy-MM-dd') : ''} onChange={e => field.onChange(e.target.value ? new Date(e.target.value) : undefined)} /></FormControl><FormMessage /></FormItem>)} />
            {usageContext === "conduct" && (
-             <FormField control={form.control} name="inspectionDate" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Actual Inspection Date *</FormLabel>
-                  <FormControl><Input type="date" {...field} value={field.value ? format(field.value instanceof Date ? field.value : new Date(field.value), 'yyyy-MM-dd') : ''} onChange={e => field.onChange(e.target.value ? new Date(e.target.value) : undefined)} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+             <FormField control={form.control} name="inspectionDate" render={({ field }) => (<FormItem><FormLabel>Actual Inspection Date *</FormLabel><FormControl><Input type="date" {...field} value={field.value ? format(field.value instanceof Date ? field.value : new Date(field.value), 'yyyy-MM-dd') : ''} onChange={e => field.onChange(e.target.value ? new Date(e.target.value) : undefined)} /></FormControl><FormMessage /></FormItem>)} />
            )}
           </CardContent>
         </Card>
@@ -757,56 +770,72 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
                                 const originalIndex = item.originalIndex;
                                 return (
                                     <Card key={item.id} className="p-3 bg-card shadow-sm">
-                                        <p className="font-medium mb-2 text-sm">{item.itemDescription}</p>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 items-start">
+                                      <p className="font-medium mb-2 text-sm">{item.itemDescription}</p>
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 items-start">
                                         <FormField
-                                        control={form.control}
-                                        name={`checklistItems.${originalIndex}.result`}
-                                        render={({ field: resultField }) => (
+                                          control={form.control}
+                                          name={`checklistItems.${originalIndex}.result`}
+                                          render={({ field: resultField }) => (
                                             <FormItem className="space-y-1">
-                                            <FormLabel className="text-xs">Result *</FormLabel>
-                                            <FormControl>
-                                                <RadioGroup
-                                                onValueChange={resultField.onChange}
-                                                defaultValue={resultField.value}
-                                                className="flex space-x-3 items-center pt-1"
-                                                >
-                                                {(["Yes", "No", "N/A"] as const).map((val) => (
+                                              <FormLabel className="text-xs">Result *</FormLabel>
+                                              <FormControl>
+                                                <RadioGroup onValueChange={resultField.onChange} defaultValue={resultField.value} className="flex space-x-3 items-center pt-1">
+                                                  {(["Yes", "No", "N/A"] as const).map((val) => (
                                                     <FormItem key={`${item.itemId}-${originalIndex}-${val}`} className="flex items-center space-x-1.5 space-y-0">
-                                                    <FormControl>
-                                                        <RadioGroupItem value={val} id={`${item.itemId}-${originalIndex}-${val.toLowerCase()}`} />
-                                                    </FormControl>
-                                                    <Label htmlFor={`${item.itemId}-${originalIndex}-${val.toLowerCase()}`} className={`font-normal text-xs ${val === "Yes" ? "text-green-600" : val === "No" ? "text-red-600" : "text-muted-foreground"}`}>
-                                                        {val}
-                                                    </Label>
+                                                      <FormControl><RadioGroupItem value={val} id={`${item.itemId}-${originalIndex}-${val.toLowerCase()}`} /></FormControl>
+                                                      <Label htmlFor={`${item.itemId}-${originalIndex}-${val.toLowerCase()}`} className={`font-normal text-xs ${val === "Yes" ? "text-green-600" : val === "No" ? "text-red-600" : "text-muted-foreground"}`}>{val}</Label>
                                                     </FormItem>
-                                                ))}
+                                                  ))}
                                                 </RadioGroup>
-                                            </FormControl>
-                                            <FormMessage />
+                                              </FormControl>
+                                              <FormMessage />
                                             </FormItem>
-                                        )}
+                                          )}
                                         />
                                         <FormField
-                                        control={form.control}
-                                        name={`checklistItems.${originalIndex}.comments`}
-                                        render={({ field: commentsField }) => (
+                                          control={form.control}
+                                          name={`checklistItems.${originalIndex}.comments`}
+                                          render={({ field: commentsField }) => (
                                             <FormItem>
-                                            <FormLabel className="text-xs">Notes / Photo Ref.</FormLabel>
-                                            <FormControl><Textarea placeholder="Optional comments" {...commentsField} rows={1} className="text-sm" /></FormControl>
-                                            <FormMessage />
+                                              <FormLabel className="text-xs">Notes / Photo Ref.</FormLabel>
+                                              <FormControl><Textarea placeholder="Optional comments" {...commentsField} rows={1} className="text-sm" /></FormControl>
+                                              <FormMessage />
                                             </FormItem>
-                                        )}
+                                          )}
                                         />
-                                    </div>
-                                    <div className="mt-2 flex justify-between items-center">
-                                        <Button type="button" size="xs" variant="outline" className="text-xs py-1 px-2 h-auto" disabled><ImageUp className="mr-1 h-3 w-3" /> Upload Photo</Button>
+                                      </div>
+                                      <div className="mt-2 flex justify-between items-center">
+                                        <div className="flex items-center gap-2">
+                                          <Button type="button" size="xs" variant="outline" className="text-xs py-1 px-2 h-auto" onClick={() => fileInputRefs.current[originalIndex]?.click()}>
+                                            <ImageUp className="mr-1 h-3 w-3" /> Upload Photo
+                                          </Button>
+                                          <Input type="file" accept="image/*" className="hidden" ref={el => fileInputRefs.current[originalIndex] = el} onChange={(e) => handleChecklistPhotoUpload(e, originalIndex)} />
+                                          {uploadProgress[originalIndex] !== null && uploadProgress[originalIndex] !== undefined && uploadProgress[originalIndex] < 100 && (
+                                            <Progress value={uploadProgress[originalIndex]} className="w-24 h-1" />
+                                          )}
+                                          {item.photoUrl && (
+                                            <div className="relative group">
+                                              <a href={item.photoUrl} target="_blank" rel="noopener noreferrer">
+                                                <Image src={item.photoUrl} alt={`Photo for ${item.itemDescription}`} width={40} height={40} className="h-10 w-10 object-cover rounded-md border" />
+                                              </a>
+                                              <Button
+                                                type="button"
+                                                variant="destructive"
+                                                size="icon"
+                                                className="absolute -top-2 -right-2 h-5 w-5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                                onClick={() => update(originalIndex, { ...item, photoUrl: undefined })}
+                                              >
+                                                <X className="h-3 w-3" />
+                                              </Button>
+                                            </div>
+                                          )}
+                                        </div>
                                         {item.itemId?.startsWith("custom_") && (
-                                            <Button type="button" variant="ghost" size="xs" onClick={() => remove(originalIndex)} className="text-destructive hover:text-destructive-foreground hover:bg-destructive text-xs py-1 px-2 h-auto">
-                                                <Trash2 className="mr-1 h-3 w-3" /> Remove
-                                            </Button>
+                                          <Button type="button" variant="ghost" size="xs" onClick={() => remove(originalIndex)} className="text-destructive hover:text-destructive-foreground hover:bg-destructive text-xs py-1 px-2 h-auto">
+                                            <Trash2 className="mr-1 h-3 w-3" /> Remove
+                                          </Button>
                                         )}
-                                    </div>
+                                      </div>
                                     </Card>
                                 );
                                 })}
@@ -867,5 +896,3 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     </Form>
   );
 }
-
-    

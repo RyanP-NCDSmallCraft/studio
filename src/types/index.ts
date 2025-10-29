@@ -111,12 +111,13 @@ export interface ChecklistItemResult {
   result: "Yes" | "No" | "N/A";
   comments?: string;
   category?: string;
+  photoUrl?: string; // URL for an uploaded photo for this checklist item
 }
 
 export interface Inspection {
   inspectionId: string;
   displayId?: string; // For standardized, human-readable ID like INSP-00001
-  registrationRef: string | DocumentReference<Registration>;
+  registrationRef: string | DocumentReference<Registration> | null;
   registrationData?: {
     id: string;
     scaRegoNo?: string;
@@ -331,5 +332,3 @@ export interface Infringement {
   lastUpdatedAt?: Timestamp | Date | string;
   lastUpdatedByRef?: string | DocumentReference<User>;
 }
-
-    
