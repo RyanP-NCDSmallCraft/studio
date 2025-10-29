@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { 
   Users, Ship, ClipboardList, ArrowRight, Info, Loader2, AlertTriangle, 
-  CheckCircle, FileEdit, Ban, PauseCircle, AlertOctagon, UserCheck, Siren, CalendarClock
+  CheckCircle, FileEdit, Ban, PauseCircle, AlertOctagon, UserCheck, Siren, CalendarClock, Contact
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import React, { useState, useEffect, useCallback } from "react";
@@ -387,11 +387,14 @@ export default function DashboardPage() {
             <Link href="/registrations">View All Registrations</Link>
           </Button>
           <Button asChild variant="secondary">
+            <Link href="/operator-licenses">Manage Operator Licenses</Link>
+          </Button>
+          <Button asChild variant="secondary">
             <Link href="/inspections">View All Inspections</Link>
           </Button>
           {(isAdmin || isRegistrar || isSupervisor) && (
             <>
-            <Button asChild variant="secondary">
+            <Button asChild variant="secondary" disabled>
                 <Link href="/commercial-licenses">Manage Commercial Licenses</Link>
             </Button>
             <Button asChild variant="secondary">
@@ -404,10 +407,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-
-    
-
-    
-
-

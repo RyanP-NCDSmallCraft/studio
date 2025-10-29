@@ -2,7 +2,7 @@
 "use client";
 
 import { OperatorLicenseForm } from "@/components/operator-licenses/OperatorLicenseForm";
-import type { CommercialLicense, Operator, User } from "@/types";
+import type { OperatorLicense, Operator, User } from "@/types";
 import { Edit, ArrowLeft, Loader2, AlertTriangle } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { Timestamp, doc, getDoc, DocumentReference } from "firebase/firestore";
@@ -36,14 +36,14 @@ const ensureDateObject = (dateValue: any): Date | undefined => {
 };
 
 
-export default function EditCommercialLicensePage() {
+export default function EditOperatorLicensePage() {
   const params = useParams();
   const router = useRouter();
   const licenseApplicationId = params.id as string;
   const { currentUser } = useAuth();
   
   const [loading, setLoading] = useState(true);
-  const [existingLicenseData, setExistingLicenseData] = useState<Partial<CommercialLicense> | null>(null);
+  const [existingLicenseData, setExistingLicenseData] = useState<Partial<OperatorLicense> | null>(null);
   const [existingOperatorData, setExistingOperatorData] = useState<Partial<Operator> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,8 +68,8 @@ export default function EditCommercialLicensePage() {
         return;
       }
       
-      const licenseDataRaw = licenseSnap.data() as Omit<CommercialLicense, 'operatorRef'> & { operatorRef: DocumentReference<Operator> | string };
-      const licenseData: Partial<CommercialLicense> = {
+      const licenseDataRaw = licenseSnap.data() as Omit<OperatorLicense, 'operatorRef'> & { operatorRef: DocumentReference<Operator> | string };
+      const licenseData: Partial<OperatorLicense> = {
         ...licenseDataRaw,
         licenseApplicationId: licenseSnap.id,
         // Ensure dates are JS Dates for the form
@@ -154,7 +154,7 @@ export default function EditCommercialLicensePage() {
             <span className="sr-only">Back</span>
         </Button>
         <Edit className="h-8 w-8 text-primary" />
-        <h1 className="text-3xl font-bold">Edit Commercial License Application</h1>
+        <h1 className="text-3xl font-bold">Edit Operator License Application</h1>
       </div>
       <OperatorLicenseForm 
         mode="edit" 

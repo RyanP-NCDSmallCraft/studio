@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/form";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import type { CommercialLicense, CompetencyTest, CompetencyTestAnswer, CompetencyTestTemplateQuestion, User } from "@/types";
+import type { OperatorLicense, CompetencyTest, CompetencyTestAnswer, CompetencyTestTemplateQuestion, User } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useParams, useRouter } from "next/navigation";
@@ -51,7 +51,7 @@ export default function TakeCompetencyTestPage() {
   const licenseApplicationId = params.id as string;
 
   const [isLoading, setIsLoading] = useState(false);
-  const [application, setApplication] = useState<CommercialLicense | null>(null);
+  const [application, setApplication] = useState<OperatorLicense | null>(null);
   const [operator, setOperator] = useState<Operator | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
   
@@ -79,7 +79,7 @@ export default function TakeCompetencyTestPage() {
             setIsLoading(false);
             return;
         }
-        const appData = appSnap.data() as CommercialLicense;
+        const appData = appSnap.data() as OperatorLicense;
         setApplication(appData);
 
         if (appData.operatorRef) {
@@ -142,7 +142,7 @@ export default function TakeCompetencyTestPage() {
     const result: CompetencyTest["result"] = percentageAchieved >= 60 ? "Pass" : "Fail"; // Assuming 60% pass mark
 
     const competencyTestPayload: Omit<CompetencyTest, 'testId'> = {
-      licenseApplicationRef: doc(db, "operatorLicenseApplications", licenseApplicationId) as DocumentReference<CommercialLicense>,
+      licenseApplicationRef: doc(db, "operatorLicenseApplications", licenseApplicationId) as DocumentReference<OperatorLicense>,
       operatorRef: application.operatorRef as DocumentReference<Operator>, // Assuming operatorRef is DocumentReference by now
       testTemplateRef: doc(db, "competencyTestTemplates", "SAMPLE_V1") as DocumentReference<any>, // Placeholder
       testTemplateVersion: 1,
@@ -165,7 +165,7 @@ export default function TakeCompetencyTestPage() {
       });
 
       toast({ title: "Test Submitted", description: `Result: ${result} (${percentageAchieved.toFixed(0)}%)` });
-      router.push(`/commercial-licenses/${licenseApplicationId}`);
+      router.push(`/operator-licenses/${licenseApplicationId}`);
       router.refresh();
     } catch (error: any) {
       console.error("Error saving competency test:", error);

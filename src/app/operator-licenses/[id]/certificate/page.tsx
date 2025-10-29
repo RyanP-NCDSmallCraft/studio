@@ -3,7 +3,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import type { CommercialLicense, Operator, User } from "@/types"; 
+import type { OperatorLicense, Operator, User } from "@/types"; 
 import { FileImage, UserCircle2, ArrowLeft, Loader2, AlertTriangle, Printer } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { formatFirebaseTimestamp } from '@/lib/utils';
@@ -31,12 +31,12 @@ const ensureDateObject = (dateValue: any): Date | undefined => {
 };
 
 
-export default function CommercialLicenseCertificatePage() {
+export default function OperatorLicenseCertificatePage() {
   const params = useParams();
   const router = useRouter();
   const licenseApplicationId = params.id as string;
 
-  const [license, setLicense] = useState<CommercialLicense | null>(null);
+  const [license, setLicense] = useState<OperatorLicense | null>(null);
   const [operator, setOperator] = useState<Operator | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +60,7 @@ export default function CommercialLicenseCertificatePage() {
         return;
       }
 
-      const licenseDataRaw = licenseSnap.data() as Omit<CommercialLicense, 'operatorRef'> & { operatorRef: DocumentReference<Operator> | string };
+      const licenseDataRaw = licenseSnap.data() as Omit<OperatorLicense, 'operatorRef'> & { operatorRef: DocumentReference<Operator> | string };
 
       if (licenseDataRaw.status !== "Approved") {
         setError("License Card can only be generated for 'Approved' licenses.");
@@ -68,7 +68,7 @@ export default function CommercialLicenseCertificatePage() {
         return;
       }
       
-      const currentLicense: CommercialLicense = {
+      const currentLicense: OperatorLicense = {
         ...licenseDataRaw,
         licenseApplicationId: licenseSnap.id,
         operatorRef: licenseDataRaw.operatorRef,
@@ -171,7 +171,7 @@ export default function CommercialLicenseCertificatePage() {
             <span className="sr-only">Back</span>
           </Button>
           <FileImage className="h-8 w-8 text-primary" />
-          <h1 className="text-2xl md:text-3xl font-bold">Commercial License Card</h1>
+          <h1 className="text-2xl md:text-3xl font-bold">Operator License Card</h1>
         </div>
         <Button onClick={() => window.print()}>
           <Printer className="mr-2 h-4 w-4" /> Print License Card
@@ -199,7 +199,7 @@ export default function CommercialLicenseCertificatePage() {
                 className="h-8 w-8"
                 />
                 <div>
-                    <h2 className="text-sm font-bold text-primary leading-tight">COMMERCIAL LICENSE</h2>
+                    <h2 className="text-sm font-bold text-primary leading-tight">OPERATOR LICENSE</h2>
                     <p className="text-xs text-muted-foreground leading-tight">NCD Small Craft Registration Board</p>
                 </div>
             </div>

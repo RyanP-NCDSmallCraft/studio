@@ -1,4 +1,3 @@
-
 import type { Timestamp, DocumentReference } from "firebase/firestore";
 
 export type UserRole = "Admin" | "Registrar" | "Inspector" | "Supervisor" | "ReadOnly";
@@ -209,7 +208,7 @@ export interface Operator {
   lastUpdatedByRef?: DocumentReference<User> | string;
 }
 
-export interface CommercialLicenseAttachedDoc {
+export interface OperatorLicenseAttachedDoc {
   docId: string; // Auto-generated or from a predefined list
   docType: "PoliceClearance" | "PreviousLicenseCopy" | "BirthCertificateCopy" | "NIDCardCopy" | "IDPhoto" | "Other";
   docOtherDescription?: string;
@@ -222,13 +221,13 @@ export interface CommercialLicenseAttachedDoc {
   notes?: string;
 }
 
-export interface CommercialLicense {
+export interface OperatorLicense {
   licenseApplicationId: string; // Firestore document ID
   operatorRef: DocumentReference<Operator> | string; // Reference to Operator document
   operatorData?: Partial<Operator>; // Denormalized operator data for quick display
   applicationType: "New" | "Renewal";
   previousLicenseNumber?: string;
-  status: "Draft" | "Submitted" | "PendingReview" | "RequiresInfo" | "AwaitingTest" | "TestScheduled" | "TestPassed" | "TestFailed" | "Approved" | "Rejected" | "Expired" | "Revoked";
+  status: "Draft" | "Submitted" | "PendingReview" | "RequiresInfo" | "AwaitingTest" | "TestScheduled" | "TestPassed" | "TestFailed" | "Approved" | "Rejected" | "Expired" | "Revoked" | "Suspended";
   submittedAt?: Timestamp | Date | string;
   approvedAt?: Timestamp | Date | string;
   issuedAt?: Timestamp | Date | string;
@@ -241,7 +240,7 @@ export interface CommercialLicense {
   paymentBy?: string; // Name of person who paid
   paymentDate?: Timestamp | Date | string;
   paymentAmount?: number;
-  attachedDocuments: CommercialLicenseAttachedDoc[]; // Array of document details
+  attachedDocuments: OperatorLicenseAttachedDoc[]; // Array of document details
   competencyTestRef?: DocumentReference<CompetencyTest> | string; // Ref to test result
   notes?: string; // General notes about the application
   createdByUserRef: DocumentReference<User> | string;
@@ -250,6 +249,11 @@ export interface CommercialLicense {
   lastUpdatedAt: Timestamp | Date | string;
   licenseClass?: string; // e.g., "Class 1 Dinghy", "Class 2 Banana Boat" - new field
   restrictions?: string; // e.g., "Daylight hours only" - new field
+  suspensionReason?: string | null;
+  suspensionStartDate?: Timestamp | Date | string | null;
+  suspensionEndDate?: Timestamp | Date | string | null;
+  revocationReason?: string | null;
+  revokedAt?: Timestamp | Date | string | null;
 }
 
 export interface CompetencyTestTemplateQuestion {
@@ -283,7 +287,7 @@ export interface CompetencyTestAnswer {
 
 export interface CompetencyTest {
   testId: string;
-  licenseApplicationRef: DocumentReference<CommercialLicense> | string;
+  licenseApplicationRef: DocumentReference<OperatorLicense> | string;
   operatorRef: DocumentReference<Operator> | string;
   testTemplateRef: DocumentReference<CompetencyTestTemplate> | string;
   testTemplateVersion?: number;
