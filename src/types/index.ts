@@ -347,3 +347,25 @@ export interface Infringement {
   lastUpdatedAt?: Timestamp | Date | string;
   lastUpdatedByRef?: string | DocumentReference<User>;
 }
+
+export interface CommercialLicense {
+  commercialLicenseId: string;
+  licenseNumber: string; // e.g., CL-0001
+  registrationRef: DocumentReference<Registration> | string;
+  registrationData?: { // Denormalized data
+    id: string;
+    scaRegoNo?: string;
+    craftMake?: string;
+    craftModel?: string;
+  };
+  licenseType: "Passenger" | "Fishing" | "Cargo" | "MixedUse" | "Other";
+  licenseTypeOtherDesc?: string;
+  status: "Draft" | "Submitted" | "Active" | "Expired" | "Suspended" | "Revoked";
+  issuedAt: Timestamp | Date | string;
+  expiryDate: Timestamp | Date | string;
+  conditions?: string;
+  lastUpdatedByRef: DocumentReference<User> | string;
+  lastUpdatedAt: Timestamp | Date | string;
+  createdByRef: DocumentReference<User> | string;
+  createdAt: Timestamp | Date | string;
+}

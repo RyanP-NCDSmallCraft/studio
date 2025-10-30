@@ -37,7 +37,7 @@ const navItems: NavItem[] = [
   { href: "/registrations", label: "Registrations", icon: Ship, roles: ["Admin", "Registrar", "Inspector", "Supervisor", "ReadOnly"] },
   { href: "/registrations/import", label: "Import Registrations", icon: UploadCloud, roles: ["Admin", "Registrar"] },
   { href: "/operator-licenses", label: "Operator Licenses", icon: Contact, roles: ["Admin", "Registrar", "Inspector", "Supervisor", "ReadOnly"] },
-  { href: "/commercial-licenses", label: "Commercial Licenses", icon: Briefcase, roles: ["Admin", "Registrar", "Supervisor"], disabled: true },
+  { href: "/commercial-licenses", label: "Commercial Licenses", icon: Briefcase, roles: ["Admin", "Registrar", "Supervisor"] },
   { href: "/inspections", label: "Inspections", icon: ClipboardList, roles: ["Admin", "Registrar", "Inspector", "Supervisor", "ReadOnly"] },
   { href: "/infringements", label: "Infringements", icon: AlertOctagon, roles: ["Admin", "Registrar", "Inspector", "Supervisor"] },
   { href: "/inspections/reports", label: "Reports", icon: FileSpreadsheet, roles: ["Admin", "Registrar"] },
