@@ -143,8 +143,6 @@ export default function SafetyCertificatePage() {
         } else {
           throw new Error("Associated registration not found.");
         }
-      } else if (currentInspection.registrationData) { // Fallback to denormalized if ref string not present
-         setRegistration(currentInspection.registrationData as Registration); // Assuming it matches Registration type
       } else {
          throw new Error("Registration reference missing or invalid in inspection data.");
       }
