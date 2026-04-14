@@ -1,0 +1,126 @@
+
+> nextn@0.1.1 build
+> next build
+
+   ▲ Next.js 15.3.8
+   - Environments: .env.local, .env
+
+   Creating an optimized production build ...
+ ⚠ Compiled with warnings in 5.0s
+
+./node_modules/@opentelemetry/sdk-node/build/src/TracerProviderWithEnvExporter.js
+Module not found: Can't resolve '@opentelemetry/exporter-jaeger' in '/Users/ryanpini/Library/CloudStorage/GoogleDrive-chair@ncdsmallcraft.com/My Drive/App/project/node_modules/@opentelemetry/sdk-node/build/src'
+
+Import trace for requested module:
+./node_modules/@opentelemetry/sdk-node/build/src/TracerProviderWithEnvExporter.js
+./node_modules/@opentelemetry/sdk-node/build/src/sdk.js
+./node_modules/@opentelemetry/sdk-node/build/src/index.js
+./node_modules/@genkit-ai/core/lib/tracing.js
+./node_modules/@genkit-ai/ai/lib/chat.js
+./node_modules/genkit/lib/common.js
+./node_modules/genkit/lib/index.mjs
+./src/ai/flows/suggest-checklist-items.ts
+
+./node_modules/handlebars/lib/index.js
+require.extensions is not supported by webpack. Use a loader instead.
+
+Import trace for requested module:
+./node_modules/handlebars/lib/index.js
+./node_modules/dotprompt/dist/index.js
+./node_modules/@genkit-ai/core/lib/registry.js
+./node_modules/genkit/lib/registry.js
+./node_modules/genkit/lib/genkit.js
+./node_modules/genkit/lib/index.mjs
+./src/ai/flows/suggest-checklist-items.ts
+
+./node_modules/handlebars/lib/index.js
+require.extensions is not supported by webpack. Use a loader instead.
+
+Import trace for requested module:
+./node_modules/handlebars/lib/index.js
+./node_modules/dotprompt/dist/index.js
+./node_modules/@genkit-ai/core/lib/registry.js
+./node_modules/genkit/lib/registry.js
+./node_modules/genkit/lib/genkit.js
+./node_modules/genkit/lib/index.mjs
+./src/ai/flows/suggest-checklist-items.ts
+
+./node_modules/handlebars/lib/index.js
+require.extensions is not supported by webpack. Use a loader instead.
+
+Import trace for requested module:
+./node_modules/handlebars/lib/index.js
+./node_modules/dotprompt/dist/index.js
+./node_modules/@genkit-ai/core/lib/registry.js
+./node_modules/genkit/lib/registry.js
+./node_modules/genkit/lib/genkit.js
+./node_modules/genkit/lib/index.mjs
+./src/ai/flows/suggest-checklist-items.ts
+
+ ✓ Compiled successfully in 7.0s
+   Skipping validation of types
+   Skipping linting
+   Collecting page data ...
+   Generating static pages (0/21) ...
+Firebase Client Init: Attempting to read NEXT_PUBLIC_FIREBASE_API_KEY. Value: AIzaSyC4fAqVemrsZjIHRPd91Nr92PE45Cwjbig
+Firebase Client Init: Attempting to read NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN. Value: regocraft.firebaseapp.com
+Firebase Client Init: Attempting to read NEXT_PUBLIC_FIREBASE_PROJECT_ID. Value: regocraft
+Firebase Client Init: Attempting to read NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET. Value: regocraft.firebasestorage.app
+Firebase Client Init: Attempting to read NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID. Value: 294249520639
+Firebase Client Init: Attempting to read NEXT_PUBLIC_FIREBASE_APP_ID. Value: 1:294249520639:web:22f06cda3775e125539bca
+Firebase Client Init: Constructed firebaseConfig object (values from process.env): {
+  "apiKey": "AIzaSyC4fAqVemrsZjIHRPd91Nr92PE45Cwjbig",
+  "authDomain": "regocraft.firebaseapp.com",
+  "projectId": "regocraft",
+  "storageBucket": "regocraft.firebasestorage.app",
+  "messagingSenderId": "294249520639",
+  "appId": "1:294249520639:web:22f06cda3775e125539bca"
+}
+   Generating static pages (5/21) 
+   Generating static pages (10/21) 
+   Generating static pages (15/21) 
+ ✓ Generating static pages (21/21)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                  Size  First Load JS
+┌ ○ /                                       667 B         255 kB
+├ ○ /_not-found                             990 B         103 kB
+├ ○ /admin/users                            13 kB         335 kB
+├ ○ /commercial-licenses                   4.1 kB         276 kB
+├ ○ /commercial-licenses/new              18.2 kB         355 kB
+├ ○ /dashboard                            5.95 kB         278 kB
+├ ○ /infringements                        5.36 kB         277 kB
+├ ƒ /infringements/[id]                   5.16 kB         277 kB
+├ ƒ /infringements/[id]/print             6.66 kB         277 kB
+├ ○ /infringements/new                    9.57 kB         345 kB
+├ ○ /inspections                          8.51 kB         306 kB
+├ ƒ /inspections/[id]                     9.11 kB         298 kB
+├ ƒ /inspections/[id]/conduct             5.16 kB         365 kB
+├ ƒ /inspections/[id]/edit-schedule       3.67 kB         364 kB
+├ ƒ /inspections/[id]/safety-certificate  7.56 kB         278 kB
+├ ○ /inspections/conduct-new              3.44 kB         363 kB
+├ ○ /inspections/new                      3.51 kB         363 kB
+├ ○ /inspections/reports                   4.9 kB         274 kB
+├ ○ /login                                5.41 kB         300 kB
+├ ○ /operator-licenses                    5.18 kB         277 kB
+├ ƒ /operator-licenses/[id]               10.1 kB         330 kB
+├ ƒ /operator-licenses/[id]/certificate   6.13 kB         276 kB
+├ ƒ /operator-licenses/[id]/edit          1.75 kB         337 kB
+├ ƒ /operator-licenses/[id]/test          8.22 kB         304 kB
+├ ○ /operator-licenses/new                  743 B         336 kB
+├ ○ /registrations                        8.78 kB         306 kB
+├ ƒ /registrations/[id]                   9.99 kB         302 kB
+├ ƒ /registrations/[id]/certificate       7.41 kB         277 kB
+├ ƒ /registrations/[id]/edit              2.17 kB         346 kB
+├ ○ /registrations/import                 11.7 kB         280 kB
+└ ○ /registrations/new                      572 B         345 kB
++ First Load JS shared by all              102 kB
+  ├ chunks/1684-ce33b9c317748aae.js       46.6 kB
+  ├ chunks/4bd1b696-30f2a8adff7f4a19.js   53.2 kB
+  └ other shared chunks (total)           1.93 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

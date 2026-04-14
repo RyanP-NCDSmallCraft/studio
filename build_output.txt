@@ -1,0 +1,130 @@
+
+> nextn@0.1.1 build
+> next build
+
+   ▲ Next.js 15.3.8
+   - Environments: .env
+
+   Creating an optimized production build ...
+ ⚠ Compiled with warnings in 2000ms
+
+./node_modules/@opentelemetry/sdk-node/build/src/TracerProviderWithEnvExporter.js
+Module not found: Can't resolve '@opentelemetry/exporter-jaeger' in '/Users/ryanpini/Library/CloudStorage/GoogleDrive-chair@ncdsmallcraft.com/My Drive/App/project/node_modules/@opentelemetry/sdk-node/build/src'
+
+Import trace for requested module:
+./node_modules/@opentelemetry/sdk-node/build/src/TracerProviderWithEnvExporter.js
+./node_modules/@opentelemetry/sdk-node/build/src/sdk.js
+./node_modules/@opentelemetry/sdk-node/build/src/index.js
+./node_modules/@genkit-ai/core/lib/tracing.js
+./node_modules/@genkit-ai/ai/lib/chat.js
+./node_modules/genkit/lib/common.js
+./node_modules/genkit/lib/index.mjs
+./src/ai/flows/suggest-checklist-items.ts
+
+./node_modules/handlebars/lib/index.js
+require.extensions is not supported by webpack. Use a loader instead.
+
+Import trace for requested module:
+./node_modules/handlebars/lib/index.js
+./node_modules/dotprompt/dist/index.js
+./node_modules/@genkit-ai/core/lib/registry.js
+./node_modules/genkit/lib/registry.js
+./node_modules/genkit/lib/genkit.js
+./node_modules/genkit/lib/index.mjs
+./src/ai/flows/suggest-checklist-items.ts
+
+./node_modules/handlebars/lib/index.js
+require.extensions is not supported by webpack. Use a loader instead.
+
+Import trace for requested module:
+./node_modules/handlebars/lib/index.js
+./node_modules/dotprompt/dist/index.js
+./node_modules/@genkit-ai/core/lib/registry.js
+./node_modules/genkit/lib/registry.js
+./node_modules/genkit/lib/genkit.js
+./node_modules/genkit/lib/index.mjs
+./src/ai/flows/suggest-checklist-items.ts
+
+./node_modules/handlebars/lib/index.js
+require.extensions is not supported by webpack. Use a loader instead.
+
+Import trace for requested module:
+./node_modules/handlebars/lib/index.js
+./node_modules/dotprompt/dist/index.js
+./node_modules/@genkit-ai/core/lib/registry.js
+./node_modules/genkit/lib/registry.js
+./node_modules/genkit/lib/genkit.js
+./node_modules/genkit/lib/index.mjs
+./src/ai/flows/suggest-checklist-items.ts
+
+ ✓ Compiled successfully in 3.0s
+   Skipping validation of types
+   Skipping linting
+   Collecting page data ...
+   Generating static pages (0/21) ...
+Firebase Client Init: Attempting to read NEXT_PUBLIC_FIREBASE_API_KEY. Value: undefined
+Firebase Client Init: Attempting to read NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN. Value: undefined
+Firebase Client Init: Attempting to read NEXT_PUBLIC_FIREBASE_PROJECT_ID. Value: undefined
+Firebase Client Init: Attempting to read NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET. Value: undefined
+Firebase Client Init: Attempting to read NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID. Value: undefined
+Firebase Client Init: Attempting to read NEXT_PUBLIC_FIREBASE_APP_ID. Value: undefined
+Firebase Client Init: Constructed firebaseConfig object (values from process.env): {}
+Firebase Client Init: Attempting to read NEXT_PUBLIC_FIREBASE_API_KEY. Value: undefined
+Firebase Client Init: Attempting to read NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN. Value: undefined
+Firebase Client Init: Attempting to read NEXT_PUBLIC_FIREBASE_PROJECT_ID. Value: undefined
+Firebase Client Init: Attempting to read NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET. Value: undefined
+Firebase Client Init: Attempting to read NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID. Value: undefined
+Firebase Client Init: Attempting to read NEXT_PUBLIC_FIREBASE_APP_ID. Value: undefined
+Firebase Client Init: Constructed firebaseConfig object (values from process.env): {}
+CRITICAL Firebase Client Init Error: NEXT_PUBLIC_FIREBASE_API_KEY or NEXT_PUBLIC_FIREBASE_PROJECT_ID is missing.
+    Values found during config construction:
+    NEXT_PUBLIC_FIREBASE_API_KEY: 'undefined'
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: 'undefined'
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: 'undefined'
+    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: 'undefined'
+    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: 'undefined'
+    NEXT_PUBLIC_FIREBASE_APP_ID: 'undefined'
+
+    IMMEDIATE ACTION REQUIRED:
+    1. **Firebase Studio Users:** Verify your project's environment variable configuration section WITHIN FIREBASE STUDIO. Ensure all NEXT_PUBLIC_ prefixed variables listed above are correctly set with your actual Firebase project credentials. Restart/redeploy your app in Studio after changes.
+    2. **Local .env.local Users:** Ensure a .env.local file exists in your project root (not inside /src), contains all NEXT_PUBLIC_ prefixed variables with correct values, and that your development server has been FULLY RESTARTED after any changes.
+    3. **Review Server/Build Logs:** Carefully check your server-side console logs (or Firebase Studio build/runtime logs) for the "Firebase Client Init: Attempting to read..." messages. These logs show the exact values (or 'undefined') being read by the application.
+CRITICAL Firebase Client Init Error: NEXT_PUBLIC_FIREBASE_API_KEY or NEXT_PUBLIC_FIREBASE_PROJECT_ID is missing.
+    Values found during config construction:
+    NEXT_PUBLIC_FIREBASE_API_KEY: 'undefined'
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: 'undefined'
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: 'undefined'
+    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: 'undefined'
+    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: 'undefined'
+    NEXT_PUBLIC_FIREBASE_APP_ID: 'undefined'
+
+    IMMEDIATE ACTION REQUIRED:
+    1. **Firebase Studio Users:** Verify your project's environment variable configuration section WITHIN FIREBASE STUDIO. Ensure all NEXT_PUBLIC_ prefixed variables listed above are correctly set with your actual Firebase project credentials. Restart/redeploy your app in Studio after changes.
+    2. **Local .env.local Users:** Ensure a .env.local file exists in your project root (not inside /src), contains all NEXT_PUBLIC_ prefixed variables with correct values, and that your development server has been FULLY RESTARTED after any changes.
+    3. **Review Server/Build Logs:** Carefully check your server-side console logs (or Firebase Studio build/runtime logs) for the "Firebase Client Init: Attempting to read..." messages. These logs show the exact values (or 'undefined') being read by the application.
+Error occurred prerendering page "/dashboard". Read more: https://nextjs.org/docs/messages/prerender-error
+Error: CRITICAL Firebase Client Init Error: NEXT_PUBLIC_FIREBASE_API_KEY or NEXT_PUBLIC_FIREBASE_PROJECT_ID is missing.
+    Values found during config construction:
+    NEXT_PUBLIC_FIREBASE_API_KEY: 'undefined'
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: 'undefined'
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: 'undefined'
+    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: 'undefined'
+    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: 'undefined'
+    NEXT_PUBLIC_FIREBASE_APP_ID: 'undefined'
+
+    IMMEDIATE ACTION REQUIRED:
+    1. **Firebase Studio Users:** Verify your project's environment variable configuration section WITHIN FIREBASE STUDIO. Ensure all NEXT_PUBLIC_ prefixed variables listed above are correctly set with your actual Firebase project credentials. Restart/redeploy your app in Studio after changes.
+    2. **Local .env.local Users:** Ensure a .env.local file exists in your project root (not inside /src), contains all NEXT_PUBLIC_ prefixed variables with correct values, and that your development server has been FULLY RESTARTED after any changes.
+    3. **Review Server/Build Logs:** Carefully check your server-side console logs (or Firebase Studio build/runtime logs) for the "Firebase Client Init: Attempting to read..." messages. These logs show the exact values (or 'undefined') being read by the application.
+    at 33784 (/Users/ryanpini/Library/CloudStorage/GoogleDrive-chair@ncdsmallcraft.com/My Drive/App/project/.next/server/chunks/121.js:13:293)
+    at t (/Users/ryanpini/Library/CloudStorage/GoogleDrive-chair@ncdsmallcraft.com/My Drive/App/project/.next/server/webpack-runtime.js:1:143)
+    at 97695 (/Users/ryanpini/Library/CloudStorage/GoogleDrive-chair@ncdsmallcraft.com/My Drive/App/project/.next/server/chunks/121.js:13:3089)
+    at t (/Users/ryanpini/Library/CloudStorage/GoogleDrive-chair@ncdsmallcraft.com/My Drive/App/project/.next/server/webpack-runtime.js:1:143)
+    at 33249 (/Users/ryanpini/Library/CloudStorage/GoogleDrive-chair@ncdsmallcraft.com/My Drive/App/project/.next/server/chunks/121.js:1:9050)
+    at Object.t [as require] (/Users/ryanpini/Library/CloudStorage/GoogleDrive-chair@ncdsmallcraft.com/My Drive/App/project/.next/server/webpack-runtime.js:1:143)
+    at require (/Users/ryanpini/Library/CloudStorage/GoogleDrive-chair@ncdsmallcraft.com/My Drive/App/project/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:141:9879)
+    at c (/Users/ryanpini/Library/CloudStorage/GoogleDrive-chair@ncdsmallcraft.com/My Drive/App/project/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:92:680)
+    at F (/Users/ryanpini/Library/CloudStorage/GoogleDrive-chair@ncdsmallcraft.com/My Drive/App/project/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:92:10783)
+    at X (/Users/ryanpini/Library/CloudStorage/GoogleDrive-chair@ncdsmallcraft.com/My Drive/App/project/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:92:13490)
+Export encountered an error on /dashboard/page: /dashboard, exiting the build.
+ ⨯ Next.js build worker exited with code: 1 and signal: null
