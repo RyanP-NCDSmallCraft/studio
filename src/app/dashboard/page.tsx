@@ -13,6 +13,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { collection, query, where, getCountFromServer, doc, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
+import { InspectionActivityChart } from "./components/InspectionActivityChart";
 
 export default function DashboardPage() {
   const { currentUser, isAdmin, isRegistrar, isInspector, isSupervisor, loading: authLoading } = useAuth();
@@ -225,56 +226,93 @@ export default function DashboardPage() {
         </Alert>
       )}
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {(isAdmin || isRegistrar || isSupervisor) && (
-          <>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Upcoming Expirations</CardTitle>
-              <CalendarClock className="h-5 w-5 text-amber-500" />
+      {/* Hero Stats Section */}
+      {(isAdmin || isRegistrar || isSupervisor) && (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-4">
+          <Card className="relative overflow-hidden bg-gradient-to-br from-green-500/20 to-green-500/5 hover:shadow-lg transition-all duration-300 border-green-500/20 group">
+            <div className="absolute -top-4 -right-4 p-4 opacity-10 group-hover:opacity-20 transition-opacity transform group-hover:scale-110 duration-300 pointer-events-none">
+              <CheckCircle className="w-32 h-32 text-green-500" />
+            </div>
+            <CardHeader className="pb-2 relative z-10">
+              <CardTitle className="text-sm font-bold text-green-700 dark:text-green-400 uppercase tracking-wider">Registered Craft</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{renderStat(expiringRegistrationsCount)}</div>
-              <p className="text-xs text-muted-foreground">Registrations expiring in the next 3 months</p>
-              <Button asChild size="sm" className="mt-4">
+            <CardContent className="relative z-10">
+              <div className="text-6xl font-black text-green-600 dark:text-green-500 mb-2 tracking-tighter">
+                {renderStat(approvedRegistrationsCount)}
+              </div>
+              <p className="text-xs font-medium text-green-600/70 dark:text-green-400/70 mb-4 h-8">Total craft with 'Approved' status</p>
+              <Button asChild size="sm" className="w-full bg-green-600 hover:bg-green-700 text-white border-none shadow-md">
                 <Link href="/registrations?status=Approved">View Approved <ArrowRight className="ml-2 h-4 w-4" /></Link>
               </Button>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Registered Craft</CardTitle>
-              <CheckCircle className="h-5 w-5 text-green-500" />
+          <Card className="relative overflow-hidden bg-gradient-to-br from-blue-500/20 to-blue-500/5 hover:shadow-lg transition-all duration-300 border-blue-500/20 group">
+            <div className="absolute -top-4 -right-4 p-4 opacity-10 group-hover:opacity-20 transition-opacity transform group-hover:scale-110 duration-300 pointer-events-none">
+              <Ship className="w-32 h-32 text-blue-500" />
+            </div>
+            <CardHeader className="pb-2 relative z-10">
+              <CardTitle className="text-sm font-bold text-blue-700 dark:text-blue-400 uppercase tracking-wider">Pending Registrations</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{renderStat(approvedRegistrationsCount)}</div>
-              <p className="text-xs text-muted-foreground">Total craft with 'Approved' status</p>
-              <Button asChild size="sm" className="mt-4">
-                <Link href="/registrations?status=Approved">View Approved <ArrowRight className="ml-2 h-4 w-4" /></Link>
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pending Registrations</CardTitle>
-              <Ship className="h-5 w-5 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{renderStat(pendingRegistrationsCount)}</div>
-              {/* Reverted description text */}
-              <p className="text-xs text-muted-foreground">Crafts awaiting review or info (Submitted, PendingReview, RequiresInfo)</p>
-              <Button asChild size="sm" className="mt-4">
-                {/* Reverted link */}
+            <CardContent className="relative z-10">
+              <div className="text-6xl font-black text-blue-600 dark:text-blue-500 mb-2 tracking-tighter">
+                {renderStat(pendingRegistrationsCount)}
+              </div>
+              <p className="text-xs font-medium text-blue-600/70 dark:text-blue-400/70 mb-4 h-8">Awaiting review or info</p>
+              <Button asChild size="sm" className="w-full bg-blue-600 hover:bg-blue-700 text-white border-none shadow-md">
                 <Link href="/registrations?status=Submitted,PendingReview,RequiresInfo">View Pending <ArrowRight className="ml-2 h-4 w-4" /></Link>
               </Button>
             </CardContent>
           </Card>
 
+          <Card className="relative overflow-hidden bg-gradient-to-br from-amber-500/20 to-amber-500/5 hover:shadow-lg transition-all duration-300 border-amber-500/20 group">
+            <div className="absolute -top-4 -right-4 p-4 opacity-10 group-hover:opacity-20 transition-opacity transform group-hover:scale-110 duration-300 pointer-events-none">
+              <CalendarClock className="w-32 h-32 text-amber-500" />
+            </div>
+            <CardHeader className="pb-2 relative z-10">
+              <CardTitle className="text-sm font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">Upcoming Expirations</CardTitle>
+            </CardHeader>
+            <CardContent className="relative z-10">
+              <div className="text-6xl font-black text-amber-600 dark:text-amber-500 mb-2 tracking-tighter">
+                {renderStat(expiringRegistrationsCount)}
+              </div>
+              <p className="text-xs font-medium text-amber-600/70 dark:text-amber-400/70 mb-4 h-8">Registrations expiring in 3 months</p>
+              <Button asChild size="sm" className="w-full bg-amber-600 hover:bg-amber-700 text-white border-none shadow-md">
+                <Link href="/registrations?status=Approved">View Renewals <ArrowRight className="ml-2 h-4 w-4" /></Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="relative overflow-hidden bg-gradient-to-br from-purple-500/20 to-purple-500/5 hover:shadow-lg transition-all duration-300 border-purple-500/20 group">
+            <div className="absolute -top-4 -right-4 p-4 opacity-10 group-hover:opacity-20 transition-opacity transform group-hover:scale-110 duration-300 pointer-events-none">
+              <ClipboardList className="w-32 h-32 text-purple-500" />
+            </div>
+            <CardHeader className="pb-2 relative z-10">
+              <CardTitle className="text-sm font-bold text-purple-700 dark:text-purple-400 uppercase tracking-wider">Pending Inspections</CardTitle>
+            </CardHeader>
+            <CardContent className="relative z-10">
+              <div className="text-6xl font-black text-purple-600 dark:text-purple-500 mb-2 tracking-tighter">
+                {renderStat(generalPendingInspectionsCount)}
+              </div>
+              <p className="text-xs font-medium text-purple-600/70 dark:text-purple-400/70 mb-4 h-8">Inspections needing action</p>
+               <Button asChild size="sm" className="w-full bg-purple-600 hover:bg-purple-700 text-white border-none shadow-md">
+                <Link href="/inspections?status=Scheduled,InProgress,PendingReview">View Inspections <ArrowRight className="ml-2 h-4 w-4" /></Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {(isAdmin || isSupervisor || isRegistrar) && <InspectionActivityChart />}
+
+      {/* Secondary Metrics Section */}
+      <h3 className="text-lg font-semibold tracking-tight mt-6 mb-2">Secondary Metrics & Tasks</h3>
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {(isAdmin || isRegistrar || isSupervisor) && (
+          <>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Draft Registrations (Alone)</CardTitle>
+              <CardTitle className="text-sm font-medium">Draft Registrations</CardTitle>
               <FileEdit className="h-5 w-5 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -329,33 +367,17 @@ export default function DashboardPage() {
           </Card>
           </>
         )}
-
-        {(isAdmin || isInspector || isSupervisor || isRegistrar) && ( 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pending Inspections (System-wide)</CardTitle>
-              <ClipboardList className="h-5 w-5 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{renderStat(generalPendingInspectionsCount)}</div>
-              <p className="text-xs text-muted-foreground">Inspections needing action or review (Scheduled, InProgress, PendingReview)</p>
-               <Button asChild size="sm" className="mt-4">
-                <Link href="/inspections?status=Scheduled,InProgress,PendingReview">View Inspections <ArrowRight className="ml-2 h-4 w-4" /></Link>
-              </Button>
-            </CardContent>
-          </Card>
-        )}
         
         {isInspector && (
-          <Card>
+          <Card className="border-purple-500/30 bg-purple-500/5">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Your Pending Inspections</CardTitle>
-              <ClipboardList className="h-5 w-5 text-muted-foreground" />
+              <CardTitle className="text-sm font-bold text-purple-700 dark:text-purple-400">Your Pending Inspections</CardTitle>
+              <ClipboardList className="h-6 w-6 text-purple-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{renderStat(userInspectionsCount)}</div>
-              <p className="text-xs text-muted-foreground">Inspections assigned to you (Scheduled, InProgress, PendingReview)</p>
-               <Button asChild size="sm" className="mt-4">
+              <div className="text-3xl font-bold text-purple-600">{renderStat(userInspectionsCount)}</div>
+              <p className="text-xs font-medium text-purple-600/80 mt-1">Inspections assigned to you</p>
+               <Button asChild size="sm" className="mt-4 w-full bg-purple-600 hover:bg-purple-700 text-white">
                 <Link href="/inspections?assignedTo=me&status=Scheduled,InProgress,PendingReview">View Your Inspections <ArrowRight className="ml-2 h-4 w-4" /></Link>
               </Button>
             </CardContent>
@@ -369,8 +391,8 @@ export default function DashboardPage() {
               <Users className="h-5 w-5 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <p className="text-xs text-muted-foreground">Manage system users and roles.</p>
-               <Button asChild variant="outline" size="sm" className="mt-4">
+              <p className="text-sm text-muted-foreground mt-4 mb-8">Manage system users and access roles.</p>
+               <Button asChild variant="outline" size="sm" className="w-full">
                   <Link href="/admin/users">Go to Users <ArrowRight className="ml-2 h-4 w-4" /></Link>
                 </Button>
             </CardContent>

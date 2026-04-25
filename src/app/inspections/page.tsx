@@ -5,11 +5,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
-import { PlusCircle, ClipboardList, Eye, Edit, Filter, Play, CheckSquare, CalendarDays, Loader2, AlertTriangle, PlayCircle } from "lucide-react";
+import { PlusCircle, ClipboardList, Eye, Edit, Filter, Play, CheckSquare, CalendarDays, Loader2, AlertTriangle, PlayCircle, CalendarClock, Clock, CheckCircle, XCircle } from "lucide-react";
 import type { Inspection, Registration, User } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { collection, getDocs, query, where, doc, getDoc, Timestamp, DocumentReference, type QueryConstraint } from 'firebase/firestore'; 
 import { db, auth as firebaseAuth } from '@/lib/firebase';
@@ -292,8 +292,78 @@ export default function InspectionListPage() {
   const canConductInspections = isInspector || canManageInspections;
   const activeFilterCount = statusFilter.length + (assignedToMeFilter ? 1 : 0);
 
+  const stats = useMemo(() => {
+    let scheduled = 0;
+    let inProgress = 0;
+    let passed = 0;
+    let failed = 0;
+
+    inspections.forEach(insp => {
+      if (insp.status === 'Scheduled') scheduled++;
+      if (insp.status === 'InProgress') inProgress++;
+      if (insp.status === 'Passed') passed++;
+      if (insp.status === 'Failed') failed++;
+    });
+
+    return { scheduled, inProgress, passed, failed };
+  }, [inspections]);
+
   return (
     <div className="space-y-6">
+      {/* High-Impact Stats */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-2">
+        <Card className="relative overflow-hidden bg-gradient-to-br from-blue-500/10 to-blue-500/5 hover:shadow-md transition-all duration-300 border-blue-500/20 group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <CalendarClock className="w-16 h-16 text-blue-500" />
+          </div>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-blue-700 dark:text-blue-400">Scheduled</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-blue-600 dark:text-blue-500">{stats.scheduled}</div>
+            <p className="text-xs font-medium text-blue-600/70 mt-1">Upcoming inspections</p>
+          </CardContent>
+        </Card>
+
+        <Card className="relative overflow-hidden bg-gradient-to-br from-amber-500/10 to-amber-500/5 hover:shadow-md transition-all duration-300 border-amber-500/20 group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <Clock className="w-16 h-16 text-amber-500" />
+          </div>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-amber-700 dark:text-amber-400">In Progress</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-amber-600 dark:text-amber-500">{stats.inProgress}</div>
+            <p className="text-xs font-medium text-amber-600/70 mt-1">Currently active</p>
+          </CardContent>
+        </Card>
+
+        <Card className="relative overflow-hidden bg-gradient-to-br from-green-500/10 to-green-500/5 hover:shadow-md transition-all duration-300 border-green-500/20 group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <CheckCircle className="w-16 h-16 text-green-500" />
+          </div>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-green-700 dark:text-green-400">Passed</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-green-600 dark:text-green-500">{stats.passed}</div>
+            <p className="text-xs font-medium text-green-600/70 mt-1">Compliance verified</p>
+          </CardContent>
+        </Card>
+
+        <Card className="relative overflow-hidden bg-gradient-to-br from-red-500/10 to-red-500/5 hover:shadow-md transition-all duration-300 border-red-500/20 group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <XCircle className="w-16 h-16 text-red-500" />
+          </div>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-red-700 dark:text-red-400">Failed</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-red-600 dark:text-red-500">{stats.failed}</div>
+            <p className="text-xs font-medium text-red-600/70 mt-1">Corrective action needed</p>
+          </CardContent>
+        </Card>
+      </div>
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
          <div className="flex items-center gap-2">
           <ClipboardList className="h-8 w-8 text-primary" />

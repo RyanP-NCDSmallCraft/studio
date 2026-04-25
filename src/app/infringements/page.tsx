@@ -6,11 +6,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
-import { PlusCircle, AlertOctagon, Eye, Filter, Search, Loader2, ArrowLeft } from "lucide-react";
+import { PlusCircle, AlertOctagon, Eye, Filter, Search, Loader2, ArrowLeft, CheckCircle, Clock, AlertTriangle, ShieldCheck } from "lucide-react";
 import type { Infringement } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { collection, getDocs, query, where, doc, getDoc, Timestamp, DocumentReference, QueryConstraint } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -182,9 +182,78 @@ export default function InfringementListPage() {
 
   const canCreate = isAdmin || isRegistrar || isInspector || isSupervisor;
 
+  const stats = useMemo(() => {
+    let activeNotices = 0;
+    let pending = 0;
+    let overdue = 0;
+    let resolved = 0;
+
+    filteredInfringements.forEach(inf => {
+      if (inf.status === 'Issued' || inf.status === 'Approved') activeNotices++;
+      if (inf.status === 'PendingReview') pending++;
+      if (inf.status === 'Overdue') overdue++;
+      if (inf.status === 'Paid' || inf.status === 'Voided') resolved++;
+    });
+
+    return { activeNotices, pending, overdue, resolved };
+  }, [filteredInfringements]);
 
   return (
     <div className="space-y-6">
+      {/* High-Impact Stats */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-2">
+        <Card className="relative overflow-hidden bg-gradient-to-br from-red-500/10 to-red-500/5 hover:shadow-md transition-all duration-300 border-red-500/20 group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <AlertOctagon className="w-16 h-16 text-red-500" />
+          </div>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-red-700 dark:text-red-400">Active Notices</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-red-600 dark:text-red-500">{stats.activeNotices}</div>
+            <p className="text-xs font-medium text-red-600/70 mt-1">Current open cases</p>
+          </CardContent>
+        </Card>
+
+        <Card className="relative overflow-hidden bg-gradient-to-br from-blue-500/10 to-blue-500/5 hover:shadow-md transition-all duration-300 border-blue-500/20 group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <Clock className="w-16 h-16 text-blue-500" />
+          </div>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-blue-700 dark:text-blue-400">Pending Review</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-blue-600 dark:text-blue-500">{stats.pending}</div>
+            <p className="text-xs font-medium text-blue-600/70 mt-1">Awaiting supervisor approval</p>
+          </CardContent>
+        </Card>
+
+        <Card className="relative overflow-hidden bg-gradient-to-br from-orange-500/10 to-orange-500/5 hover:shadow-md transition-all duration-300 border-orange-500/20 group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <AlertTriangle className="w-16 h-16 text-orange-500" />
+          </div>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-orange-700 dark:text-orange-400">Overdue</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-orange-600 dark:text-orange-500">{stats.overdue}</div>
+            <p className="text-xs font-medium text-orange-600/70 mt-1">Payment required</p>
+          </CardContent>
+        </Card>
+
+        <Card className="relative overflow-hidden bg-gradient-to-br from-green-500/10 to-green-500/5 hover:shadow-md transition-all duration-300 border-green-500/20 group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <ShieldCheck className="w-16 h-16 text-green-500" />
+          </div>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-green-700 dark:text-green-400">Resolved</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-green-600 dark:text-green-500">{stats.resolved}</div>
+            <p className="text-xs font-medium text-green-600/70 mt-1">Closed cases</p>
+          </CardContent>
+        </Card>
+      </div>
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
             <Button variant="outline" size="icon" onClick={() => router.back()} className="mr-1 h-9 w-9">

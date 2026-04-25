@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge }
 from "@/components/ui/badge";
 import Link from "next/link";
-import { PlusCircle, Ship, Eye, Edit, Filter, Search, Loader2, AlertTriangle } from "lucide-react";
+import { PlusCircle, Ship, Eye, Edit, Filter, Search, Loader2, AlertTriangle, MoreHorizontal, RefreshCw, CheckCircle, Clock, Ban, DollarSign, CalendarClock } from "lucide-react";
 import type { Registration, Owner, ProofOfOwnershipDoc, User } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
@@ -21,6 +21,7 @@ import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuCheckboxItem,
@@ -310,6 +311,31 @@ export default function RegistrationsPage() {
   };
 
 
+  const stats = useMemo(() => {
+    let approved = 0;
+    let pending = 0;
+    let expiringSoon = 0;
+    let suspendedOrRevoked = 0;
+
+    const futureDate = new Date();
+    futureDate.setMonth(futureDate.getMonth() + 3);
+    futureDate.setHours(23, 59, 59, 999);
+
+    filteredRegistrations.forEach(reg => {
+      if (reg.status === 'Approved') approved++;
+      if (reg.status === 'PendingReview' || reg.status === 'Submitted' || reg.status === 'RequiresInfo') pending++;
+      if (reg.status === 'Suspended' || reg.status === 'Revoked' || reg.status === 'Expired') suspendedOrRevoked++;
+      
+      if (reg.status === 'Approved' && reg.expiryDate) {
+         if (reg.expiryDate <= futureDate) {
+            expiringSoon++;
+         }
+      }
+    });
+
+    return { approved, pending, expiringSoon, suspendedOrRevoked };
+  }, [filteredRegistrations]);
+
   if (authLoading && isLoading) { 
     return (
       <div className="flex h-64 justify-center items-center py-10">
@@ -322,6 +348,62 @@ export default function RegistrationsPage() {
 
   return (
     <div className="space-y-6">
+      {/* High-Impact Stats */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-2">
+        <Card className="relative overflow-hidden bg-gradient-to-br from-green-500/10 to-green-500/5 hover:shadow-md transition-all duration-300 border-green-500/20 group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <CheckCircle className="w-16 h-16 text-green-500" />
+          </div>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-green-700 dark:text-green-400">Total Approved</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-green-600 dark:text-green-500">{stats.approved}</div>
+            <p className="text-xs font-medium text-green-600/70 mt-1">Current valid registrations</p>
+          </CardContent>
+        </Card>
+
+        <Card className="relative overflow-hidden bg-gradient-to-br from-blue-500/10 to-blue-500/5 hover:shadow-md transition-all duration-300 border-blue-500/20 group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <Clock className="w-16 h-16 text-blue-500" />
+          </div>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-blue-700 dark:text-blue-400">Pending Review</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-blue-600 dark:text-blue-500">{stats.pending}</div>
+            <p className="text-xs font-medium text-blue-600/70 mt-1">Awaiting processing</p>
+          </CardContent>
+        </Card>
+
+        <Card className="relative overflow-hidden bg-gradient-to-br from-amber-500/10 to-amber-500/5 hover:shadow-md transition-all duration-300 border-amber-500/20 group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <CalendarClock className="w-16 h-16 text-amber-500" />
+          </div>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-amber-700 dark:text-amber-400">Expiring Soon</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-amber-600 dark:text-amber-500">
+               {stats.expiringSoon}
+            </div>
+            <p className="text-xs font-medium text-amber-600/70 mt-1">Expiring within 3 months (or overdue)</p>
+          </CardContent>
+        </Card>
+
+        <Card className="relative overflow-hidden bg-gradient-to-br from-orange-500/10 to-orange-500/5 hover:shadow-md transition-all duration-300 border-orange-500/20 group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <Ban className="w-16 h-16 text-orange-500" />
+          </div>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-orange-700 dark:text-orange-400">Action Required</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-orange-600 dark:text-orange-500">{stats.suspendedOrRevoked}</div>
+            <p className="text-xs font-medium text-orange-600/70 mt-1">Suspended or Revoked</p>
+          </CardContent>
+        </Card>
+      </div>
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <Ship className="h-8 w-8 text-primary" />
@@ -442,14 +524,44 @@ export default function RegistrationsPage() {
                         : "N/A"}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" asChild title="View Details">
-                        <Link href={`/registrations/${reg.registrationId}`}><Eye className="h-4 w-4" /></Link>
-                      </Button>
-                      {canEditRegistration(reg.status) && (
-                        <Button variant="ghost" size="icon" asChild title="Edit Registration">
-                          <Link href={`/registrations/${reg.registrationId}/edit`}><Edit className="h-4 w-4" /></Link>
-                        </Button>
-                      )}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" className="h-8 w-8 p-0">
+                            <span className="sr-only">Open menu</span>
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuItem asChild>
+                            <Link href={`/registrations/${reg.registrationId}`} className="cursor-pointer flex items-center">
+                              <Eye className="mr-2 h-4 w-4" /> View Details
+                            </Link>
+                          </DropdownMenuItem>
+                          
+                          {canEditRegistration(reg.status) && (
+                            <DropdownMenuItem asChild>
+                              <Link href={`/registrations/${reg.registrationId}/edit`} className="cursor-pointer flex items-center">
+                                <Edit className="mr-2 h-4 w-4" /> Edit Registration
+                              </Link>
+                            </DropdownMenuItem>
+                          )}
+
+                          {(isAdmin || isRegistrar) && ["Approved", "Expired"].includes(reg.status) && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem asChild>
+                                <Link 
+                                  href={`/registrations/new?type=Renewal&previousScaRegoNo=${reg.scaRegoNo || reg.interimRegoNo || ''}`} 
+                                  className="cursor-pointer flex items-center"
+                                >
+                                  <RefreshCw className="mr-2 h-4 w-4" /> Renew Registration
+                                </Link>
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 )) : (

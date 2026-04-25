@@ -3,12 +3,14 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Registration, Owner, User } from "@/types"; 
-import { FileSpreadsheet, Printer, Sailboat, ArrowLeft, Loader2, AlertTriangle } from "lucide-react";
+import { FileSpreadsheet, Printer, Sailboat, ArrowLeft, Loader2, AlertTriangle, Download } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { formatFirebaseTimestamp } from '@/lib/utils';
 import { Separator } from "@/components/ui/separator";
 import Image from "next/image";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
 import { doc, getDoc, Timestamp, DocumentReference } from 'firebase/firestore'; 
 import { db } from '@/lib/firebase';
 import { isValid } from "date-fns";
@@ -52,6 +54,8 @@ export default function CertificatePreviewPage() {
   const [approvedByName, setApprovedByName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
+  const printRef = useRef<HTMLDivElement>(null);
 
   const fetchCertificateData = useCallback(async () => {
     if (!registrationId) {
@@ -183,13 +187,55 @@ export default function CertificatePreviewPage() {
     fetchCertificateData();
   }, [fetchCertificateData]);
 
-  useEffect(() => {
-    if (!loading && registration && !error) {
-      setTimeout(() => {
-        window.print();
-      }, 500);
+
+
+  const handleDownloadPdf = async () => {
+    if (!printRef.current) return;
+    try {
+      setDownloading(true);
+      // Wait slightly to ensure fonts/images are ready
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      const canvas = await html2canvas(printRef.current, { 
+        scale: 2, 
+        useCORS: true,
+        scrollY: -window.scrollY // Fixes issues where page scrolling cuts off bottom of canvas
+      });
+      
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "pt",
+        format: "a4",
+      });
+      
+      const a4Width = pdf.internal.pageSize.getWidth();
+      const a4Height = pdf.internal.pageSize.getHeight();
+      
+      const canvasRatio = canvas.height / canvas.width;
+      const a4Ratio = a4Height / a4Width;
+
+      let renderWidth = a4Width;
+      let renderHeight = a4Width * canvasRatio;
+
+      // If the rendered canvas is taller than an A4 page, scale it down to fit vertically
+      if (canvasRatio > a4Ratio) { 
+        renderHeight = a4Height;
+        renderWidth = a4Height / canvasRatio;
+      }
+      
+      // Center the image if it's scaled down
+      const xOffset = (a4Width - renderWidth) / 2;
+      const yOffset = (a4Height - renderHeight) / 2;
+
+      pdf.addImage(imgData, "PNG", xOffset, yOffset, renderWidth, renderHeight);
+      pdf.save(`Registration_Certificate_${registration?.scaRegoNo || registrationId}.pdf`);
+    } catch (e) {
+      console.error("Failed to generate PDF:", e);
+    } finally {
+      setDownloading(false);
     }
-  }, [loading, registration, error]);
+  };
 
   if (loading) {
     return (
@@ -230,96 +276,108 @@ export default function CertificatePreviewPage() {
           <FileSpreadsheet className="h-8 w-8 text-primary" />
           <h1 className="text-3xl font-bold">Certificate Preview</h1>
         </div>
-        <Button onClick={() => window.print()}>
-          <Printer className="mr-2 h-4 w-4" /> Print Certificate
+        <Button onClick={handleDownloadPdf} disabled={downloading}>
+          {downloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+          {downloading ? "Generating PDF..." : "Download PDF"}
         </Button>
       </div>
 
-      <Card className="shadow-lg p-6 md:p-10 print-area relative overflow-hidden" data-ai-hint="document certificate">
-        <Sailboat className="absolute inset-0 m-auto h-1/2 w-1/2 text-primary/5 opacity-20 z-0" />
+      <Card ref={printRef} className="shadow-lg print-area relative overflow-hidden bg-white border-[12px] border-primary border-double mx-auto max-w-4xl" data-ai-hint="document certificate">
+        {/* Large Watermark */}
+        <div className="absolute inset-0 z-0 flex items-center justify-center opacity-[0.05] pointer-events-none grayscale">
+            <div className="relative w-3/4 max-w-xl aspect-square">
+              <Image 
+                src="/logo-highres.png" 
+                alt="Watermark" 
+                fill
+                className="object-contain"
+              />
+            </div>
+        </div>
         
-        <div className="relative z-10">
-          <header className="text-center border-b-2 border-primary pb-4 mb-6">
-            <Image 
-              src="https://ncdsmallcraft.com/images/114/11667247/LOGO-NCDCRB-small.png" 
-              alt="NCDCRB Logo" 
-              width={64} 
-              height={64} 
-              className="mx-auto mb-2 h-16 w-16"
-            />
-            <h2 className="text-3xl md:text-4xl font-bold text-primary">Certificate of Registration</h2>
-            <p className="text-sm text-muted-foreground">Small Craft Act 2011</p>
-            <p className="text-sm text-muted-foreground">Amended Schedules SI 190/2016</p>
+        <div className="relative z-10 p-8 md:p-12 lg:p-16">
+          <header className="text-center pb-6 md:pb-8 relative">
+            <div className="relative mx-auto mb-6 h-28 w-28 drop-shadow-md">
+              <Image 
+                src="/logo-highres.png" 
+                alt="NCDCRB Logo" 
+                fill
+                className="object-contain"
+              />
+            </div>
+            <h2 className="text-4xl md:text-5xl tracking-tight font-serif font-bold text-primary mb-3 uppercase">Certificate of Registration</h2>
+            <p className="text-md font-semibold text-muted-foreground tracking-widest uppercase">Small Craft Act 2011</p>
+            <p className="text-sm text-muted-foreground uppercase tracking-wider">Amended Schedules SI 190/2016</p>
           </header>
 
-          <CardContent className="space-y-4 md:space-y-6 text-sm md:text-base">
-            <div className="text-center">
-              <p>This is to certify that the craft detailed below is registered:</p>
-              <p className="text-3xl md:text-4xl font-bold text-primary mt-1">{registration.scaRegoNo || "PENDING"}</p>
+          <CardContent className="space-y-8 md:space-y-10 text-sm md:text-base px-0 md:px-6">
+            <div className="text-center bg-primary/5 py-6 rounded-lg border border-primary/20 shadow-inner">
+              <p className="text-primary/70 font-medium mb-2 uppercase tracking-widest text-sm">Official Registration Number</p>
+              <p className="text-4xl md:text-5xl font-mono font-bold tracking-widest text-secondary-foreground">{registration.scaRegoNo || "PENDING"}</p>
             </div>
-
-            <Separator />
             
-            <div className="grid grid-cols-2 gap-x-6">
-                <div>
-                    <h3 className="font-semibold text-primary mb-1">Registered Owner(s):</h3>
-                    {registration.owners.map(o => <p key={o.ownerId}>{o.firstName} {o.surname} ({o.role})</p>)}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+                <div className="space-y-3">
+                    <h3 className="font-semibold text-primary uppercase text-xs tracking-wider border-b-2 border-primary/20 pb-2">Registered Owner(s)</h3>
+                    {registration.owners.map(o => (
+                        <p key={o.ownerId} className="font-medium text-xl">
+                            {o.firstName} {o.surname} <span className="text-sm text-muted-foreground font-normal ml-2">({o.role})</span>
+                        </p>
+                    ))}
                 </div>
-                <div>
-                    <h3 className="font-semibold text-primary mb-1">Owner Address:</h3>
-                    <p>{registration.owners[0]?.postalAddress}, {registration.owners[0]?.wardVillage}, {registration.owners[0]?.llg}, {registration.owners[0]?.townDistrict}</p>
-                </div>
-            </div>
-
-            <Separator />
-
-            <h3 className="text-xl font-semibold text-primary text-center">Craft Details</h3>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-2">
-                <div>
-                    <p><strong>Make:</strong> {registration.craftMake}</p>
-                    <p><strong>Year:</strong> {registration.craftYear}</p>
-                    <p><strong>Length:</strong> {registration.craftLength}{registration.lengthUnits}</p>
-                    <p><strong>Color:</strong> {registration.craftColor}</p>
-                    <p><strong>Propulsion:</strong> {registration.propulsionType} {registration.propulsionOtherDesc && `(${registration.propulsionOtherDesc})`}</p>
-                </div>
-                <div>
-                    <p><strong>Model:</strong> {registration.craftModel}</p>
-                    <p><strong>Hull ID (HIN):</strong> {registration.hullIdNumber}</p>
-                    <p><strong>Passenger Capacity:</strong> {registration.passengerCapacity || "N/A"}</p>
-                    <p><strong>Vessel Type:</strong> {registration.vesselType} {registration.vesselTypeOtherDesc && `(${registration.vesselTypeOtherDesc})`}</p>
-                    <p><strong>Use:</strong> {registration.craftUse} {registration.craftUseOtherDesc && `(${registration.craftUseOtherDesc})`}</p>
+                <div className="space-y-3">
+                    <h3 className="font-semibold text-primary uppercase text-xs tracking-wider border-b-2 border-primary/20 pb-2">Primary Address</h3>
+                    <p className="text-md leading-relaxed">{registration.owners[0]?.postalAddress}<br/>{registration.owners[0]?.wardVillage}, {registration.owners[0]?.llg}<br/>{registration.owners[0]?.townDistrict}</p>
                 </div>
             </div>
 
-            <Separator />
+            <div className="space-y-5">
+               <h3 className="text-center font-bold text-lg text-primary uppercase tracking-widest border-y-2 border-primary/20 py-3 bg-primary/5">Particulars of Craft</h3>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-3 px-2">
+                  <div className="space-y-3">
+                      <div className="flex justify-between border-b border-dotted border-gray-300 pb-1"><span className="text-muted-foreground">Make</span> <span className="font-medium text-right">{registration.craftMake}</span></div>
+                      <div className="flex justify-between border-b border-dotted border-gray-300 pb-1"><span className="text-muted-foreground">Year</span> <span className="font-medium text-right">{registration.craftYear}</span></div>
+                      <div className="flex justify-between border-b border-dotted border-gray-300 pb-1"><span className="text-muted-foreground">Primary Color</span> <span className="font-medium text-right">{registration.craftColor}</span></div>
+                      <div className="flex justify-between border-b border-dotted border-gray-300 pb-1"><span className="text-muted-foreground">Length Overall</span> <span className="font-medium text-right">{registration.craftLength} {registration.lengthUnits}</span></div>
+                      <div className="flex justify-between border-b border-dotted border-gray-300 pb-1"><span className="text-muted-foreground">Propulsion</span> <span className="font-medium text-right">{registration.propulsionType} {registration.propulsionOtherDesc && `(${registration.propulsionOtherDesc})`}</span></div>
+                  </div>
+                  <div className="space-y-3">
+                      <div className="flex justify-between border-b border-dotted border-gray-300 pb-1"><span className="text-muted-foreground">Model</span> <span className="font-medium text-right">{registration.craftModel}</span></div>
+                      <div className="flex justify-between border-b border-dotted border-gray-300 pb-1"><span className="text-muted-foreground">Hull ID (HIN)</span> <span className="font-medium text-right">{registration.hullIdNumber}</span></div>
+                      <div className="flex justify-between border-b border-dotted border-gray-300 pb-1"><span className="text-muted-foreground">Capacity</span> <span className="font-medium text-right">{registration.passengerCapacity || "N/A"} pax</span></div>
+                      <div className="flex justify-between border-b border-dotted border-gray-300 pb-1"><span className="text-muted-foreground">Vessel Type</span> <span className="font-medium text-right">{registration.vesselType} {registration.vesselTypeOtherDesc && `(${registration.vesselTypeOtherDesc})`}</span></div>
+                      <div className="flex justify-between border-b border-dotted border-gray-300 pb-1"><span className="text-muted-foreground">Permitted Use</span> <span className="font-medium text-right">{registration.craftUse} {registration.craftUseOtherDesc && `(${registration.craftUseOtherDesc})`}</span></div>
+                  </div>
+               </div>
+            </div>
 
-            <div className="grid grid-cols-2 gap-x-6 pt-2">
-                <div>
-                    <h3 className="font-semibold text-primary mb-1">Date of Issue:</h3>
-                    <p>{formatFirebaseTimestamp(registration.effectiveDate || registration.approvedAt, "MMMM dd, yyyy")}</p>
-                    {approvedByName && (
-                        <div className="mt-2">
-                            <h3 className="font-semibold text-primary mb-1">Approved By:</h3>
-                            <p>{approvedByName} (Registrar)</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 pt-8">
+                <div className="space-y-4">
+                    <h3 className="font-semibold text-primary uppercase text-xs tracking-wider border-b-2 border-primary/20 pb-2 mb-3">Effective Dates</h3>
+                    <p className="flex justify-between text-lg"><span className="text-muted-foreground">Date of Issue:</span> <span className="font-medium">{formatFirebaseTimestamp(registration.effectiveDate || registration.approvedAt, "dd MMM yyyy")}</span></p>
+                    <p className="flex justify-between text-lg"><span className="text-red-600/80 font-semibold uppercase tracking-wide">Valid Until:</span> <span className="text-red-700 font-bold">{formatFirebaseTimestamp(registration.expiryDate, "dd MMM yyyy")}</span></p>
+                </div>
+                <div className="text-center flex flex-col items-center justify-end mt-8 md:mt-0">
+                    <div className="w-56 h-20 border-b-2 border-primary mb-3 flex items-end justify-center pb-2 relative">
+                        {/* Placeholder for digital signature */}
+                        <span className="font-serif italic text-3xl text-blue-900/50">{approvedByName}</span>
+                        <div className="absolute -left-10 -bottom-4 w-16 h-16 rounded-full border-4 border-double border-red-500/20 text-red-500/20 flex flex-col justify-center items-center font-bold text-[8px] leading-tight rotate-12">
+                          <span className="bg-white/50 w-full text-center">NCDSCRB</span>
+                          <span className="bg-white/50 w-full text-center">OFFICIAL</span>
                         </div>
-                    )}
-                </div>
-                <div>
-                    <h3 className="font-semibold text-primary mb-1">Expiry Date:</h3>
-                    <p>{formatFirebaseTimestamp(registration.expiryDate, "MMMM dd, yyyy")}</p>
+                    </div>
+                    <p className="font-semibold uppercase tracking-wider text-sm mt-1">Registrar of Small Craft</p>
+                    <p className="text-xs text-muted-foreground font-medium">National Capital District</p>
                 </div>
             </div>
             
-            <div className="pt-4 text-center">
-                <p className="text-xs text-muted-foreground">Official Stamp / Signature Area</p>
-                <div className="h-24 w-24 border-2 border-dashed border-muted-foreground mx-auto mt-1 rounded-full flex items-center justify-center text-muted-foreground">
-                </div>
-            </div>
           </CardContent>
           
-          <footer className="mt-6 pt-4 border-t text-center text-xs text-muted-foreground">
-            <p>This certificate is issued under the authority of the National Capital District Small Craft Registration Board (NCDSCRB).</p>
-            <p>RegoCraft &copy; {new Date().getFullYear()}</p>
+          <footer className="mt-12 pt-6 border-t border-primary/20 text-center text-xs text-muted-foreground bg-slate-50 -mx-8 -md:-mx-12 lg:-mx-16 -mb-8 md:-mb-12 lg:-mb-16 p-8 relative overflow-hidden">
+             <div className="relative z-10">
+                <p className="mb-2 font-medium">This certificate is issued under the authority of the National Capital District Small Craft Registration Board (NCDSCRB).</p>
+                <p className="uppercase tracking-widest text-[10px]">Document Generated • {new Date().getFullYear()} • Valid when presented with original seal</p>
+             </div>
           </footer>
         </div>
       </Card>

@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
-import { PlusCircle, Briefcase, Eye, Filter, Search, Loader2 } from "lucide-react";
+import { PlusCircle, Briefcase, Eye, Filter, Search, Loader2, CheckCircle, Clock, CalendarClock, Ban } from "lucide-react";
 import type { CommercialLicense } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
@@ -46,8 +46,97 @@ export default function CommercialLicensesPage() {
     );
   }, [searchTerm, licenses]);
 
+  const stats = useMemo(() => {
+    let active = 0;
+    let pending = 0;
+    let expiringSoon = 0;
+    let invalid = 0;
+
+    const oneMonthFromNow = new Date();
+    oneMonthFromNow.setMonth(oneMonthFromNow.getMonth() + 1);
+    oneMonthFromNow.setHours(23, 59, 59, 999);
+    const now = new Date();
+
+    filteredLicenses.forEach(lic => {
+      if (lic.status === 'Active') active++;
+      if (lic.status === 'Submitted') pending++;
+      if (lic.status === 'Suspended' || lic.status === 'Revoked' || lic.status === 'Expired') invalid++;
+      
+      if (lic.status === 'Active' && lic.expiryDate) {
+        let expDate: Date;
+        if (lic.expiryDate instanceof Date) {
+            expDate = lic.expiryDate;
+        } else if (typeof lic.expiryDate === 'object' && lic.expiryDate !== null && 'seconds' in lic.expiryDate) {
+            expDate = new Date((lic.expiryDate as any).seconds * 1000);
+        } else {
+            expDate = new Date(lic.expiryDate as any);
+        }
+        
+        if (!isNaN(expDate.getTime()) && expDate <= oneMonthFromNow && expDate >= now) {
+          expiringSoon++;
+        }
+      }
+    });
+
+    return { active, pending, expiringSoon, invalid };
+  }, [filteredLicenses]);
+
   return (
     <div className="space-y-6">
+      {/* High-Impact Stats */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-2">
+        <Card className="relative overflow-hidden bg-gradient-to-br from-green-500/10 to-green-500/5 hover:shadow-md transition-all duration-300 border-green-500/20 group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <CheckCircle className="w-16 h-16 text-green-500" />
+          </div>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-green-700 dark:text-green-400">Total Active</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-green-600 dark:text-green-500">{stats.active}</div>
+            <p className="text-xs font-medium text-green-600/70 mt-1">Currently permitted</p>
+          </CardContent>
+        </Card>
+
+        <Card className="relative overflow-hidden bg-gradient-to-br from-blue-500/10 to-blue-500/5 hover:shadow-md transition-all duration-300 border-blue-500/20 group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <Clock className="w-16 h-16 text-blue-500" />
+          </div>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-blue-700 dark:text-blue-400">Pending Review</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-blue-600 dark:text-blue-500">{stats.pending}</div>
+            <p className="text-xs font-medium text-blue-600/70 mt-1">Awaiting approval</p>
+          </CardContent>
+        </Card>
+
+        <Card className="relative overflow-hidden bg-gradient-to-br from-amber-500/10 to-amber-500/5 hover:shadow-md transition-all duration-300 border-amber-500/20 group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <CalendarClock className="w-16 h-16 text-amber-500" />
+          </div>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-amber-700 dark:text-amber-400">Expiring Soon</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-amber-600 dark:text-amber-500">{stats.expiringSoon}</div>
+            <p className="text-xs font-medium text-amber-600/70 mt-1">Expiring within 1 month</p>
+          </CardContent>
+        </Card>
+
+        <Card className="relative overflow-hidden bg-gradient-to-br from-orange-500/10 to-orange-500/5 hover:shadow-md transition-all duration-300 border-orange-500/20 group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <Ban className="w-16 h-16 text-orange-500" />
+          </div>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-orange-700 dark:text-orange-400">Action Required</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-orange-600 dark:text-orange-500">{stats.invalid}</div>
+            <p className="text-xs font-medium text-orange-600/70 mt-1">Invalid or suspended</p>
+          </CardContent>
+        </Card>
+      </div>
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Briefcase className="h-8 w-8 text-primary" />
