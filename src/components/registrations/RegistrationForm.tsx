@@ -79,7 +79,7 @@ const registrationFormSchema = z.object({
   previousScaRegoNo: z.string().optional().default(""),
 
   owners: z.array(ownerSchema).min(1, "At least one owner is required").max(5, "Maximum of 5 owners"),
-  proofOfOwnershipDocs: z.array(proofOfOwnershipDocSchema).min(1, "At least one proof of ownership document is required"),
+  proofOfOwnershipDocs: z.array(proofOfOwnershipDocSchema).optional().default([]),
 
   craftMake: z.string().min(1, "Craft make is required"),
   craftModel: z.string().optional().default(""),
@@ -321,7 +321,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
   };
 
 
-  const onSubmit = async (data: RegistrationFormValues, submissionStatus: "Draft" | "Submitted") => {
+  const onSubmit = async (data: RegistrationFormValues, submissionStatus: "Draft" | "Submitted" | "Approved" | "Rejected") => {
     if (!currentUser?.userId) {
       toast({ title: "Authentication Error", description: "You must be logged in to create or edit a registration.", variant: "destructive" });
       return;
@@ -467,6 +467,20 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
     } finally {
       setImageUploadProgress(null);
     }
+  };
+
+  const onValidationError = (errors: any) => {
+    const errorFields = Object.keys(errors).join(", ");
+    // Only log the keys or a safe representation of the errors to avoid circular reference crashes in Next.js dev server
+    console.log("Validation Errors:", Object.keys(errors).reduce((acc, key) => {
+      acc[key] = errors[key]?.message || "Invalid";
+      return acc;
+    }, {} as Record<string, any>));
+    toast({
+      title: "Validation Error",
+      description: `Missing or invalid fields: ${errorFields}`,
+      variant: "destructive",
+    });
   };
 
   const watchPropulsionType = form.watch("propulsionType");
@@ -796,10 +810,10 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
 
 
         <CardFooter className="flex justify-end gap-4 p-0 pt-8">
-          <Button type="button" variant="outline" onClick={form.handleSubmit((data) => onSubmit(data, "Draft"))} disabled={form.formState.isSubmitting || imageUploadProgress !== null && imageUploadProgress < 100}>
+          <Button type="button" variant="outline" onClick={form.handleSubmit((data) => onSubmit(data, "Draft"), onValidationError)} disabled={form.formState.isSubmitting || imageUploadProgress !== null && imageUploadProgress < 100}>
             <Save className="mr-2 h-4 w-4" /> Save Draft
           </Button>
-          <Button type="button" onClick={form.handleSubmit((data) => onSubmit(data, "Submitted"))} disabled={form.formState.isSubmitting || imageUploadProgress !== null && imageUploadProgress < 100}>
+          <Button type="button" onClick={form.handleSubmit((data) => onSubmit(data, "Submitted"), onValidationError)} disabled={form.formState.isSubmitting || imageUploadProgress !== null && imageUploadProgress < 100}>
             <Send className="mr-2 h-4 w-4" /> {mode === 'create' ? 'Submit for Review' : 'Resubmit for Review'}
           </Button>
         </CardFooter>

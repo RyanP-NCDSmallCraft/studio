@@ -99,4 +99,4 @@ db = initializeFirestore(app, {
 
 storage = getStorage(app);
 
-export { app, auth, db, storage };
+export { app, auth, db, storage, firebaseConfig };

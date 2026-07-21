@@ -1,0 +1,10 @@
+Page / Section,Admin,Registrar,Supervisor,Inspector,ReadOnly
+Dashboard (/dashboard),Yes,Yes,Yes,Yes,Yes
+Registrations (/registrations),Yes,Yes,Yes,Yes,Yes
+Operator Licenses (/operator-licenses),Yes,Yes,Yes,Yes,Yes
+Inspections (/inspections),Yes,Yes,Yes,Yes,Yes
+Infringements (/infringements),Yes,Yes,Yes,Yes,No
+Commercial Licenses (/commercial-licenses),Yes,Yes,Yes,No,No
+Import Registrations (/registrations/import),Yes,Yes,No,No,No
+Reports (/inspections/reports),Yes,Yes,No,No,No
+User Management (/admin/users),Yes,No,Yes,No,No

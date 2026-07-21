@@ -23,7 +23,7 @@ import type { Inspection, ChecklistItemResult as ChecklistItemResultType, Checkl
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
-import { Save, Send, Ship, User as UserIcon, CalendarDays, Trash2, PlusCircle, Lightbulb, Loader2, ImageUp, Settings, Play, Info, ChevronsUpDown, Check, X } from "lucide-react";
+import { Save, Send, Ship, User as UserIcon, CalendarDays, Trash2, PlusCircle, Lightbulb, Loader2, ImageUp, Settings, Play, Info, ChevronsUpDown, Check, X, ChevronLeft, ChevronRight, CheckCircle } from "lucide-react";
 import React, { useState, useEffect, useRef } from "react";
 import { Timestamp, addDoc, updateDoc, collection, getDocs, doc, query, where, type DocumentReference } from "firebase/firestore";
 import { db, storage } from "@/lib/firebase";
@@ -45,9 +45,9 @@ const checklistItemSchema = z.object({
   itemId: z.string(),
   itemDescription: z.string().min(1, "Description is required"),
   category: z.string().optional(),
-  result: z.enum(["Yes", "No", "N/A"]),
+  result: z.enum(["Yes", "No", "N/A", "Pending"]),
   comments: z.string().optional(),
-  photoUrl: z.string().url().optional(),
+  photoUrl: z.string().optional(),
 });
 
 const inspectionFormSchema = z.object({
@@ -136,7 +136,7 @@ const ncdChecklistTemplate: ChecklistTemplate = {
   isActive: true,
   createdAt: Timestamp.now(),
   createdByRef: {} as any, 
-  items: ncdChecklistTemplateItems.map(item => ({ ...item, result: "N/A", comments: "" })) as any,
+  items: ncdChecklistTemplateItems.map(item => ({ ...item, result: "Pending", comments: "" })) as any,
 };
 
 interface InspectionFormProps {
@@ -149,13 +149,14 @@ interface InspectionFormProps {
 
 interface RegistrationSelectItem {
   value: string; // Firestore document ID
-  label: string; // Concatenated string for display e.g., "NCD-123 / Yamaha WaveRunner"
+  label: string;
   scaRegoNo?: string;
   craftDetails?: string;
-  craftType?: string; // To help with dynamic checklist items later
+  craftType?: string;
   craftMake?: string;
   craftModel?: string;
   craftYear?: number;
+  craftUse?: string; // e.g. "Passenger" | "Fishing" | "Cargo" — used to auto-detect commercial
 }
 
 export function InspectionForm({ mode, usageContext, inspectionId, existingInspectionData, prefilledRegistrationId }: InspectionFormProps) {
@@ -171,6 +172,14 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
   const [loadingInspectors, setLoadingInspectors] = useState(false);
   const fileInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [uploadProgress, setUploadProgress] = useState<Record<number, number | null>>({});
+
+  // Stepper state for conduct flow
+  type ConductStep = 'A' | 'B' | 'C' | 'extras' | 'assessment';
+  const initialStep = (existingInspectionData?.lastConductStep as ConductStep | undefined) || 'A';
+  const [currentConductStep, setCurrentConductStep] = useState<ConductStep>(initialStep);
+  const [showCommercial, setShowCommercial] = useState(false);
+  const [showOutOfSight, setShowOutOfSight] = useState(false);
+  const [showNightTravel, setShowNightTravel] = useState(false);
 
   const canAssignInspector = isAdmin || isRegistrar || isSupervisor;
 
@@ -196,7 +205,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
       inspectionDate: existingInspectionData.inspectionDate
         ? (existingInspectionData.inspectionDate instanceof Timestamp ? existingInspectionData.inspectionDate.toDate() : new Date(existingInspectionData.inspectionDate as any))
         : (usageContext === 'conduct' ? new Date() : undefined),
-      checklistItems: (existingInspectionData.checklistItems || []).map(item => ({...item, category: item.category || ncdChecklistTemplate.items.find(t => t.itemId === item.itemId)?.category, result: item.result || "N/A" })),
+      checklistItems: (existingInspectionData.checklistItems || []).map(item => ({...item, category: item.category || ncdChecklistTemplate.items.find(t => t.itemId === item.itemId)?.category, result: item.result || "Pending" })),
       findings: existingInspectionData.findings || "",
       correctiveActions: existingInspectionData.correctiveActions || "",
       followUpRequired: existingInspectionData.followUpRequired || false,
@@ -228,6 +237,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
   const watchInspectionType = form.watch("inspectionType");
   const watchInspectionDate = form.watch("inspectionDate");
   const watchRegistrationRefId = form.watch("registrationRefId");
+  const watchChecklistItems = form.watch("checklistItems");
 
 
   useEffect(() => {
@@ -238,7 +248,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
             itemId: templateItem.itemId,
             itemDescription: templateItem.itemDescription,
             category: templateItem.category,
-            result: "N/A" as "Yes" | "No" | "N/A", 
+            result: "Pending" as "Yes" | "No" | "N/A" | "Pending", 
             comments: "",
             photoUrl: "",
         }));
@@ -247,9 +257,20 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     }
 }, [mode, usageContext, existingInspectionData, form, fields.length]); 
 
+  // Auto-detect commercial craft from linked registration's craftUse
+  useEffect(() => {
+    if (usageContext !== 'conduct') return;
+    const commercialUseTypes = ['Passenger', 'Fishing', 'Cargo'];
+    const linked = registrationsForSelect.find(r => r.value === watchRegistrationRefId);
+    if (linked?.craftUse && commercialUseTypes.includes(linked.craftUse)) {
+      setShowCommercial(true);
+    }
+  }, [watchRegistrationRefId, registrationsForSelect, usageContext]);
+
 
   useEffect(() => {
     const fetchRegs = async () => {
+
       if (!db) {
         console.error("InspectionForm: Firestore db instance is not available for fetching registrations.");
         return;
@@ -268,6 +289,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
             craftMake: data.craftMake,
             craftModel: data.craftModel,
             craftYear: data.craftYear,
+            craftUse: data.craftUse,
           };
         });
         setRegistrationsForSelect(regs);
@@ -477,6 +499,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
         overallResult: data.overallResult || null,
         followUpRequired: data.followUpRequired,
         checklistItems: data.checklistItems || [],
+        lastConductStep: currentConductStep, // persist step position
       } as any;
 
 
@@ -487,6 +510,11 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
       }
       if (!data.findings || !data.overallResult) {
         toast({ title: "Missing Information", description: "Please provide Overall Findings and an Overall Result to submit for review.", variant: "destructive"});
+        return;
+      }
+      const hasPendingItems = data.checklistItems?.some(item => item.result === "Pending" || !item.result);
+      if (hasPendingItems) {
+        toast({ title: "Incomplete Checklist", description: "Please answer all checklist items (Yes, No, or N/A) before submitting.", variant: "destructive"});
         return;
       }
       finalStatus = "PendingReview";
@@ -500,6 +528,7 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
         followUpRequired: data.followUpRequired,
         checklistItems: data.checklistItems || [],
         completedAt: Timestamp.now(),
+        lastConductStep: 'A', // reset step on final submission
       } as any;
     } else {
       toast({ title: "Error", description: "Invalid action.", variant: "destructive" });
@@ -542,6 +571,117 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
     if (foundInspector) return foundInspector.displayName;
     if (existingInspectionData?.inspectorData?.id === inspectorId) return existingInspectionData.inspectorData.displayName;
     return inspectorId; // Fallback to ID if name not found
+  };
+
+  // --- Stepper helpers ---
+  const getStepProgress = (stepKey: string) => {
+    const currentItems = watchChecklistItems && watchChecklistItems.length > 0 ? watchChecklistItems : fields;
+    const stepItems = currentItems.filter(f => {
+      const cat = (f as any).category as string | undefined;
+      if (stepKey === 'A') return cat?.startsWith('A.');
+      if (stepKey === 'B') return cat?.startsWith('B.');
+      if (stepKey === 'C') return cat?.startsWith('C.');
+      if (stepKey === 'extras') return cat === 'AI Suggested' || cat === 'Custom';
+      return false;
+    });
+    const answered = stepItems.filter(f => f.result !== 'Pending' && !!f.result).length;
+    return { total: stepItems.length, answered };
+  };
+
+  // Returns true when a step is before the current one and still has unanswered items
+  const hasStepWarning = (stepKey: string, currentIdx: number, stepIdx: number) => {
+    if (stepKey === 'assessment') return false;
+    if (stepIdx >= currentIdx) return false; // only flag steps already passed
+    const prog = getStepProgress(stepKey);
+    return prog.total > 0 && prog.answered < prog.total;
+  };
+
+  const conductStepsList: { key: string; label: string; sublabel: string }[] = [
+    { key: 'A', label: 'Schedule A', sublabel: 'Marking & Load Lines' },
+    { key: 'B', label: 'Schedule B', sublabel: 'Safety Standards' },
+    { key: 'C', label: 'Schedule C', sublabel: 'Construction' },
+    { key: 'extras', label: 'Additional', sublabel: 'Custom & AI Items' },
+    { key: 'assessment', label: 'Assessment', sublabel: 'Overall Result' },
+  ];
+
+  const conductStepOrder: string[] = ['A', 'B', 'C', 'extras', 'assessment'];
+
+  const handleStepNext = () => {
+    const idx = conductStepOrder.indexOf(currentConductStep);
+    if (idx < conductStepOrder.length - 1) setCurrentConductStep(conductStepOrder[idx + 1] as any);
+  };
+  const handleStepBack = () => {
+    const idx = conductStepOrder.indexOf(currentConductStep);
+    if (idx > 0) setCurrentConductStep(conductStepOrder[idx - 1] as any);
+  };
+
+  // Reusable checklist item card renderer
+  const renderChecklistItem = (item: typeof fields[number] & { originalIndex: number }) => {
+    const originalIndex = item.originalIndex;
+    return (
+      <Card key={item.id} className="p-4 bg-card shadow-sm">
+        <p className="font-medium mb-3 text-sm leading-snug">{item.itemDescription}</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3 items-start">
+          <FormField
+            control={form.control}
+            name={`checklistItems.${originalIndex}.result`}
+            render={({ field: resultField }) => (
+              <FormItem className="space-y-1">
+                <FormLabel className="text-xs font-semibold">Result *</FormLabel>
+                <FormControl>
+                  <RadioGroup onValueChange={resultField.onChange} defaultValue={resultField.value} className="flex space-x-4 items-center pt-1">
+                    {(["Yes", "No", "N/A"] as const).map((val) => (
+                      <FormItem key={`${item.itemId}-${originalIndex}-${val}`} className="flex items-center space-x-2 space-y-0">
+                        <FormControl><RadioGroupItem value={val} id={`${item.itemId}-${originalIndex}-${val.toLowerCase()}`} className="h-5 w-5" /></FormControl>
+                        <Label htmlFor={`${item.itemId}-${originalIndex}-${val.toLowerCase()}`} className={`font-medium text-sm cursor-pointer ${val === "Yes" ? "text-green-600" : val === "No" ? "text-red-600" : "text-muted-foreground"}`}>{val}</Label>
+                      </FormItem>
+                    ))}
+                  </RadioGroup>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name={`checklistItems.${originalIndex}.comments`}
+            render={({ field: commentsField }) => (
+              <FormItem>
+                <FormLabel className="text-xs font-semibold">Notes</FormLabel>
+                <FormControl><Textarea placeholder="Optional comments" {...commentsField} rows={1} className="text-sm" /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+        <div className="mt-3 flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <Button type="button" size="sm" variant="outline" className="text-xs h-8" onClick={() => fileInputRefs.current[originalIndex]?.click()}>
+              <ImageUp className="mr-1 h-3 w-3" /> Upload Photo
+            </Button>
+            <Input type="file" accept="image/*" className="hidden" ref={el => fileInputRefs.current[originalIndex] = el} onChange={(e) => handleChecklistPhotoUpload(e, originalIndex)} />
+            {uploadProgress[originalIndex] !== null && uploadProgress[originalIndex] !== undefined && uploadProgress[originalIndex]! < 100 && (
+              <Progress value={uploadProgress[originalIndex]} className="w-24 h-1.5" />
+            )}
+            {item.photoUrl && (
+              <div className="relative group">
+                <a href={item.photoUrl} target="_blank" rel="noopener noreferrer">
+                  <Image src={item.photoUrl} alt={`Photo for ${item.itemDescription}`} width={40} height={40} className="h-10 w-10 object-cover rounded-md border" />
+                </a>
+                <Button type="button" variant="destructive" size="icon" className="absolute -top-2 -right-2 h-5 w-5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => update(originalIndex, { ...item, photoUrl: undefined })}>
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            )}
+          </div>
+          {item.itemId?.startsWith("custom_") && (
+            <Button type="button" variant="ghost" size="sm" onClick={() => remove(originalIndex)} className="text-destructive hover:text-destructive-foreground hover:bg-destructive text-xs h-8">
+              <Trash2 className="mr-1 h-3 w-3" /> Remove
+            </Button>
+          )}
+        </div>
+      </Card>
+    );
   };
 
   const selectedRegistrationDisplay = registrationsForSelect.find(
@@ -740,138 +880,262 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
 
         {usageContext === "conduct" && (
           <>
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle>Checklist</CardTitle>
-                    <div className="flex gap-2">
-                        <Button type="button" variant="outline" size="sm" onClick={handleAISuggestions} disabled={isAISuggesting || !form.getValues("registrationRefId")}>
-                            {isAISuggesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Lightbulb className="mr-2 h-4 w-4" />}
-                            Suggest Items (AI)
-                        </Button>
-                        <Button type="button" variant="outline" size="sm" onClick={() => append({ itemId: `custom_${Date.now()}`, itemDescription: "New Custom Item", category: "Custom", result: "N/A", comments: "" })}>
-                            <PlusCircle className="mr-2 h-4 w-4" /> Add Custom Item
-                        </Button>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    {mainCategoriesOrder.map(mainCatKey => {
-                        const itemsInCategory = groupedChecklistItems[mainCatKey];
-                        if (!itemsInCategory || itemsInCategory.length === 0) return null;
-                        
-                        return (
-                            <Card key={mainCatKey} className="mt-4 mb-2 shadow-md">
-                            <CardHeader className="py-3 px-4 bg-muted/30 rounded-t-md border-b">
-                                <CardTitle className="text-base font-semibold">{categoryTitles[mainCatKey as keyof typeof categoryTitles]}</CardTitle>
-                                {mainCatKey === 'B' && <CardDescription className="text-xs">Note: Some items depend on craft type/operation.</CardDescription>}
-                                {mainCatKey === 'C' && <CardDescription className="text-xs">Note: Many construction standards require detailed assessment or certification. This focuses on observable aspects.</CardDescription>}
-                            </CardHeader>
-                            <CardContent className="space-y-2 p-3">
-                                {itemsInCategory.map((item) => {
-                                const originalIndex = item.originalIndex;
-                                return (
-                                    <Card key={item.id} className="p-3 bg-card shadow-sm">
-                                      <p className="font-medium mb-2 text-sm">{item.itemDescription}</p>
-                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 items-start">
-                                        <FormField
-                                          control={form.control}
-                                          name={`checklistItems.${originalIndex}.result`}
-                                          render={({ field: resultField }) => (
-                                            <FormItem className="space-y-1">
-                                              <FormLabel className="text-xs">Result *</FormLabel>
-                                              <FormControl>
-                                                <RadioGroup onValueChange={resultField.onChange} defaultValue={resultField.value} className="flex space-x-3 items-center pt-1">
-                                                  {(["Yes", "No", "N/A"] as const).map((val) => (
-                                                    <FormItem key={`${item.itemId}-${originalIndex}-${val}`} className="flex items-center space-x-1.5 space-y-0">
-                                                      <FormControl><RadioGroupItem value={val} id={`${item.itemId}-${originalIndex}-${val.toLowerCase()}`} /></FormControl>
-                                                      <Label htmlFor={`${item.itemId}-${originalIndex}-${val.toLowerCase()}`} className={`font-normal text-xs ${val === "Yes" ? "text-green-600" : val === "No" ? "text-red-600" : "text-muted-foreground"}`}>{val}</Label>
-                                                    </FormItem>
-                                                  ))}
-                                                </RadioGroup>
-                                              </FormControl>
-                                              <FormMessage />
-                                            </FormItem>
-                                          )}
-                                        />
-                                        <FormField
-                                          control={form.control}
-                                          name={`checklistItems.${originalIndex}.comments`}
-                                          render={({ field: commentsField }) => (
-                                            <FormItem>
-                                              <FormLabel className="text-xs">Notes / Photo Ref.</FormLabel>
-                                              <FormControl><Textarea placeholder="Optional comments" {...commentsField} rows={1} className="text-sm" /></FormControl>
-                                              <FormMessage />
-                                            </FormItem>
-                                          )}
-                                        />
-                                      </div>
-                                      <div className="mt-2 flex justify-between items-center">
-                                        <div className="flex items-center gap-2">
-                                          <Button type="button" size="xs" variant="outline" className="text-xs py-1 px-2 h-auto" onClick={() => fileInputRefs.current[originalIndex]?.click()}>
-                                            <ImageUp className="mr-1 h-3 w-3" /> Upload Photo
-                                          </Button>
-                                          <Input type="file" accept="image/*" className="hidden" ref={el => fileInputRefs.current[originalIndex] = el} onChange={(e) => handleChecklistPhotoUpload(e, originalIndex)} />
-                                          {uploadProgress[originalIndex] !== null && uploadProgress[originalIndex] !== undefined && uploadProgress[originalIndex] < 100 && (
-                                            <Progress value={uploadProgress[originalIndex]} className="w-24 h-1" />
-                                          )}
-                                          {item.photoUrl && (
-                                            <div className="relative group">
-                                              <a href={item.photoUrl} target="_blank" rel="noopener noreferrer">
-                                                <Image src={item.photoUrl} alt={`Photo for ${item.itemDescription}`} width={40} height={40} className="h-10 w-10 object-cover rounded-md border" />
-                                              </a>
-                                              <Button
-                                                type="button"
-                                                variant="destructive"
-                                                size="icon"
-                                                className="absolute -top-2 -right-2 h-5 w-5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                                                onClick={() => update(originalIndex, { ...item, photoUrl: undefined })}
-                                              >
-                                                <X className="h-3 w-3" />
-                                              </Button>
-                                            </div>
-                                          )}
-                                        </div>
-                                        {item.itemId?.startsWith("custom_") && (
-                                          <Button type="button" variant="ghost" size="xs" onClick={() => remove(originalIndex)} className="text-destructive hover:text-destructive-foreground hover:bg-destructive text-xs py-1 px-2 h-auto">
-                                            <Trash2 className="mr-1 h-3 w-3" /> Remove
-                                          </Button>
-                                        )}
-                                      </div>
-                                    </Card>
-                                );
-                                })}
-                            </CardContent>
-                            </Card>
-                        );
-                        })}
-                    {fields.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No checklist items. Add items manually, use AI suggestions, or select an inspection type that populates a template.</p>}
-                </CardContent>
-            </Card>
+            {/* ── Stepper Nav ── */}
+            <nav aria-label="Inspection steps" className="overflow-x-auto pb-1">
+              <ol className="flex items-center gap-1 min-w-max">
+                {conductStepsList.map((step, idx) => {
+                  const isActive = currentConductStep === step.key;
+                  const stepIdx = conductStepOrder.indexOf(currentConductStep);
+                  const isBefore = stepIdx > idx;
+                  const hasWarning = hasStepWarning(step.key, stepIdx, idx);
+                  const prog = step.key !== 'assessment' ? getStepProgress(step.key) : null;
+                  return (
+                    <React.Fragment key={step.key}>
+                      <li className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setCurrentConductStep(step.key as any)}
+                          className={cn(
+                            "flex flex-col items-center px-3 py-2 rounded-xl border-2 transition-all duration-200 min-w-[80px] text-center gap-0.5",
+                            isActive
+                              ? "bg-primary text-primary-foreground border-primary shadow-lg scale-[1.04]"
+                              : hasWarning
+                              ? "bg-red-50 text-red-700 border-red-400 dark:bg-red-950/60 dark:text-red-300 dark:border-red-600"
+                              : isBefore
+                              ? "bg-green-50 text-green-700 border-green-400 dark:bg-green-950/60 dark:text-green-300 dark:border-green-600"
+                              : "bg-card text-muted-foreground border-muted hover:border-muted-foreground/40"
+                          )}
+                        >
+                          {isBefore && !hasWarning
+                            ? <CheckCircle className="h-4 w-4 text-green-500" />
+                            : <span className={cn("text-xs font-bold", isActive && "text-primary-foreground", hasWarning && "text-red-600 dark:text-red-400")}>{idx + 1}</span>
+                          }
+                          <span className="text-xs font-semibold leading-tight">{step.label}</span>
+                          <span className="text-[10px] leading-tight opacity-70">{step.sublabel}</span>
+                          {prog && prog.total > 0 && (
+                            <span className={cn(
+                              "text-[10px] font-medium px-1.5 rounded-full mt-0.5",
+                              prog.answered === prog.total
+                                ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
+                                : hasWarning
+                                ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
+                                : isActive ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"
+                            )}>
+                              {prog.answered}/{prog.total}
+                            </span>
+                          )}
+                        </button>
+                        {hasWarning && (
+                           <div className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full h-4 w-4 flex items-center justify-center text-[10px] font-bold shadow-sm">
+                             !
+                           </div>
+                        )}
+                      </li>
+                      {idx < conductStepsList.length - 1 && (
+                        <li aria-hidden className="text-muted-foreground flex-shrink-0">
+                          <ChevronRight className="h-4 w-4" />
+                        </li>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </ol>
+            </nav>
 
-            <Card>
-              <CardHeader><CardTitle>Overall Assessment</CardTitle></CardHeader>
-              <CardContent className="grid grid-cols-1 gap-6">
-                <FormField control={form.control} name="findings" render={({ field }) => (<FormItem><FormLabel>Inspector Summary / Recommendations *</FormLabel><FormControl><Textarea placeholder="Summarize inspection findings and any recommendations" {...field} rows={4} /></FormControl><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name="correctiveActions" render={({ field }) => (<FormItem><FormLabel>Corrective Actions Required (if any)</FormLabel><FormControl><Textarea placeholder="Detail any corrective actions needed based on 'No' answers or critical findings" {...field} rows={3} /></FormControl><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name="followUpRequired" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>Follow-up Inspection Required?</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>)} />
-                <FormField control={form.control} name="overallResult" render={({ field }) => (
+            {/* ── Schedule A ── */}
+            {currentConductStep === 'A' && (
+              <Card className="shadow-md">
+                <CardHeader className="border-b bg-muted/20 pb-3">
+                  <CardTitle className="text-base">Schedule A — Marking &amp; Load Line Requirements</CardTitle>
+                  <CardDescription>Check registration number and load line markings comply with Schedule 1.</CardDescription>
+                  {(() => { const p = getStepProgress('A'); return p.total > 0 ? <><div className="flex justify-between text-xs text-muted-foreground mt-2"><span>Progress</span><span>{p.answered}/{p.total} answered</span></div><Progress value={(p.answered/p.total)*100} className="h-1.5 mt-1"/></> : null; })()}
+                </CardHeader>
+                <CardContent className="p-4 space-y-3">
+                  {(groupedChecklistItems['A'] || []).map(item => renderChecklistItem(item))}
+                  {(!groupedChecklistItems['A'] || groupedChecklistItems['A'].length === 0) && <p className="text-sm text-muted-foreground text-center py-4">No Schedule A items loaded.</p>}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* ── Schedule B ── */}
+            {currentConductStep === 'B' && (
+              <Card className="shadow-md">
+                <CardHeader className="border-b bg-muted/20 pb-3">
+                  <CardTitle className="text-base">Schedule B — Safety Standards</CardTitle>
+                  <CardDescription>Verify safety equipment. Optional sections apply based on craft type and intended operation.</CardDescription>
+                  {(() => { const p = getStepProgress('B'); return p.total > 0 ? <><div className="flex justify-between text-xs text-muted-foreground mt-2"><span>Progress</span><span>{p.answered}/{p.total} answered</span></div><Progress value={(p.answered/p.total)*100} className="h-1.5 mt-1"/></> : null; })()}
+                </CardHeader>
+                <CardContent className="p-4 space-y-5">
+                  {/* B1 – All Registered Craft */}
+                  <div>
+                    <h3 className="text-sm font-semibold border-b pb-1 mb-3">B1. For ALL Registered Craft</h3>
+                    <div className="space-y-3">{(groupedChecklistItems['B'] || []).filter(i => ((i as any).category as string)?.includes('All Registered Craft')).map(item => renderChecklistItem(item))}</div>
+                  </div>
+                  {/* B2 – Out of Sight of Land (toggle) */}
+                  <div className="border rounded-lg overflow-hidden">
+                    <div role="button" tabIndex={0} onClick={() => setShowOutOfSight(v => !v)} className="w-full flex items-center justify-between px-4 py-3 bg-muted/30 hover:bg-muted/50 transition-colors text-left cursor-pointer">
+                      <div>
+                        <span className="text-sm font-semibold">B2. Travelling Out of Sight of Land</span>
+                        <p className="text-xs text-muted-foreground">Enable if craft will operate beyond sight of land</p>
+                      </div>
+                      <Switch checked={showOutOfSight} onCheckedChange={setShowOutOfSight} onClick={e => e.stopPropagation()} />
+                    </div>
+                    {showOutOfSight && (
+                      <div className="p-3 space-y-3 border-t">{(groupedChecklistItems['B'] || []).filter(i => ((i as any).category as string)?.includes('Out of Sight of Land')).map(item => renderChecklistItem(item))}</div>
+                    )}
+                  </div>
+                  {/* B3 – Night Travel (toggle) */}
+                  <div className="border rounded-lg overflow-hidden">
+                    <div role="button" tabIndex={0} onClick={() => setShowNightTravel(v => !v)} className="w-full flex items-center justify-between px-4 py-3 bg-muted/30 hover:bg-muted/50 transition-colors text-left cursor-pointer">
+                      <div>
+                        <span className="text-sm font-semibold">B3. Night Travel</span>
+                        <p className="text-xs text-muted-foreground">Enable if craft will operate at night</p>
+                      </div>
+                      <Switch checked={showNightTravel} onCheckedChange={setShowNightTravel} onClick={e => e.stopPropagation()} />
+                    </div>
+                    {showNightTravel && (
+                      <div className="p-3 space-y-3 border-t">{(groupedChecklistItems['B'] || []).filter(i => ((i as any).category as string)?.includes('Night Travel')).map(item => renderChecklistItem(item))}</div>
+                    )}
+                  </div>
+                  {/* B4 – Commercial (toggle) */}
+                  <div className="border-2 rounded-lg overflow-hidden border-amber-200 dark:border-amber-800">
+                    <div role="button" tabIndex={0} onClick={() => setShowCommercial(v => !v)} className="w-full flex items-center justify-between px-4 py-3 bg-amber-50/60 hover:bg-amber-50 dark:bg-amber-950/30 transition-colors text-left cursor-pointer">
+                      <div>
+                        <span className="text-sm font-semibold text-amber-800 dark:text-amber-300">B4. Commercial Small Craft (Licensed)</span>
+                        <p className="text-xs text-muted-foreground">Enable for commercially licensed passenger/cargo/fishing craft</p>
+                      </div>
+                      <Switch checked={showCommercial} onCheckedChange={setShowCommercial} onClick={e => e.stopPropagation()} />
+                    </div>
+                    {showCommercial && (
+                      <div className="p-3 space-y-3 border-t border-amber-200 dark:border-amber-800">{(groupedChecklistItems['B'] || []).filter(i => ((i as any).category as string)?.includes('Commercial Craft')).map(item => renderChecklistItem(item))}</div>
+                    )}
+                  </div>
+                  {/* B5 – Exemptions */}
+                  <div>
+                    <h3 className="text-sm font-semibold border-b pb-1 mb-3">B5. Safety Standards Exemptions</h3>
+                    <div className="space-y-3">{(groupedChecklistItems['B'] || []).filter(i => ((i as any).category as string)?.includes('Exemptions')).map(item => renderChecklistItem(item))}</div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* ── Schedule C ── */}
+            {currentConductStep === 'C' && (
+              <Card className="shadow-md">
+                <CardHeader className="border-b bg-muted/20 pb-3">
+                  <CardTitle className="text-base">Schedule C — Construction Standards</CardTitle>
+                  <CardDescription>Visual checks on observable construction aspects. Many standards require detailed assessment or certification.</CardDescription>
+                  {(() => { const p = getStepProgress('C'); return p.total > 0 ? <><div className="flex justify-between text-xs text-muted-foreground mt-2"><span>Progress</span><span>{p.answered}/{p.total} answered</span></div><Progress value={(p.answered/p.total)*100} className="h-1.5 mt-1"/></> : null; })()}
+                </CardHeader>
+                <CardContent className="p-4 space-y-3">
+                  {(groupedChecklistItems['C'] || []).map(item => renderChecklistItem(item))}
+                  {(!groupedChecklistItems['C'] || groupedChecklistItems['C'].length === 0) && <p className="text-sm text-muted-foreground text-center py-4">No Schedule C items loaded.</p>}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* ── Additional / Extras ── */}
+            {currentConductStep === 'extras' && (
+              <Card className="shadow-md">
+                <CardHeader className="border-b bg-muted/20 pb-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <CardTitle className="text-base">Additional Items</CardTitle>
+                      <CardDescription>AI-suggested and custom craft-specific checklist items.</CardDescription>
+                    </div>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <Button type="button" variant="outline" size="sm" onClick={handleAISuggestions} disabled={isAISuggesting || !form.getValues("registrationRefId")}>
+                        {isAISuggesting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Lightbulb className="mr-1 h-4 w-4" />} AI Suggest
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => append({ itemId: `custom_${Date.now()}`, itemDescription: "New Custom Item", category: "Custom", result: "N/A", comments: "" })}>
+                        <PlusCircle className="mr-1 h-4 w-4" /> Add Item
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-4 space-y-3">
+                  {[...(groupedChecklistItems['AI Suggested'] || []), ...(groupedChecklistItems['Custom'] || [])].map(item => renderChecklistItem(item))}
+                  {((!groupedChecklistItems['AI Suggested'] || groupedChecklistItems['AI Suggested'].length === 0) && (!groupedChecklistItems['Custom'] || groupedChecklistItems['Custom'].length === 0)) && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <PlusCircle className="mx-auto h-8 w-8 mb-2 opacity-30" />
+                      <p className="text-sm">No additional items yet. Use AI suggestions or add a custom item above.</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* ── Assessment ── */}
+            {currentConductStep === 'assessment' && (
+              <Card className="shadow-md">
+                <CardHeader className="border-b bg-muted/20 pb-3">
+                  <CardTitle className="text-base">Overall Assessment</CardTitle>
+                  <CardDescription>Summarize your findings and provide the overall inspection outcome.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 gap-6 p-6">
+                  <FormField control={form.control} name="findings" render={({ field }) => (<FormItem><FormLabel>Inspector Summary / Recommendations *</FormLabel><FormControl><Textarea placeholder="Summarize inspection findings and any recommendations" {...field} rows={4} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="correctiveActions" render={({ field }) => (<FormItem><FormLabel>Corrective Actions Required (if any)</FormLabel><FormControl><Textarea placeholder="Detail any corrective actions needed based on 'No' answers or critical findings" {...field} rows={3} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="followUpRequired" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm"><div className="space-y-0.5"><FormLabel>Follow-up Inspection Required?</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>)} />
+                  <FormField control={form.control} name="overallResult" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Overall Inspection Outcome *</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value || undefined}>
                         <FormControl><SelectTrigger><SelectValue placeholder="Select overall outcome" /></SelectTrigger></FormControl>
                         <SelectContent>
-                            <SelectItem value="Pass">Pass</SelectItem>
-                            <SelectItem value="PassWithRecommendations">Pass with Recommendations</SelectItem>
-                            <SelectItem value="Fail">Fail</SelectItem>
-                            <SelectItem value="N/A">N/A (Assessment Pending)</SelectItem>
+                          <SelectItem value="Pass">Pass</SelectItem>
+                          <SelectItem value="PassWithRecommendations">Pass with Recommendations</SelectItem>
+                          <SelectItem value="Fail">Fail</SelectItem>
+                          <SelectItem value="N/A">N/A (Assessment Pending)</SelectItem>
                         </SelectContent>
                       </Select>
-                      <FormDescription>This is the inspector's final assessment for this inspection event.</FormDescription>
+                      <FormDescription>This is the inspector&apos;s final assessment for this inspection event.</FormDescription>
                       <FormMessage />
                     </FormItem>
-                  )}
-                />
-              </CardContent>
-            </Card>
+                  )} />
+                </CardContent>
+              </Card>
+            )}
+
+            {/* ── Step Navigation ── */}
+            <div className="flex items-center justify-between pt-2 pb-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleStepBack}
+                disabled={currentConductStep === 'A'}
+              >
+                <ChevronLeft className="mr-1 h-4 w-4" /> Back
+              </Button>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={form.handleSubmit((data) => onSubmit(data, "saveProgress"))}
+                  disabled={form.formState.isSubmitting}
+                >
+                  <Save className="mr-2 h-4 w-4" /> Save Progress
+                </Button>
+                {currentConductStep !== 'assessment' ? (
+                  <Button type="button" onClick={handleStepNext}>
+                    Next <ChevronRight className="ml-1 h-4 w-4" />
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    onClick={form.handleSubmit(
+                      (data) => onSubmit(data, "submitReview"),
+                      (errors) => {
+                        console.error("Validation Errors:", errors);
+                        toast({ title: "Form Validation Error", description: "Please check the form for errors. Ensure all required fields (like dates and inspector) are filled.", variant: "destructive" });
+                      }
+                    )}
+                    disabled={form.formState.isSubmitting}
+                  >
+                    <Send className="mr-2 h-4 w-4" /> Submit for Review
+                  </Button>
+                )}
+              </div>
+            </div>
           </>
         )}
 
@@ -881,18 +1145,10 @@ export function InspectionForm({ mode, usageContext, inspectionId, existingInspe
               <CalendarDays className="mr-2 h-4 w-4" /> {mode === "create" ? "Schedule Inspection" : "Update Schedule"}
             </Button>
           )}
-          {usageContext === "conduct" && (
-            <>
-              <Button type="button" variant="outline" onClick={form.handleSubmit((data) => onSubmit(data, "saveProgress"))} disabled={form.formState.isSubmitting}>
-                <Save className="mr-2 h-4 w-4" /> Save Progress
-              </Button>
-              <Button type="button" onClick={form.handleSubmit((data) => onSubmit(data, "submitReview"))} disabled={form.formState.isSubmitting}>
-                <Send className="mr-2 h-4 w-4" /> Submit for Review
-              </Button>
-            </>
-          )}
         </CardFooter>
       </form>
     </Form>
   );
 }
+
+

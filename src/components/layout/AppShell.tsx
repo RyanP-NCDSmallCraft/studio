@@ -69,7 +69,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           {children}
         </main>
         <footer className="border-t p-4 text-center text-sm text-muted-foreground">
-          &copy; {new Date().getFullYear()} RegoCraft. v0.1.1
+          &copy; {new Date().getFullYear()} RegoCraft. v0.1.2
         </footer>
       </SidebarInset>
     </SidebarProvider>

@@ -118,7 +118,7 @@ export interface Registration {
 export interface ChecklistItemResult {
   itemId: string;
   itemDescription: string;
-  result: "Yes" | "No" | "N/A";
+  result: "Yes" | "No" | "N/A" | "Pending";
   comments?: string;
   category?: string;
   photoUrl?: string; // URL for an uploaded photo for this checklist item
@@ -158,7 +158,9 @@ export interface Inspection {
   createdByRef: string | DocumentReference<User>;
   lastUpdatedAt?: Timestamp | Date | string;
   lastUpdatedByRef?: string | DocumentReference<User>;
+  lastConductStep?: string;   // persists stepper position across sessions
 }
+
 
 export interface ChecklistTemplateItem {
   itemId: string;
