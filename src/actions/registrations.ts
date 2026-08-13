@@ -174,22 +174,34 @@ export interface RegistrationImportData {
   engine2_make?: string;
   engine2_horsepower?: string; // Expect string from CSV, convert to number
   engine2_serialNumber?: string;
+  
+  // Owner 1 fields
   owner1_role: "Primary" | "CoOwner";
-  owner1_surname: string;
-  owner1_firstName: string;
-  owner1_dob: string; // Expect YYYY-MM-DD string
-  owner1_sex: "Male" | "Female" | "Other";
+  owner1_ownerType?: "Private" | "Company";
+  owner1_surname?: string;
+  owner1_firstName?: string;
+  owner1_dob?: string; // Expect YYYY-MM-DD string
+  owner1_sex?: "Male" | "Female" | "Other";
+  owner1_companyName?: string;
+  owner1_companyRegNo?: string;
+  owner1_companyAddress?: string;
   owner1_phone: string;
   owner1_email?: string;
   owner1_postalAddress: string;
   owner1_townDistrict: string;
   owner1_llg: string;
   owner1_wardVillage: string;
+
+  // Owner 2 fields
   owner2_role?: "CoOwner";
+  owner2_ownerType?: "Private" | "Company";
   owner2_surname?: string;
   owner2_firstName?: string;
   owner2_dob?: string; // Expect YYYY-MM-DD string
   owner2_sex?: "Male" | "Female" | "Other";
+  owner2_companyName?: string;
+  owner2_companyRegNo?: string;
+  owner2_companyAddress?: string;
   owner2_phone?: string;
   owner2_email?: string;
   owner2_postalAddress?: string;
@@ -197,6 +209,19 @@ export interface RegistrationImportData {
   owner2_llg?: string;
   owner2_wardVillage?: string;
 }
+
+const parseDateString = (dateStr: string | undefined): Date | null => {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+  return d;
+};
+
+const parseHorsepower = (hpStr: string | undefined): number | undefined => {
+  if (!hpStr) return undefined;
+  const parsed = parseInt(hpStr, 10);
+  return isNaN(parsed) ? undefined : parsed;
+};
 
 export async function importRegistrations_serverAction(
   records: RegistrationImportData[],
@@ -219,42 +244,104 @@ export async function importRegistrations_serverAction(
     const record = records[i];
     try {
       const owners: Owner[] = [];
+      
+      // Determine Owner 1 Type (defaults to Private if not explicit, but Company if companyName is provided)
+      const owner1Type = record.owner1_ownerType || (record.owner1_companyName ? "Company" : "Private");
+      
       // Owner 1 (mandatory)
-      if (record.owner1_surname && record.owner1_firstName && record.owner1_dob && record.owner1_phone) {
-        owners.push({
-          ownerId: crypto.randomUUID(),
-          role: record.owner1_role || "Primary",
-          surname: record.owner1_surname,
-          firstName: record.owner1_firstName,
-          dob: Timestamp.fromDate(new Date(record.owner1_dob)),
-          sex: record.owner1_sex || "Male",
-          phone: record.owner1_phone,
-          email: record.owner1_email ?? "", // Default to empty string
-          postalAddress: record.owner1_postalAddress || "",
-          townDistrict: record.owner1_townDistrict || "",
-          llg: record.owner1_llg || "",
-          wardVillage: record.owner1_wardVillage || "",
-        });
+      if (owner1Type === "Company") {
+        if (record.owner1_companyName && record.owner1_phone && record.owner1_townDistrict) {
+          owners.push({
+            ownerId: crypto.randomUUID(),
+            role: record.owner1_role || "Primary",
+            ownerType: "Company",
+            companyName: record.owner1_companyName,
+            companyRegNo: record.owner1_companyRegNo ?? "",
+            companyAddress: record.owner1_companyAddress ?? "",
+            phone: record.owner1_phone,
+            email: record.owner1_email ?? "",
+            postalAddress: record.owner1_postalAddress || "",
+            townDistrict: record.owner1_townDistrict || "",
+            llg: record.owner1_llg || "",
+            wardVillage: record.owner1_wardVillage || "",
+          });
+        } else {
+          throw new Error(`Row ${i + 1}: Missing required fields for Company Owner 1 (Company Name, Phone, and Town/District).`);
+        }
       } else {
-        throw new Error(`Row ${i + 1}: Missing required fields for Owner 1.`);
+        if (record.owner1_surname && record.owner1_firstName && record.owner1_dob && record.owner1_phone && record.owner1_townDistrict) {
+          const dobDate = parseDateString(record.owner1_dob);
+          if (!dobDate) {
+            throw new Error(`Row ${i + 1}: Invalid Date of Birth format for Owner 1 ("${record.owner1_dob}"). Use YYYY-MM-DD.`);
+          }
+          owners.push({
+            ownerId: crypto.randomUUID(),
+            role: record.owner1_role || "Primary",
+            ownerType: "Private",
+            surname: record.owner1_surname,
+            firstName: record.owner1_firstName,
+            dob: Timestamp.fromDate(dobDate),
+            sex: record.owner1_sex || "Male",
+            phone: record.owner1_phone,
+            email: record.owner1_email ?? "",
+            postalAddress: record.owner1_postalAddress || "",
+            townDistrict: record.owner1_townDistrict || "",
+            llg: record.owner1_llg || "",
+            wardVillage: record.owner1_wardVillage || "",
+          });
+        } else {
+          throw new Error(`Row ${i + 1}: Missing required fields for Private Owner 1 (First Name, Surname, DOB, Phone, and Town/District).`);
+        }
       }
 
       // Owner 2 (optional)
-      if (record.owner2_surname && record.owner2_firstName && record.owner2_dob && record.owner2_phone) {
-        owners.push({
-          ownerId: crypto.randomUUID(),
-          role: record.owner2_role || "CoOwner",
-          surname: record.owner2_surname,
-          firstName: record.owner2_firstName,
-          dob: Timestamp.fromDate(new Date(record.owner2_dob)),
-          sex: record.owner2_sex || "Male",
-          phone: record.owner2_phone,
-          email: record.owner2_email ?? "", // Default to empty string
-          postalAddress: record.owner2_postalAddress ?? "",
-          townDistrict: record.owner2_townDistrict ?? "",
-          llg: record.owner2_llg ?? "",
-          wardVillage: record.owner2_wardVillage ?? "",
-        });
+      const hasOwner2 = (record.owner2_companyName || record.owner2_surname || record.owner2_firstName || record.owner2_phone);
+      if (hasOwner2) {
+        const owner2Type = record.owner2_ownerType || (record.owner2_companyName ? "Company" : "Private");
+        if (owner2Type === "Company") {
+          if (record.owner2_companyName && record.owner2_phone && record.owner2_townDistrict) {
+            owners.push({
+              ownerId: crypto.randomUUID(),
+              role: record.owner2_role || "CoOwner",
+              ownerType: "Company",
+              companyName: record.owner2_companyName,
+              companyRegNo: record.owner2_companyRegNo ?? "",
+              companyAddress: record.owner2_companyAddress ?? "",
+              phone: record.owner2_phone,
+              email: record.owner2_email ?? "",
+              postalAddress: record.owner2_postalAddress ?? "",
+              townDistrict: record.owner2_townDistrict ?? "",
+              llg: record.owner2_llg ?? "",
+              wardVillage: record.owner2_wardVillage ?? "",
+            });
+          } else {
+            throw new Error(`Row ${i + 1}: Missing required fields for Company Owner 2 (Company Name, Phone, and Town/District).`);
+          }
+        } else {
+          if (record.owner2_surname && record.owner2_firstName && record.owner2_dob && record.owner2_phone && record.owner2_townDistrict) {
+            const dobDate = parseDateString(record.owner2_dob);
+            if (!dobDate) {
+              throw new Error(`Row ${i + 1}: Invalid Date of Birth format for Owner 2 ("${record.owner2_dob}"). Use YYYY-MM-DD.`);
+            }
+            owners.push({
+              ownerId: crypto.randomUUID(),
+              role: record.owner2_role || "CoOwner",
+              ownerType: "Private",
+              surname: record.owner2_surname,
+              firstName: record.owner2_firstName,
+              dob: Timestamp.fromDate(dobDate),
+              sex: record.owner2_sex || "Male",
+              phone: record.owner2_phone,
+              email: record.owner2_email ?? "",
+              postalAddress: record.owner2_postalAddress ?? "",
+              townDistrict: record.owner2_townDistrict ?? "",
+              llg: record.owner2_llg ?? "",
+              wardVillage: record.owner2_wardVillage ?? "",
+            });
+          } else {
+            throw new Error(`Row ${i + 1}: Missing required fields for Private Owner 2 (First Name, Surname, DOB, Phone, and Town/District).`);
+          }
+        }
       }
       
       const engines: EngineDetail[] = [];
@@ -262,7 +349,7 @@ export async function importRegistrations_serverAction(
         engines.push({
           engineId: crypto.randomUUID(),
           make: record.engine1_make ?? "",
-          horsepower: record.engine1_horsepower ? parseInt(record.engine1_horsepower, 10) : undefined,
+          horsepower: parseHorsepower(record.engine1_horsepower),
           serialNumber: record.engine1_serialNumber ?? "",
         });
       }
@@ -270,11 +357,10 @@ export async function importRegistrations_serverAction(
          engines.push({
           engineId: crypto.randomUUID(),
           make: record.engine2_make ?? "",
-          horsepower: record.engine2_horsepower ? parseInt(record.engine2_horsepower, 10) : undefined,
+          horsepower: parseHorsepower(record.engine2_horsepower),
           serialNumber: record.engine2_serialNumber ?? "",
         });
       }
-
 
       const registrationDoc: Omit<Registration, "registrationId"> = {
         registrationType: record.registrationType || "New",
@@ -284,12 +370,12 @@ export async function importRegistrations_serverAction(
         proofOfOwnershipDocs: [], // Not handled in this CSV import
         craftMake: record.craftMake || "",
         craftModel: record.craftModel || "",
-        craftYear: record.craftYear ? parseInt(record.craftYear, 10) : new Date().getFullYear(),
+        craftYear: record.craftYear ? (parseInt(record.craftYear, 10) || new Date().getFullYear()) : new Date().getFullYear(),
         craftColor: record.craftColor || "",
         hullIdNumber: record.hullIdNumber || "",
-        craftLength: record.craftLength ? parseFloat(record.craftLength) : 0,
+        craftLength: record.craftLength ? (parseFloat(record.craftLength) || 0) : 0,
         lengthUnits: record.lengthUnits || "m",
-        passengerCapacity: record.passengerCapacity ? parseInt(record.passengerCapacity, 10) : undefined,
+        passengerCapacity: record.passengerCapacity ? (parseInt(record.passengerCapacity, 10) || undefined) : undefined,
         distinguishingFeatures: record.distinguishingFeatures ?? "",
         engines,
         propulsionType: record.propulsionType || "Outboard",
