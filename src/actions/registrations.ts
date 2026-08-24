@@ -269,10 +269,14 @@ export async function importRegistrations_serverAction(
           throw new Error(`Row ${i + 1}: Missing required fields for Company Owner 1 (Company Name, Phone, and Town/District).`);
         }
       } else {
-        if (record.owner1_surname && record.owner1_firstName && record.owner1_dob && record.owner1_phone && record.owner1_townDistrict) {
-          const dobDate = parseDateString(record.owner1_dob);
-          if (!dobDate) {
-            throw new Error(`Row ${i + 1}: Invalid Date of Birth format for Owner 1 ("${record.owner1_dob}"). Use YYYY-MM-DD.`);
+        if (record.owner1_surname && record.owner1_firstName && record.owner1_phone && record.owner1_townDistrict) {
+          let dob: any = undefined;
+          if (record.owner1_dob) {
+            const dobDate = parseDateString(record.owner1_dob);
+            if (!dobDate) {
+              throw new Error(`Row ${i + 1}: Invalid Date of Birth format for Owner 1 ("${record.owner1_dob}"). Use YYYY-MM-DD.`);
+            }
+            dob = Timestamp.fromDate(dobDate);
           }
           owners.push({
             ownerId: crypto.randomUUID(),
@@ -280,7 +284,7 @@ export async function importRegistrations_serverAction(
             ownerType: "Private",
             surname: record.owner1_surname,
             firstName: record.owner1_firstName,
-            dob: Timestamp.fromDate(dobDate),
+            dob,
             sex: record.owner1_sex || "Male",
             phone: record.owner1_phone,
             email: record.owner1_email ?? "",
@@ -290,7 +294,7 @@ export async function importRegistrations_serverAction(
             wardVillage: record.owner1_wardVillage || "",
           });
         } else {
-          throw new Error(`Row ${i + 1}: Missing required fields for Private Owner 1 (First Name, Surname, DOB, Phone, and Town/District).`);
+          throw new Error(`Row ${i + 1}: Missing required fields for Private Owner 1 (First Name, Surname, Phone, and Town/District).`);
         }
       }
 
@@ -318,10 +322,14 @@ export async function importRegistrations_serverAction(
             throw new Error(`Row ${i + 1}: Missing required fields for Company Owner 2 (Company Name, Phone, and Town/District).`);
           }
         } else {
-          if (record.owner2_surname && record.owner2_firstName && record.owner2_dob && record.owner2_phone && record.owner2_townDistrict) {
-            const dobDate = parseDateString(record.owner2_dob);
-            if (!dobDate) {
-              throw new Error(`Row ${i + 1}: Invalid Date of Birth format for Owner 2 ("${record.owner2_dob}"). Use YYYY-MM-DD.`);
+          if (record.owner2_surname && record.owner2_firstName && record.owner2_phone && record.owner2_townDistrict) {
+            let dob: any = undefined;
+            if (record.owner2_dob) {
+              const dobDate = parseDateString(record.owner2_dob);
+              if (!dobDate) {
+                throw new Error(`Row ${i + 1}: Invalid Date of Birth format for Owner 2 ("${record.owner2_dob}"). Use YYYY-MM-DD.`);
+              }
+              dob = Timestamp.fromDate(dobDate);
             }
             owners.push({
               ownerId: crypto.randomUUID(),
@@ -329,7 +337,7 @@ export async function importRegistrations_serverAction(
               ownerType: "Private",
               surname: record.owner2_surname,
               firstName: record.owner2_firstName,
-              dob: Timestamp.fromDate(dobDate),
+              dob,
               sex: record.owner2_sex || "Male",
               phone: record.owner2_phone,
               email: record.owner2_email ?? "",
@@ -339,7 +347,7 @@ export async function importRegistrations_serverAction(
               wardVillage: record.owner2_wardVillage ?? "",
             });
           } else {
-            throw new Error(`Row ${i + 1}: Missing required fields for Private Owner 2 (First Name, Surname, DOB, Phone, and Town/District).`);
+            throw new Error(`Row ${i + 1}: Missing required fields for Private Owner 2 (First Name, Surname, Phone, and Town/District).`);
           }
         }
       }

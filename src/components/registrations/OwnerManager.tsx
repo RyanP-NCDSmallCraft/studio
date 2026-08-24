@@ -50,7 +50,7 @@ const ownerModalSchema = z.object({
     if (data.ownerType === 'Private') {
         if (!data.surname) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["surname"], message: "Surname is required for private owners." });
         if (!data.firstName) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["firstName"], message: "First name is required for private owners." });
-        if (!data.dobString || !isValid(parseISO(data.dobString))) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["dobString"], message: "A valid date of birth is required for private owners." });
+        if (data.dobString && !isValid(parseISO(data.dobString))) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["dobString"], message: "Invalid date of birth format for private owners." });
         if (!data.sex) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["sex"], message: "Sex is required for private owners." });
     }
     if (data.ownerType === 'Company') {
@@ -210,7 +210,7 @@ export function OwnerManager({ owners, setOwners, form: mainForm }: OwnerManager
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-md">
                         <FormField control={modalForm.control} name="firstName" render={({ field }) => (<FormItem><FormLabel>First Name *</FormLabel><FormControl><Input placeholder="John" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
                         <FormField control={modalForm.control} name="surname" render={({ field }) => (<FormItem><FormLabel>Surname *</FormLabel><FormControl><Input placeholder="Doe" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
-                        <FormField control={modalForm.control} name="dobString" render={({ field }) => (<FormItem><FormLabel>Date of Birth *</FormLabel><FormControl><Input type="date" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
+                        <FormField control={modalForm.control} name="dobString" render={({ field }) => (<FormItem><FormLabel>Date of Birth</FormLabel><FormControl><Input type="date" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
                         <FormField control={modalForm.control} name="sex" render={({ field }) => (<FormItem><FormLabel>Sex *</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger></FormControl><SelectContent>{["Male", "Female", "Other"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                     </div>
                 )}
