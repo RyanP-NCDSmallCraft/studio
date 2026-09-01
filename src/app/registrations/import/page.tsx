@@ -17,6 +17,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
 const CSV_HEADERS = [
+  "scaRegoNo","status","effectiveDate","expiryDate",
   "registrationType","previousScaRegoNo","craftMake","craftModel","craftYear","craftColor","hullIdNumber","craftLength","lengthUnits","passengerCapacity","distinguishingFeatures",
   "propulsionType","propulsionOtherDesc","hullMaterial","hullMaterialOtherDesc","craftUse","craftUseOtherDesc","fuelType","fuelTypeOtherDesc","vesselType","vesselTypeOtherDesc",
   "engine1_make","engine1_horsepower","engine1_serialNumber","engine2_make","engine2_horsepower","engine2_serialNumber",
@@ -250,19 +251,19 @@ export default function ImportRegistrationsPage() {
         <AlertDescription className="text-amber-700 dark:text-amber-400 mt-2 space-y-2">
           <ul className="list-disc list-inside space-y-1 text-sm">
             <li>
-              <strong>Use the latest template.</strong> The CSV template has been updated to support both <strong>Private</strong> and <strong>Company</strong> owners. Re-download it if you have an older version.
+              <strong>Use the latest template.</strong> The CSV template now includes <strong>scaRegoNo</strong>, <strong>status</strong>, <strong>effectiveDate</strong>, and <strong>expiryDate</strong>.
             </li>
             <li>
-              <strong>Date format:</strong> All dates (e.g. Date of Birth) must be in <strong>YYYY-MM-DD</strong> format (e.g. <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded">1985-06-15</code>).
+              <strong>Date format:</strong> All dates (e.g. Effective Date, Expiry Date, Owner DOB) must be in <strong>YYYY-MM-DD</strong> format (e.g. <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded">2025-01-15</code>).
             </li>
             <li>
-              <strong>Owner type:</strong> Set <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded">owner1_ownerType</code> to <strong>Private</strong> or <strong>Company</strong>. Private owners require: Surname, First Name, DOB, Sex. Company owners require: Company Name.
+              <strong>Registration Status:</strong> If <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded">effectiveDate</code> or <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded">status</code> is set to <strong>Approved</strong> / <strong>Active</strong>, the record will be imported directly as Approved. Otherwise, it defaults to <strong>Draft</strong>.
+            </li>
+            <li>
+              <strong>Owner type:</strong> Set <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded">owner1_ownerType</code> to <strong>Private</strong> or <strong>Company</strong>.
             </li>
             <li>
               <strong>Fields with commas</strong> (e.g. addresses) must be enclosed in double quotes: <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded">"123 Main St, Town"</code>.
-            </li>
-            <li>
-              All imported records will be created as <strong>Draft</strong> status and must be reviewed and submitted individually.
             </li>
           </ul>
         </AlertDescription>
@@ -321,40 +322,41 @@ export default function ImportRegistrationsPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Row</TableHead>
+                      <TableHead>Rego No.</TableHead>
                       <TableHead>Craft Make</TableHead>
                       <TableHead>Model</TableHead>
-                      <TableHead>Year</TableHead>
-                      <TableHead>HIN</TableHead>
                       <TableHead>Owner 1</TableHead>
                       <TableHead>Owner Type</TableHead>
-                      <TableHead>Reg. Type</TableHead>
+                      <TableHead>Effective</TableHead>
+                      <TableHead>Expiry</TableHead>
                       <TableHead>Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {parsedData.slice(0, 5).map((record, index) => (
-                      <TableRow key={index}>
-                        <TableCell className="text-muted-foreground text-xs">{index + 2}</TableCell>
-                        <TableCell>{record.craftMake || <span className="text-destructive text-xs">Missing</span>}</TableCell>
-                        <TableCell>{record.craftModel}</TableCell>
-                        <TableCell>{record.craftYear}</TableCell>
-                        <TableCell>{record.hullIdNumber}</TableCell>
-                        <TableCell className="font-medium">{getOwner1DisplayName(record)}</TableCell>
-                        <TableCell>
-                          <Badge variant={record.owner1_ownerType === 'Company' ? 'secondary' : 'outline'} className="text-xs">
-                            {record.owner1_ownerType || 'Private'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="text-xs">{record.registrationType || 'New'}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge className="bg-yellow-100 text-yellow-800 border border-yellow-300 text-xs dark:bg-yellow-900/30 dark:text-yellow-300">
-                            Draft
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {parsedData.slice(0, 5).map((record, index) => {
+                      const displayStatus = record.status || (record.effectiveDate ? 'Approved' : 'Draft');
+                      return (
+                        <TableRow key={index}>
+                          <TableCell className="text-muted-foreground text-xs">{index + 2}</TableCell>
+                          <TableCell className="font-mono text-xs">{record.scaRegoNo || '-'}</TableCell>
+                          <TableCell>{record.craftMake || <span className="text-destructive text-xs">Missing</span>}</TableCell>
+                          <TableCell>{record.craftModel || '-'}</TableCell>
+                          <TableCell className="font-medium">{getOwner1DisplayName(record)}</TableCell>
+                          <TableCell>
+                            <Badge variant={record.owner1_ownerType === 'Company' ? 'secondary' : 'outline'} className="text-xs">
+                              {record.owner1_ownerType || 'Private'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-xs">{record.effectiveDate || '-'}</TableCell>
+                          <TableCell className="text-xs">{record.expiryDate || '-'}</TableCell>
+                          <TableCell>
+                            <Badge variant={displayStatus === 'Approved' || displayStatus === 'Active' ? 'default' : 'secondary'} className="text-xs">
+                              {displayStatus}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>

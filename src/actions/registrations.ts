@@ -151,6 +151,10 @@ export async function getRegistrations(): Promise<Registration[]> {
 
 
 export interface RegistrationImportData {
+  scaRegoNo?: string;
+  effectiveDate?: string; // Expect YYYY-MM-DD string
+  expiryDate?: string;    // Expect YYYY-MM-DD string
+  status?: string;        // "Draft" | "Submitted" | "PendingReview" | "Approved" | "Active" | "Expired" etc.
   registrationType: "New" | "Renewal";
   previousScaRegoNo?: string;
   craftMake: string;
@@ -389,10 +393,45 @@ export async function importRegistrations_serverAction(
       const parsedCapacity = record.passengerCapacity ? parseInt(record.passengerCapacity, 10) : NaN;
       const passengerCapacity = isNaN(parsedCapacity) ? undefined : parsedCapacity;
 
+      let effectiveDateTimestamp: Timestamp | undefined = undefined;
+      if (record.effectiveDate) {
+        const d = parseDateString(record.effectiveDate);
+        if (d) {
+          effectiveDateTimestamp = Timestamp.fromDate(d);
+        }
+      }
+
+      let expiryDateTimestamp: Timestamp | undefined = undefined;
+      if (record.expiryDate) {
+        const d = parseDateString(record.expiryDate);
+        if (d) {
+          expiryDateTimestamp = Timestamp.fromDate(d);
+        }
+      }
+
+      const validStatuses = ["Draft", "Submitted", "PendingReview", "Approved", "Rejected", "Expired", "RequiresInfo", "Suspended", "Revoked"];
+      let statusToUse: any = "Draft";
+      if (record.status) {
+        const normalized = record.status.trim();
+        if (normalized.toLowerCase() === "active") {
+          statusToUse = "Approved";
+        } else {
+          const match = validStatuses.find(s => s.toLowerCase() === normalized.toLowerCase());
+          if (match) {
+            statusToUse = match;
+          }
+        }
+      } else if (effectiveDateTimestamp) {
+        statusToUse = "Approved";
+      }
+
       const rawDoc: any = {
+        scaRegoNo: record.scaRegoNo || "",
+        effectiveDate: effectiveDateTimestamp,
+        expiryDate: expiryDateTimestamp,
         registrationType: record.registrationType || "New",
         previousScaRegoNo: record.previousScaRegoNo || "",
-        status: "Draft", // Default status for imported records
+        status: statusToUse,
         owners,
         proofOfOwnershipDocs: [], // Not handled in this CSV import
         craftMake: record.craftMake || "",
@@ -420,6 +459,15 @@ export async function importRegistrations_serverAction(
         lastUpdatedAt: Timestamp.now(),
         lastUpdatedByRef: createdByRef,
       };
+
+      if (statusToUse === "Approved" && !effectiveDateTimestamp) {
+        rawDoc.effectiveDate = Timestamp.now();
+        if (!expiryDateTimestamp) {
+          const oneYearLater = new Date();
+          oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
+          rawDoc.expiryDate = Timestamp.fromDate(oneYearLater);
+        }
+      }
 
       const registrationDoc = cleanUndefined(rawDoc);
 
