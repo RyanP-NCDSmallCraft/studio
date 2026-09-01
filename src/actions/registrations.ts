@@ -227,6 +227,27 @@ const parseHorsepower = (hpStr: string | undefined): number | undefined => {
   return isNaN(parsed) ? undefined : parsed;
 };
 
+/**
+ * Recursively removes any keys with `undefined` values from an object or array.
+ * Firestore `addDoc` / `setDoc` throws an error if any field in the document is `undefined`.
+ */
+function cleanUndefined<T>(obj: T): T {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(cleanUndefined) as unknown as T;
+  }
+  if (typeof obj === 'object' && !(obj instanceof Date) && !(obj instanceof Timestamp) && !(obj instanceof DocumentReference)) {
+    const cleaned: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined) {
+        cleaned[key] = cleanUndefined(value);
+      }
+    }
+    return cleaned;
+  }
+  return obj;
+}
+
 export async function importRegistrations_serverAction(
   records: RegistrationImportData[],
   currentUserId: string // Assuming you pass this from a client component with auth
@@ -252,131 +273,125 @@ export async function importRegistrations_serverAction(
       // Determine Owner 1 Type (defaults to Private if not explicit, but Company if companyName is provided)
       const owner1Type = record.owner1_ownerType || (record.owner1_companyName ? "Company" : "Private");
       
-      // Owner 1 (mandatory)
+      // Owner 1 (import whatever is present; missing values dealable before final submission)
       if (owner1Type === "Company") {
-        if (record.owner1_companyName) {
-          owners.push({
-            ownerId: crypto.randomUUID(),
-            role: record.owner1_role || "Primary",
-            ownerType: "Company",
-            companyName: record.owner1_companyName,
-            companyRegNo: record.owner1_companyRegNo ?? "",
-            companyAddress: record.owner1_companyAddress ?? "",
-            phone: record.owner1_phone || "",
-            email: record.owner1_email ?? "",
-            postalAddress: record.owner1_postalAddress || "",
-            townDistrict: record.owner1_townDistrict || "",
-            llg: record.owner1_llg || "",
-            wardVillage: record.owner1_wardVillage || "",
-          });
-        } else {
-          throw new Error(`Row ${i + 1}: Missing required Company Name for Owner 1.`);
-        }
+        owners.push({
+          ownerId: crypto.randomUUID(),
+          role: record.owner1_role || "Primary",
+          ownerType: "Company",
+          companyName: record.owner1_companyName || record.owner1_surname || "Unnamed Company",
+          companyRegNo: record.owner1_companyRegNo || "",
+          companyAddress: record.owner1_companyAddress || "",
+          phone: record.owner1_phone || "",
+          email: record.owner1_email || "",
+          postalAddress: record.owner1_postalAddress || "",
+          townDistrict: record.owner1_townDistrict || "",
+          llg: record.owner1_llg || "",
+          wardVillage: record.owner1_wardVillage || "",
+        });
       } else {
-        if (record.owner1_surname && record.owner1_firstName) {
-          let dob: any = undefined;
-          if (record.owner1_dob) {
-            const dobDate = parseDateString(record.owner1_dob);
-            if (!dobDate) {
-              throw new Error(`Row ${i + 1}: Invalid Date of Birth format for Owner 1 ("${record.owner1_dob}"). Use YYYY-MM-DD.`);
-            }
+        let dob: any = undefined;
+        if (record.owner1_dob) {
+          const dobDate = parseDateString(record.owner1_dob);
+          if (dobDate) {
             dob = Timestamp.fromDate(dobDate);
           }
-          owners.push({
-            ownerId: crypto.randomUUID(),
-            role: record.owner1_role || "Primary",
-            ownerType: "Private",
-            surname: record.owner1_surname,
-            firstName: record.owner1_firstName,
-            dob,
-            sex: record.owner1_sex || "Male",
-            phone: record.owner1_phone || "",
-            email: record.owner1_email ?? "",
-            postalAddress: record.owner1_postalAddress || "",
-            townDistrict: record.owner1_townDistrict || "",
-            llg: record.owner1_llg || "",
-            wardVillage: record.owner1_wardVillage || "",
-          });
-        } else {
-          throw new Error(`Row ${i + 1}: Missing required fields for Private Owner 1 (First Name and Surname).`);
         }
+        owners.push({
+          ownerId: crypto.randomUUID(),
+          role: record.owner1_role || "Primary",
+          ownerType: "Private",
+          surname: record.owner1_surname || record.owner1_companyName || "Unknown",
+          firstName: record.owner1_firstName || "",
+          ...(dob ? { dob } : {}),
+          sex: record.owner1_sex || "Male",
+          phone: record.owner1_phone || "",
+          email: record.owner1_email || "",
+          postalAddress: record.owner1_postalAddress || "",
+          townDistrict: record.owner1_townDistrict || "",
+          llg: record.owner1_llg || "",
+          wardVillage: record.owner1_wardVillage || "",
+        });
       }
 
       // Owner 2 (optional)
-      const hasOwner2 = (record.owner2_companyName || record.owner2_surname || record.owner2_firstName || record.owner2_phone);
+      const hasOwner2 = Boolean(
+        record.owner2_companyName ||
+        record.owner2_surname ||
+        record.owner2_firstName ||
+        record.owner2_phone ||
+        record.owner2_email
+      );
+
       if (hasOwner2) {
         const owner2Type = record.owner2_ownerType || (record.owner2_companyName ? "Company" : "Private");
         if (owner2Type === "Company") {
-          if (record.owner2_companyName) {
-            owners.push({
-              ownerId: crypto.randomUUID(),
-              role: record.owner2_role || "CoOwner",
-              ownerType: "Company",
-              companyName: record.owner2_companyName,
-              companyRegNo: record.owner2_companyRegNo ?? "",
-              companyAddress: record.owner2_companyAddress ?? "",
-              phone: record.owner2_phone || "",
-              email: record.owner2_email ?? "",
-              postalAddress: record.owner2_postalAddress ?? "",
-              townDistrict: record.owner2_townDistrict ?? "",
-              llg: record.owner2_llg ?? "",
-              wardVillage: record.owner2_wardVillage ?? "",
-            });
-          } else {
-            throw new Error(`Row ${i + 1}: Missing required Company Name for Owner 2.`);
-          }
+          owners.push({
+            ownerId: crypto.randomUUID(),
+            role: record.owner2_role || "CoOwner",
+            ownerType: "Company",
+            companyName: record.owner2_companyName || record.owner2_surname || "Unnamed Co-Owner Company",
+            companyRegNo: record.owner2_companyRegNo || "",
+            companyAddress: record.owner2_companyAddress || "",
+            phone: record.owner2_phone || "",
+            email: record.owner2_email || "",
+            postalAddress: record.owner2_postalAddress || "",
+            townDistrict: record.owner2_townDistrict || "",
+            llg: record.owner2_llg || "",
+            wardVillage: record.owner2_wardVillage || "",
+          });
         } else {
-          if (record.owner2_surname && record.owner2_firstName) {
-            let dob: any = undefined;
-            if (record.owner2_dob) {
-              const dobDate = parseDateString(record.owner2_dob);
-              if (!dobDate) {
-                throw new Error(`Row ${i + 1}: Invalid Date of Birth format for Owner 2 ("${record.owner2_dob}"). Use YYYY-MM-DD.`);
-              }
+          let dob: any = undefined;
+          if (record.owner2_dob) {
+            const dobDate = parseDateString(record.owner2_dob);
+            if (dobDate) {
               dob = Timestamp.fromDate(dobDate);
             }
-            owners.push({
-              ownerId: crypto.randomUUID(),
-              role: record.owner2_role || "CoOwner",
-              ownerType: "Private",
-              surname: record.owner2_surname,
-              firstName: record.owner2_firstName,
-              dob,
-              sex: record.owner2_sex || "Male",
-              phone: record.owner2_phone || "",
-              email: record.owner2_email ?? "",
-              postalAddress: record.owner2_postalAddress ?? "",
-              townDistrict: record.owner2_townDistrict ?? "",
-              llg: record.owner2_llg ?? "",
-              wardVillage: record.owner2_wardVillage ?? "",
-            });
-          } else {
-            throw new Error(`Row ${i + 1}: Missing required fields for Private Owner 2 (First Name and Surname).`);
           }
+          owners.push({
+            ownerId: crypto.randomUUID(),
+            role: record.owner2_role || "CoOwner",
+            ownerType: "Private",
+            surname: record.owner2_surname || record.owner2_companyName || "Unknown",
+            firstName: record.owner2_firstName || "",
+            ...(dob ? { dob } : {}),
+            sex: record.owner2_sex || "Male",
+            phone: record.owner2_phone || "",
+            email: record.owner2_email || "",
+            postalAddress: record.owner2_postalAddress || "",
+            townDistrict: record.owner2_townDistrict || "",
+            llg: record.owner2_llg || "",
+            wardVillage: record.owner2_wardVillage || "",
+          });
         }
       }
       
       const engines: EngineDetail[] = [];
       if (record.engine1_make || record.engine1_horsepower || record.engine1_serialNumber) {
+        const hp = parseHorsepower(record.engine1_horsepower);
         engines.push({
           engineId: crypto.randomUUID(),
-          make: record.engine1_make ?? "",
-          horsepower: parseHorsepower(record.engine1_horsepower),
-          serialNumber: record.engine1_serialNumber ?? "",
+          make: record.engine1_make || "",
+          ...(hp !== undefined ? { horsepower: hp } : {}),
+          serialNumber: record.engine1_serialNumber || "",
         });
       }
       if (record.engine2_make || record.engine2_horsepower || record.engine2_serialNumber) {
-         engines.push({
+        const hp = parseHorsepower(record.engine2_horsepower);
+        engines.push({
           engineId: crypto.randomUUID(),
-          make: record.engine2_make ?? "",
-          horsepower: parseHorsepower(record.engine2_horsepower),
-          serialNumber: record.engine2_serialNumber ?? "",
+          make: record.engine2_make || "",
+          ...(hp !== undefined ? { horsepower: hp } : {}),
+          serialNumber: record.engine2_serialNumber || "",
         });
       }
 
-      const registrationDoc: Omit<Registration, "registrationId"> = {
+      const parsedCapacity = record.passengerCapacity ? parseInt(record.passengerCapacity, 10) : NaN;
+      const passengerCapacity = isNaN(parsedCapacity) ? undefined : parsedCapacity;
+
+      const rawDoc: any = {
         registrationType: record.registrationType || "New",
-        previousScaRegoNo: record.previousScaRegoNo ?? "",
+        previousScaRegoNo: record.previousScaRegoNo || "",
         status: "Draft", // Default status for imported records
         owners,
         proofOfOwnershipDocs: [], // Not handled in this CSV import
@@ -387,24 +402,26 @@ export async function importRegistrations_serverAction(
         hullIdNumber: record.hullIdNumber || "",
         craftLength: record.craftLength ? (parseFloat(record.craftLength) || 0) : 0,
         lengthUnits: record.lengthUnits || "m",
-        passengerCapacity: record.passengerCapacity ? (parseInt(record.passengerCapacity, 10) || undefined) : undefined,
-        distinguishingFeatures: record.distinguishingFeatures ?? "",
+        passengerCapacity,
+        distinguishingFeatures: record.distinguishingFeatures || "",
         engines,
         propulsionType: record.propulsionType || "Outboard",
-        propulsionOtherDesc: record.propulsionOtherDesc ?? "",
+        propulsionOtherDesc: record.propulsionOtherDesc || "",
         hullMaterial: record.hullMaterial || "Fiberglass",
-        hullMaterialOtherDesc: record.hullMaterialOtherDesc ?? "",
+        hullMaterialOtherDesc: record.hullMaterialOtherDesc || "",
         craftUse: record.craftUse || "Pleasure",
-        craftUseOtherDesc: record.craftUseOtherDesc ?? "",
+        craftUseOtherDesc: record.craftUseOtherDesc || "",
         fuelType: record.fuelType || "Petrol",
-        fuelTypeOtherDesc: record.fuelTypeOtherDesc ?? "",
+        fuelTypeOtherDesc: record.fuelTypeOtherDesc || "",
         vesselType: record.vesselType || "OpenBoat",
-        vesselTypeOtherDesc: record.vesselTypeOtherDesc ?? "",
+        vesselTypeOtherDesc: record.vesselTypeOtherDesc || "",
         createdAt: Timestamp.now(),
         createdByRef: createdByRef,
         lastUpdatedAt: Timestamp.now(),
         lastUpdatedByRef: createdByRef,
       };
+
+      const registrationDoc = cleanUndefined(rawDoc);
 
       await addDoc(registrationsCol, registrationDoc);
       successfulCount++;
@@ -412,7 +429,7 @@ export async function importRegistrations_serverAction(
       failedCount++;
       let errorMessage = `Row ${i + 2}: ${error.message || "Unknown error during import."}`;
       if (error.code === 'permission-denied') {
-          errorMessage = `Row ${i + 2}: Firestore permission denied. This usually means the server action's request to Firestore was not recognized as an authenticated active user with the necessary role. Original: ${error.message}`;
+          errorMessage = `Row ${i + 2}: Firestore permission denied. Original: ${error.message}`;
       }
       errorMessages.push(errorMessage);
       console.error(`Error importing record at row ${i + 2}:`, error, record);
