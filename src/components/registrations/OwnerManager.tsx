@@ -39,11 +39,11 @@ const ownerModalSchema = z.object({
   companyRegNo: z.string().optional(),
   companyAddress: z.string().optional(),
   // Common
-  phone: z.string().min(1, "Phone number is required"),
+  phone: z.string().optional().default(""),
   fax: z.string().optional().default(""),
   email: z.string().email("Invalid email address").optional().or(z.literal("")).default(""),
   postalAddress: z.string().optional().default(""),
-  townDistrict: z.string().min(1, "Town/District is required"),
+  townDistrict: z.string().optional().default(""),
   llg: z.string().optional().default(""),
   wardVillage: z.string().optional().default(""),
 }).superRefine((data, ctx) => {
@@ -51,7 +51,6 @@ const ownerModalSchema = z.object({
         if (!data.surname) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["surname"], message: "Surname is required for private owners." });
         if (!data.firstName) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["firstName"], message: "First name is required for private owners." });
         if (data.dobString && !isValid(parseISO(data.dobString))) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["dobString"], message: "Invalid date of birth format for private owners." });
-        if (!data.sex) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["sex"], message: "Sex is required for private owners." });
     }
     if (data.ownerType === 'Company') {
         if (!data.companyName) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["companyName"], message: "Company name is required." });
@@ -121,25 +120,42 @@ export function OwnerManager({ owners, setOwners, form: mainForm }: OwnerManager
   };
 
   const onModalSubmit = (data: OwnerModalFormValues) => {
-    const ownerData: Owner = {
-      ownerId: editingOwner?.ownerId || crypto.randomUUID(), 
-      role: data.role,
-      ownerType: data.ownerType,
-      surname: data.surname,
-      firstName: data.firstName,
-      dob: data.dobString && isValid(parseISO(data.dobString)) ? parseISO(data.dobString) as any : undefined,
-      sex: data.sex,
-      companyName: data.companyName,
-      companyRegNo: data.companyRegNo,
-      companyAddress: data.companyAddress,
-      phone: data.phone,
-      fax: data.fax,
-      email: data.email,
-      postalAddress: data.postalAddress,
-      townDistrict: data.townDistrict,
-      llg: data.llg,
-      wardVillage: data.wardVillage,
-    };
+    let ownerData: Owner;
+    
+    if (data.ownerType === "Company") {
+      ownerData = {
+        ownerId: editingOwner?.ownerId || crypto.randomUUID(),
+        role: data.role,
+        ownerType: "Company",
+        companyName: data.companyName,
+        companyRegNo: data.companyRegNo,
+        companyAddress: data.companyAddress,
+        phone: data.phone,
+        fax: data.fax,
+        email: data.email,
+        postalAddress: data.postalAddress,
+        townDistrict: data.townDistrict,
+        llg: data.llg,
+        wardVillage: data.wardVillage,
+      };
+    } else {
+      ownerData = {
+        ownerId: editingOwner?.ownerId || crypto.randomUUID(),
+        role: data.role,
+        ownerType: "Private",
+        surname: data.surname,
+        firstName: data.firstName,
+        dob: data.dobString && isValid(parseISO(data.dobString)) ? parseISO(data.dobString) as any : undefined,
+        sex: data.sex,
+        phone: data.phone,
+        fax: data.fax,
+        email: data.email,
+        postalAddress: data.postalAddress,
+        townDistrict: data.townDistrict,
+        llg: data.llg,
+        wardVillage: data.wardVillage,
+      };
+    }
 
     if (editingIndex !== null) {
       setOwners(prev => prev.map((o, i) => i === editingIndex ? ownerData : o));
@@ -211,7 +227,7 @@ export function OwnerManager({ owners, setOwners, form: mainForm }: OwnerManager
                         <FormField control={modalForm.control} name="firstName" render={({ field }) => (<FormItem><FormLabel>First Name *</FormLabel><FormControl><Input placeholder="John" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
                         <FormField control={modalForm.control} name="surname" render={({ field }) => (<FormItem><FormLabel>Surname *</FormLabel><FormControl><Input placeholder="Doe" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
                         <FormField control={modalForm.control} name="dobString" render={({ field }) => (<FormItem><FormLabel>Date of Birth</FormLabel><FormControl><Input type="date" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
-                        <FormField control={modalForm.control} name="sex" render={({ field }) => (<FormItem><FormLabel>Sex *</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger></FormControl><SelectContent>{["Male", "Female", "Other"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                        <FormField control={modalForm.control} name="sex" render={({ field }) => (<FormItem><FormLabel>Sex</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger></FormControl><SelectContent>{["Male", "Female", "Other"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                     </div>
                 )}
 
@@ -224,11 +240,11 @@ export function OwnerManager({ owners, setOwners, form: mainForm }: OwnerManager
                 )}
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                  <FormField control={modalForm.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Contact Phone *</FormLabel><FormControl><Input placeholder="e.g., +675 70000000" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={modalForm.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Contact Phone</FormLabel><FormControl><Input placeholder="e.g., +675 70000000" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
                   <FormField control={modalForm.control} name="fax" render={({ field }) => (<FormItem><FormLabel>Fax</FormLabel><FormControl><Input placeholder="Optional" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
                   <FormField control={modalForm.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="contact@example.com" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
                   <FormField control={modalForm.control} name="postalAddress" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Postal Address</FormLabel><FormControl><Input placeholder="P.O. Box 123, Waigani" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
-                  <FormField control={modalForm.control} name="townDistrict" render={({ field }) => (<FormItem><FormLabel>Town/District *</FormLabel><FormControl><Input placeholder="Port Moresby" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={modalForm.control} name="townDistrict" render={({ field }) => (<FormItem><FormLabel>Town/District</FormLabel><FormControl><Input placeholder="Port Moresby" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
                   <FormField control={modalForm.control} name="llg" render={({ field }) => (<FormItem><FormLabel>LLG (Local Level Gov.)</FormLabel><FormControl><Input placeholder="NCD" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
                   <FormField control={modalForm.control} name="wardVillage" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Ward/Village</FormLabel><FormControl><Input placeholder="Waigani Village" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
                 </div>

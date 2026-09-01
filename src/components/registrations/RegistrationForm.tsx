@@ -50,11 +50,11 @@ const ownerSchema = z.object({
   companyRegNo: z.string().optional(),
   companyAddress: z.string().optional(),
   // Common
-  phone: z.string().min(1, "Phone number is required"),
+  phone: z.string().optional().default(""),
   fax: z.string().optional().default(""),
   email: z.string().email("Invalid email address").optional().or(z.literal("")).default(""),
   postalAddress: z.string().optional().default(""),
-  townDistrict: z.string().min(1, "Town/District is required"),
+  townDistrict: z.string().optional().default(""),
   llg: z.string().optional().default(""),
   wardVillage: z.string().optional().default(""),
 });
@@ -81,26 +81,26 @@ const registrationFormSchema = z.object({
   owners: z.array(ownerSchema).min(1, "At least one owner is required").max(5, "Maximum of 5 owners"),
   proofOfOwnershipDocs: z.array(proofOfOwnershipDocSchema).optional().default([]),
 
-  craftMake: z.string().min(1, "Craft make is required"),
+  craftMake: z.string().optional().default(""),
   craftModel: z.string().optional().default(""),
   craftYear: z.number({invalid_type_error: "Year must be a number"}).int().min(1900, "Invalid year").max(new Date().getFullYear() + 1, "Invalid year").optional().nullable(),
   craftColor: z.string().optional().default(""),
   hullIdNumber: z.string().optional().default(""),
-  craftLength: z.number({invalid_type_error: "Length must be a number"}).positive("Length must be positive"),
-  lengthUnits: z.enum(["m", "ft"]),
+  craftLength: z.number({invalid_type_error: "Length must be a number"}).min(0, "Length cannot be negative").optional().default(0),
+  lengthUnits: z.enum(["m", "ft"]).optional().default("m"),
   passengerCapacity: z.number({invalid_type_error: "Capacity must be a number"}).int().positive("Passenger capacity must be a positive number").optional().nullable(),
   distinguishingFeatures: z.string().optional().default(""),
   craftImageUrl: z.string().url().optional().nullable(),
 
   engines: z.array(engineDetailSchema).optional().default([]),
 
-  propulsionType: z.enum(["Inboard", "Outboard", "Both", "Sail", "Other"]),
+  propulsionType: z.enum(["Inboard", "Outboard", "Both", "Sail", "Other"]).optional().default("Outboard"),
   propulsionOtherDesc: z.string().optional().default(""),
   hullMaterial: z.enum(["Wood", "Fiberglass", "Metal", "Inflatable", "Other"]).optional(),
   hullMaterialOtherDesc: z.string().optional().default(""),
-  craftUse: z.enum(["Pleasure", "Passenger", "Fishing", "Cargo", "Mixed Use", "Other"]),
+  craftUse: z.enum(["Pleasure", "Passenger", "Fishing", "Cargo", "Mixed Use", "Other"]).optional().default("Pleasure"),
   craftUseOtherDesc: z.string().optional().default(""),
-  fuelType: z.enum(["Electric", "Petrol", "Diesel", "Other"]),
+  fuelType: z.enum(["Electric", "Petrol", "Diesel", "Other"]).optional().default("Petrol"),
   fuelTypeOtherDesc: z.string().optional().default(""),
   vesselType: z.enum(["OpenBoat", "CabinCruiser", "Sailboat", "PWC", "Other"]).optional(),
   vesselTypeOtherDesc: z.string().optional().default(""),
@@ -298,11 +298,11 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
 
 
   useEffect(() => {
-    form.setValue("owners", ownersData as any);
+    form.setValue("owners", ownersData as any, { shouldValidate: true, shouldDirty: true });
   }, [ownersData, form]);
 
   useEffect(() => {
-    form.setValue("proofOfOwnershipDocs", proofDocsData as any);
+    form.setValue("proofOfOwnershipDocs", proofDocsData as any, { shouldValidate: true, shouldDirty: true });
   }, [proofDocsData, form]);
 
   const handleImageFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -541,7 +541,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
           <CardHeader><CardTitle>Craft Information</CardTitle></CardHeader>
           <CardContent className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FormField control={form.control} name="craftMake" render={({ field }) => (<FormItem><FormLabel>Craft Make *</FormLabel><FormControl><Input placeholder="e.g., Yamaha" {...field} /></FormControl><FormMessage /></FormItem>)} />
+              <FormField control={form.control} name="craftMake" render={({ field }) => (<FormItem><FormLabel>Craft Make</FormLabel><FormControl><Input placeholder="e.g., Yamaha" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
               <FormField control={form.control} name="craftModel" render={({ field }) => (<FormItem><FormLabel>Craft Model</FormLabel><FormControl><Input placeholder="e.g., FX Cruiser HO" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
               <FormField control={form.control} name="craftYear" render={({ field }) => (
                   <FormItem>
@@ -567,7 +567,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
               <div className="grid grid-cols-2 gap-4">
                 <FormField control={form.control} name="craftLength" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Craft Length *</FormLabel>
+                      <FormLabel>Craft Length</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -577,7 +577,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                           value={field.value === undefined || field.value === null || isNaN(Number(field.value)) ? '' : Number(field.value)}
                           onChange={e => {
                             const val = e.target.value;
-                            field.onChange(val === '' || isNaN(parseFloat(val)) ? undefined : parseFloat(val));
+                            field.onChange(val === '' || isNaN(parseFloat(val)) ? 0 : parseFloat(val));
                           }}
                         />
                       </FormControl>
@@ -585,7 +585,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                     </FormItem>
                   )}
                 />
-                <FormField control={form.control} name="lengthUnits" render={({ field }) => (<FormItem><FormLabel>Units *</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="m">Meters (m)</SelectItem><SelectItem value="ft">Feet (ft)</SelectItem></SelectContent></Select><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="lengthUnits" render={({ field }) => (<FormItem><FormLabel>Units</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="m">Meters (m)</SelectItem><SelectItem value="ft">Feet (ft)</SelectItem></SelectContent></Select><FormMessage /></FormItem>)} />
               </div>
               <FormField control={form.control} name="passengerCapacity" render={({ field }) => (
                   <FormItem>
@@ -706,16 +706,16 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
         <Card>
           <CardHeader><CardTitle>Technical Specifications</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <FormField control={form.control} name="propulsionType" render={({ field }) => (<FormItem><FormLabel>Propulsion Type *</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{["Inboard", "Outboard", "Both", "Sail", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="propulsionType" render={({ field }) => (<FormItem><FormLabel>Propulsion Type</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{["Inboard", "Outboard", "Both", "Sail", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
             {watchPropulsionType === "Other" && <FormField control={form.control} name="propulsionOtherDesc" render={({ field }) => (<FormItem><FormLabel>Other Propulsion Desc. *</FormLabel><FormControl><Input placeholder="Specify other" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
 
             <FormField control={form.control} name="hullMaterial" render={({ field }) => (<FormItem><FormLabel>Hull Material</FormLabel><Select onValueChange={field.onChange} value={field.value || ""}><FormControl><SelectTrigger><SelectValue placeholder="Select material..." /></SelectTrigger></FormControl><SelectContent>{["Wood", "Fiberglass", "Metal", "Inflatable", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
             {watchHullMaterial === "Other" && <FormField control={form.control} name="hullMaterialOtherDesc" render={({ field }) => (<FormItem><FormLabel>Other Hull Material Desc. *</FormLabel><FormControl><Input placeholder="Specify other" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
 
-            <FormField control={form.control} name="craftUse" render={({ field }) => (<FormItem><FormLabel>Craft Use *</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{["Pleasure", "Passenger", "Fishing", "Cargo", "Mixed Use", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="craftUse" render={({ field }) => (<FormItem><FormLabel>Craft Use</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{["Pleasure", "Passenger", "Fishing", "Cargo", "Mixed Use", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
             {watchCraftUse === "Other" && <FormField control={form.control} name="craftUseOtherDesc" render={({ field }) => (<FormItem><FormLabel>Other Craft Use Desc. *</FormLabel><FormControl><Input placeholder="Specify other" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
 
-            <FormField control={form.control} name="fuelType" render={({ field }) => (<FormItem><FormLabel>Fuel Type *</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{["Electric", "Petrol", "Diesel", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="fuelType" render={({ field }) => (<FormItem><FormLabel>Fuel Type</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{["Electric", "Petrol", "Diesel", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
             {watchFuelType === "Other" && <FormField control={form.control} name="fuelTypeOtherDesc" render={({ field }) => (<FormItem><FormLabel>Other Fuel Type Desc. *</FormLabel><FormControl><Input placeholder="Specify other" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
 
             <FormField control={form.control} name="vesselType" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Vessel Type</FormLabel><Select onValueChange={field.onChange} value={field.value || ""}><FormControl><SelectTrigger><SelectValue placeholder="Select vessel type..." /></SelectTrigger></FormControl><SelectContent>{["OpenBoat", "CabinCruiser", "Sailboat", "PWC", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />

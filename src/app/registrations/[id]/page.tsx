@@ -123,7 +123,7 @@ export default function RegistrationDetailPage() {
           safetyCertNumber: data.safetyCertNumber,
           safetyEquipIssued: data.safetyEquipIssued,
           owners: (data.owners || []).map((o: any) => ({ ...o, dob: ensureDateObject(o.dob) })),
-          proofOfOwnershipDocs: (data.proofOfOwnershipDocs || []).map((d: any) => ({ ...d, uploadedAt: ensureDateObject(d.uploadedAt) })),
+          proofOfOwnershipDocs: (data.proofOfOwnershipDocs || []).map((d: any) => ({ ...d, uploadedAt: ensureDateObject(d.uploadedAt) || new Date() })),
           craftMake: data.craftMake,
           craftModel: data.craftModel,
           craftYear: data.craftYear,
@@ -154,9 +154,9 @@ export default function RegistrationDetailPage() {
           revocationReason: data.revocationReason,
           revokedAt: ensureDateObject(data.revokedAt),
           lastUpdatedByRef: (data.lastUpdatedByRef instanceof DocumentReference) ? data.lastUpdatedByRef.id : data.lastUpdatedByRef,
-          lastUpdatedAt: ensureDateObject(data.lastUpdatedAt),
+          lastUpdatedAt: ensureDateObject(data.lastUpdatedAt) || new Date(),
           createdByRef: (data.createdByRef instanceof DocumentReference) ? data.createdByRef.id : data.createdByRef,
-          createdAt: ensureDateObject(data.createdAt),
+          createdAt: ensureDateObject(data.createdAt) || new Date(),
         };
         setRegistration(processedData);
         

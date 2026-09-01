@@ -134,7 +134,7 @@ export default function CertificatePreviewPage() {
           safetyEquipIssued: data.safetyEquipIssued || false,
           safetyEquipReceiptNumber: data.safetyEquipReceiptNumber,
           owners: Array.isArray(data.owners) ? data.owners.map(mapOwner) : [],
-          proofOfOwnershipDocs: Array.isArray(data.proofOfOwnershipDocs) ? data.proofOfOwnershipDocs.map(d => ({...d, uploadedAt: ensureDateObject(d.uploadedAt)})) : [],
+          proofOfOwnershipDocs: Array.isArray(data.proofOfOwnershipDocs) ? data.proofOfOwnershipDocs.map(d => ({...d, uploadedAt: ensureDateObject(d.uploadedAt) || new Date()})) : [],
           craftMake: data.craftMake || "",
           craftModel: data.craftModel || "",
           craftYear: data.craftYear || new Date().getFullYear(),
@@ -165,9 +165,9 @@ export default function CertificatePreviewPage() {
           revocationReason: data.revocationReason,
           revokedAt: ensureDateObject(data.revokedAt),
           lastUpdatedByRef: (data.lastUpdatedByRef instanceof DocumentReference) ? data.lastUpdatedByRef.id : data.lastUpdatedByRef,
-          lastUpdatedAt: ensureDateObject(data.lastUpdatedAt) as Date,
+          lastUpdatedAt: ensureDateObject(data.lastUpdatedAt) || new Date(),
           createdByRef: (data.createdByRef instanceof DocumentReference) ? data.createdByRef.id : data.createdByRef,
-          createdAt: ensureDateObject(data.createdAt) as Date,
+          createdAt: ensureDateObject(data.createdAt) || new Date(),
         };
         setRegistration(processedData);
       } else {

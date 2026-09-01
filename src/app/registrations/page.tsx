@@ -10,6 +10,7 @@ import { PlusCircle, Ship, Eye, Edit, Filter, Search, Loader2, AlertTriangle, Mo
 import type { Registration, Owner, ProofOfOwnershipDoc, User } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
+import { isValid } from 'date-fns';
 import type { BadgeProps } from "@/components/ui/badge";
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { Input } from "@/components/ui/input";
@@ -139,7 +140,7 @@ export default function RegistrationsPage() {
           description: docData.description || '',
           fileName: docData.fileName || '',
           fileUrl: docData.fileUrl || '',
-          uploadedAt: ensureSerializableDate(docData.uploadedAt),
+          uploadedAt: ensureSerializableDate(docData.uploadedAt) || new Date(),
         });
         
         const createdByRefId = data.createdByRef instanceof DocumentReference ? data.createdByRef.id : data.createdByRef;
@@ -327,7 +328,8 @@ export default function RegistrationsPage() {
       if (reg.status === 'Suspended' || reg.status === 'Revoked' || reg.status === 'Expired') suspendedOrRevoked++;
       
       if (reg.status === 'Approved' && reg.expiryDate) {
-         if (reg.expiryDate <= futureDate) {
+         const expDate = reg.expiryDate instanceof Date ? reg.expiryDate : new Date(reg.expiryDate as any);
+         if (isValid(expDate) && expDate <= futureDate) {
             expiringSoon++;
          }
       }

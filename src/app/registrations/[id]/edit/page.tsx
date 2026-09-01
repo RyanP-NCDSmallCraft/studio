@@ -83,7 +83,7 @@ export default function EditRegistrationPage() {
         const mapProofDoc = (docData: any): ProofOfOwnershipDoc => ({
           ...docData,
           docId: docData.docId || crypto.randomUUID(),
-          uploadedAt: ensureDateObject(docData.uploadedAt) as Date,
+          uploadedAt: ensureDateObject(docData.uploadedAt) || new Date(),
         });
 
         const mapEngineDetail = (engineData: any): EngineDetail => ({
@@ -142,9 +142,9 @@ export default function EditRegistrationPage() {
           revocationReason: data.revocationReason,
           revokedAt: ensureDateObject(data.revokedAt),
           lastUpdatedByRef: (data.lastUpdatedByRef instanceof DocumentReference) ? data.lastUpdatedByRef.id : data.lastUpdatedByRef,
-          lastUpdatedAt: ensureDateObject(data.lastUpdatedAt) as Date,
+          lastUpdatedAt: ensureDateObject(data.lastUpdatedAt) || new Date(),
           createdByRef: (data.createdByRef instanceof DocumentReference) ? data.createdByRef.id : data.createdByRef,
-          createdAt: ensureDateObject(data.createdAt) as Date,
+          createdAt: ensureDateObject(data.createdAt) || new Date(),
         };
         setExistingRegistration(processedData);
       } else {

@@ -2,7 +2,7 @@
 // src/actions/registrations.ts
 'use server';
 
-import { collection, getDocs, Timestamp, doc, type DocumentReference, addDoc } from 'firebase/firestore';
+import { collection, getDocs, Timestamp, doc, DocumentReference, addDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Registration, Owner, ProofOfOwnershipDoc, User, EngineDetail } from '@/types';
 
@@ -52,6 +52,7 @@ export async function getRegistrations(): Promise<Registration[]> {
       const mapOwner = (ownerData: any): Owner => ({
         ownerId: ownerData.ownerId || '',
         role: ownerData.role || 'Primary',
+        ownerType: ownerData.ownerType || 'Private',
         surname: ownerData.surname || '',
         firstName: ownerData.firstName || '',
         dob: ensureSerializableDate(ownerData.dob),
@@ -63,6 +64,9 @@ export async function getRegistrations(): Promise<Registration[]> {
         townDistrict: ownerData.townDistrict || '',
         llg: ownerData.llg || '',
         wardVillage: ownerData.wardVillage || '',
+        companyName: ownerData.companyName,
+        companyRegNo: ownerData.companyRegNo,
+        companyAddress: ownerData.companyAddress,
       });
 
       const mapProofDoc = (docData: any): ProofOfOwnershipDoc => ({
@@ -70,7 +74,7 @@ export async function getRegistrations(): Promise<Registration[]> {
         description: docData.description || '',
         fileName: docData.fileName || '',
         fileUrl: docData.fileUrl || '',
-        uploadedAt: ensureSerializableDate(docData.uploadedAt),
+        uploadedAt: ensureSerializableDate(docData.uploadedAt) || new Date(),
       });
 
       const mapEngineDetail = (engineData: any): EngineDetail => ({
@@ -250,7 +254,7 @@ export async function importRegistrations_serverAction(
       
       // Owner 1 (mandatory)
       if (owner1Type === "Company") {
-        if (record.owner1_companyName && record.owner1_phone && record.owner1_townDistrict) {
+        if (record.owner1_companyName) {
           owners.push({
             ownerId: crypto.randomUUID(),
             role: record.owner1_role || "Primary",
@@ -258,7 +262,7 @@ export async function importRegistrations_serverAction(
             companyName: record.owner1_companyName,
             companyRegNo: record.owner1_companyRegNo ?? "",
             companyAddress: record.owner1_companyAddress ?? "",
-            phone: record.owner1_phone,
+            phone: record.owner1_phone || "",
             email: record.owner1_email ?? "",
             postalAddress: record.owner1_postalAddress || "",
             townDistrict: record.owner1_townDistrict || "",
@@ -266,10 +270,10 @@ export async function importRegistrations_serverAction(
             wardVillage: record.owner1_wardVillage || "",
           });
         } else {
-          throw new Error(`Row ${i + 1}: Missing required fields for Company Owner 1 (Company Name, Phone, and Town/District).`);
+          throw new Error(`Row ${i + 1}: Missing required Company Name for Owner 1.`);
         }
       } else {
-        if (record.owner1_surname && record.owner1_firstName && record.owner1_phone && record.owner1_townDistrict) {
+        if (record.owner1_surname && record.owner1_firstName) {
           let dob: any = undefined;
           if (record.owner1_dob) {
             const dobDate = parseDateString(record.owner1_dob);
@@ -286,7 +290,7 @@ export async function importRegistrations_serverAction(
             firstName: record.owner1_firstName,
             dob,
             sex: record.owner1_sex || "Male",
-            phone: record.owner1_phone,
+            phone: record.owner1_phone || "",
             email: record.owner1_email ?? "",
             postalAddress: record.owner1_postalAddress || "",
             townDistrict: record.owner1_townDistrict || "",
@@ -294,7 +298,7 @@ export async function importRegistrations_serverAction(
             wardVillage: record.owner1_wardVillage || "",
           });
         } else {
-          throw new Error(`Row ${i + 1}: Missing required fields for Private Owner 1 (First Name, Surname, Phone, and Town/District).`);
+          throw new Error(`Row ${i + 1}: Missing required fields for Private Owner 1 (First Name and Surname).`);
         }
       }
 
@@ -303,7 +307,7 @@ export async function importRegistrations_serverAction(
       if (hasOwner2) {
         const owner2Type = record.owner2_ownerType || (record.owner2_companyName ? "Company" : "Private");
         if (owner2Type === "Company") {
-          if (record.owner2_companyName && record.owner2_phone && record.owner2_townDistrict) {
+          if (record.owner2_companyName) {
             owners.push({
               ownerId: crypto.randomUUID(),
               role: record.owner2_role || "CoOwner",
@@ -311,7 +315,7 @@ export async function importRegistrations_serverAction(
               companyName: record.owner2_companyName,
               companyRegNo: record.owner2_companyRegNo ?? "",
               companyAddress: record.owner2_companyAddress ?? "",
-              phone: record.owner2_phone,
+              phone: record.owner2_phone || "",
               email: record.owner2_email ?? "",
               postalAddress: record.owner2_postalAddress ?? "",
               townDistrict: record.owner2_townDistrict ?? "",
@@ -319,10 +323,10 @@ export async function importRegistrations_serverAction(
               wardVillage: record.owner2_wardVillage ?? "",
             });
           } else {
-            throw new Error(`Row ${i + 1}: Missing required fields for Company Owner 2 (Company Name, Phone, and Town/District).`);
+            throw new Error(`Row ${i + 1}: Missing required Company Name for Owner 2.`);
           }
         } else {
-          if (record.owner2_surname && record.owner2_firstName && record.owner2_phone && record.owner2_townDistrict) {
+          if (record.owner2_surname && record.owner2_firstName) {
             let dob: any = undefined;
             if (record.owner2_dob) {
               const dobDate = parseDateString(record.owner2_dob);
@@ -339,7 +343,7 @@ export async function importRegistrations_serverAction(
               firstName: record.owner2_firstName,
               dob,
               sex: record.owner2_sex || "Male",
-              phone: record.owner2_phone,
+              phone: record.owner2_phone || "",
               email: record.owner2_email ?? "",
               postalAddress: record.owner2_postalAddress ?? "",
               townDistrict: record.owner2_townDistrict ?? "",
@@ -347,7 +351,7 @@ export async function importRegistrations_serverAction(
               wardVillage: record.owner2_wardVillage ?? "",
             });
           } else {
-            throw new Error(`Row ${i + 1}: Missing required fields for Private Owner 2 (First Name, Surname, Phone, and Town/District).`);
+            throw new Error(`Row ${i + 1}: Missing required fields for Private Owner 2 (First Name and Surname).`);
           }
         }
       }
