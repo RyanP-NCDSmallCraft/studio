@@ -10,6 +10,14 @@ import { doc, getDoc, Timestamp, DocumentReference } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from "@/hooks/useAuth";
 import { isValid } from "date-fns";
+import {
+  normalizeEnum,
+  propulsionTypeMap,
+  hullMaterialMap,
+  craftUseMap,
+  fuelTypeMap,
+  vesselTypeMap,
+} from "@/lib/enum-normalization";
 
 
 // Helper function to safely convert Firestore Timestamps or other date forms to JS Date objects
@@ -123,15 +131,15 @@ export default function EditRegistrationPage() {
           distinguishingFeatures: data.distinguishingFeatures,
           craftImageUrl: data.craftImageUrl,
           engines: Array.isArray(data.engines) ? data.engines.map(mapEngineDetail) : [],
-          propulsionType: data.propulsionType || "Outboard",
+          propulsionType: (normalizeEnum(data.propulsionType, propulsionTypeMap, 'Outboard') as Registration['propulsionType']),
           propulsionOtherDesc: data.propulsionOtherDesc,
-          hullMaterial: data.hullMaterial || "Fiberglass",
+          hullMaterial: (normalizeEnum(data.hullMaterial, hullMaterialMap, 'Fiberglass') as Registration['hullMaterial']),
           hullMaterialOtherDesc: data.hullMaterialOtherDesc,
-          craftUse: data.craftUse || "Pleasure",
+          craftUse: (normalizeEnum(data.craftUse, craftUseMap, 'Pleasure') as Registration['craftUse']),
           craftUseOtherDesc: data.craftUseOtherDesc,
-          fuelType: data.fuelType || "Petrol",
+          fuelType: (normalizeEnum(data.fuelType, fuelTypeMap, 'Petrol') as Registration['fuelType']),
           fuelTypeOtherDesc: data.fuelTypeOtherDesc,
-          vesselType: data.vesselType || "OpenBoat",
+          vesselType: (normalizeEnum(data.vesselType, vesselTypeMap, 'OpenBoat') as Registration['vesselType']),
           vesselTypeOtherDesc: data.vesselTypeOtherDesc,
           certificateGeneratedAt: ensureDateObject(data.certificateGeneratedAt),
           certificateFileName: data.certificateFileName,

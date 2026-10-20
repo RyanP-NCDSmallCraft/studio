@@ -5,6 +5,14 @@
 import { collection, getDocs, Timestamp, doc, DocumentReference, addDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Registration, Owner, ProofOfOwnershipDoc, User, EngineDetail } from '@/types';
+import {
+  normalizeEnum,
+  propulsionTypeMap,
+  hullMaterialMap,
+  craftUseMap,
+  fuelTypeMap,
+  vesselTypeMap,
+} from '@/lib/enum-normalization';
 
 // Helper function to safely convert a Firestore Timestamp, JS Date, or Firestore-like object to a JS Date object.
 // Returns undefined if input is null/undefined or cannot be converted.
@@ -116,15 +124,15 @@ export async function getRegistrations(): Promise<Registration[]> {
         distinguishingFeatures: data.distinguishingFeatures,
         craftImageUrl: data.craftImageUrl,
         engines: Array.isArray(data.engines) ? data.engines.map(mapEngineDetail) : [],
-        propulsionType: data.propulsionType || 'Outboard',
+        propulsionType: (normalizeEnum(data.propulsionType, propulsionTypeMap, 'Outboard') as Registration['propulsionType']),
         propulsionOtherDesc: data.propulsionOtherDesc,
-        hullMaterial: data.hullMaterial || 'Fiberglass',
+        hullMaterial: (normalizeEnum(data.hullMaterial, hullMaterialMap, 'Fiberglass') as Registration['hullMaterial']),
         hullMaterialOtherDesc: data.hullMaterialOtherDesc,
-        craftUse: data.craftUse || 'Pleasure',
+        craftUse: (normalizeEnum(data.craftUse, craftUseMap, 'Pleasure') as Registration['craftUse']),
         craftUseOtherDesc: data.craftUseOtherDesc,
-        fuelType: data.fuelType || 'Petrol',
+        fuelType: (normalizeEnum(data.fuelType, fuelTypeMap, 'Petrol') as Registration['fuelType']),
         fuelTypeOtherDesc: data.fuelTypeOtherDesc,
-        vesselType: data.vesselType || 'OpenBoat',
+        vesselType: (normalizeEnum(data.vesselType, vesselTypeMap, 'OpenBoat') as Registration['vesselType']),
         vesselTypeOtherDesc: data.vesselTypeOtherDesc,
         certificateGeneratedAt: ensureSerializableDate(data.certificateGeneratedAt),
         certificateFileName: data.certificateFileName,
@@ -444,15 +452,15 @@ export async function importRegistrations_serverAction(
         passengerCapacity,
         distinguishingFeatures: record.distinguishingFeatures || "",
         engines,
-        propulsionType: record.propulsionType || "Outboard",
+        propulsionType: normalizeEnum(record.propulsionType as string, propulsionTypeMap, 'Outboard'),
         propulsionOtherDesc: record.propulsionOtherDesc || "",
-        hullMaterial: record.hullMaterial || "Fiberglass",
+        hullMaterial: normalizeEnum(record.hullMaterial as string, hullMaterialMap, 'Fiberglass'),
         hullMaterialOtherDesc: record.hullMaterialOtherDesc || "",
-        craftUse: record.craftUse || "Pleasure",
+        craftUse: normalizeEnum(record.craftUse as string, craftUseMap, 'Pleasure'),
         craftUseOtherDesc: record.craftUseOtherDesc || "",
-        fuelType: record.fuelType || "Petrol",
+        fuelType: normalizeEnum(record.fuelType as string, fuelTypeMap, 'Petrol'),
         fuelTypeOtherDesc: record.fuelTypeOtherDesc || "",
-        vesselType: record.vesselType || "OpenBoat",
+        vesselType: normalizeEnum(record.vesselType as string, vesselTypeMap, 'OpenBoat'),
         vesselTypeOtherDesc: record.vesselTypeOtherDesc || "",
         createdAt: Timestamp.now(),
         createdByRef: createdByRef,

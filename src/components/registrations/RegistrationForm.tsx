@@ -94,15 +94,25 @@ const registrationFormSchema = z.object({
 
   engines: z.array(engineDetailSchema).optional().default([]),
 
-  propulsionType: z.enum(["Inboard", "Outboard", "Both", "Sail", "Other"]).optional().default("Outboard"),
+  propulsionType: z.enum(["Inboard", "Outboard", "Both", "Sail", "Other"], {
+    errorMap: () => ({ message: "Please select a propulsion type" }),
+  }).optional().default("Outboard"),
   propulsionOtherDesc: z.string().optional().default(""),
-  hullMaterial: z.enum(["Wood", "Fiberglass", "Metal", "Inflatable", "Other"]).optional(),
+  hullMaterial: z.enum(["Wood", "Fiberglass", "Metal", "Inflatable", "Other"], {
+    errorMap: () => ({ message: "Please select a hull material" }),
+  }).optional(),
   hullMaterialOtherDesc: z.string().optional().default(""),
-  craftUse: z.enum(["Pleasure", "Passenger", "Fishing", "Cargo", "Mixed Use", "Other"]).optional().default("Pleasure"),
+  craftUse: z.enum(["Pleasure", "Passenger", "Fishing", "Cargo", "Mixed Use", "Other"], {
+    errorMap: () => ({ message: "Please select the craft use" }),
+  }).optional().default("Pleasure"),
   craftUseOtherDesc: z.string().optional().default(""),
-  fuelType: z.enum(["Electric", "Petrol", "Diesel", "Other"]).optional().default("Petrol"),
+  fuelType: z.enum(["Electric", "Petrol", "Diesel", "Other"], {
+    errorMap: () => ({ message: "Please select a fuel type" }),
+  }).optional().default("Petrol"),
   fuelTypeOtherDesc: z.string().optional().default(""),
-  vesselType: z.enum(["OpenBoat", "CabinCruiser", "Sailboat", "PWC", "Other"]).optional(),
+  vesselType: z.enum(["OpenBoat", "CabinCruiser", "Sailboat", "PWC", "Other"], {
+    errorMap: () => ({ message: "Please select a vessel type" }),
+  }).optional(),
   vesselTypeOtherDesc: z.string().optional().default(""),
 
   paymentMethod: z.enum(["Cash", "Card", "BankDeposit"]).optional(),
@@ -706,19 +716,19 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
         <Card>
           <CardHeader><CardTitle>Technical Specifications</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <FormField control={form.control} name="propulsionType" render={({ field }) => (<FormItem><FormLabel>Propulsion Type</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{["Inboard", "Outboard", "Both", "Sail", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="propulsionType" render={({ field }) => (<FormItem><FormLabel>Propulsion Type</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select propulsion type..." /></SelectTrigger></FormControl><SelectContent>{["Inboard", "Outboard", "Both", "Sail", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormDescription>e.g. Outboard, Inboard, Sail</FormDescription><FormMessage /></FormItem>)} />
             {watchPropulsionType === "Other" && <FormField control={form.control} name="propulsionOtherDesc" render={({ field }) => (<FormItem><FormLabel>Other Propulsion Desc. *</FormLabel><FormControl><Input placeholder="Specify other" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
 
-            <FormField control={form.control} name="hullMaterial" render={({ field }) => (<FormItem><FormLabel>Hull Material</FormLabel><Select onValueChange={field.onChange} value={field.value || ""}><FormControl><SelectTrigger><SelectValue placeholder="Select material..." /></SelectTrigger></FormControl><SelectContent>{["Wood", "Fiberglass", "Metal", "Inflatable", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="hullMaterial" render={({ field }) => (<FormItem><FormLabel>Hull Material</FormLabel><Select onValueChange={field.onChange} value={field.value || ""}><FormControl><SelectTrigger><SelectValue placeholder="Select hull material..." /></SelectTrigger></FormControl><SelectContent>{["Wood", "Fiberglass", "Metal", "Inflatable", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormDescription>e.g. Fiberglass, Wood, Metal</FormDescription><FormMessage /></FormItem>)} />
             {watchHullMaterial === "Other" && <FormField control={form.control} name="hullMaterialOtherDesc" render={({ field }) => (<FormItem><FormLabel>Other Hull Material Desc. *</FormLabel><FormControl><Input placeholder="Specify other" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
 
-            <FormField control={form.control} name="craftUse" render={({ field }) => (<FormItem><FormLabel>Craft Use</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{["Pleasure", "Passenger", "Fishing", "Cargo", "Mixed Use", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="craftUse" render={({ field }) => (<FormItem><FormLabel>Craft Use</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select craft use..." /></SelectTrigger></FormControl><SelectContent>{["Pleasure", "Passenger", "Fishing", "Cargo", "Mixed Use", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormDescription>e.g. Pleasure, Fishing, Mixed Use</FormDescription><FormMessage /></FormItem>)} />
             {watchCraftUse === "Other" && <FormField control={form.control} name="craftUseOtherDesc" render={({ field }) => (<FormItem><FormLabel>Other Craft Use Desc. *</FormLabel><FormControl><Input placeholder="Specify other" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
 
-            <FormField control={form.control} name="fuelType" render={({ field }) => (<FormItem><FormLabel>Fuel Type</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{["Electric", "Petrol", "Diesel", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="fuelType" render={({ field }) => (<FormItem><FormLabel>Fuel Type</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select fuel type..." /></SelectTrigger></FormControl><SelectContent>{["Electric", "Petrol", "Diesel", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormDescription>e.g. Petrol, Diesel, Electric</FormDescription><FormMessage /></FormItem>)} />
             {watchFuelType === "Other" && <FormField control={form.control} name="fuelTypeOtherDesc" render={({ field }) => (<FormItem><FormLabel>Other Fuel Type Desc. *</FormLabel><FormControl><Input placeholder="Specify other" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
 
-            <FormField control={form.control} name="vesselType" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Vessel Type</FormLabel><Select onValueChange={field.onChange} value={field.value || ""}><FormControl><SelectTrigger><SelectValue placeholder="Select vessel type..." /></SelectTrigger></FormControl><SelectContent>{["OpenBoat", "CabinCruiser", "Sailboat", "PWC", "Other"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="vesselType" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Vessel Type</FormLabel><Select onValueChange={field.onChange} value={field.value || ""}><FormControl><SelectTrigger><SelectValue placeholder="Select vessel type..." /></SelectTrigger></FormControl><SelectContent>{[{val: "OpenBoat", label: "Open Boat"}, {val: "CabinCruiser", label: "Cabin Cruiser"}, {val: "Sailboat", label: "Sailboat"}, {val: "PWC", label: "PWC (Jet Ski)"}, {val: "Other", label: "Other"}].map(item => <SelectItem key={item.val} value={item.val}>{item.label}</SelectItem>)}</SelectContent></Select><FormDescription>e.g. Open Boat, Cabin Cruiser, PWC</FormDescription><FormMessage /></FormItem>)} />
             {watchVesselType === "Other" && <FormField control={form.control} name="vesselTypeOtherDesc" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Other Vessel Type Desc. *</FormLabel><FormControl><Input placeholder="Specify other" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
           </CardContent>
         </Card>
