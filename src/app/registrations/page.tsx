@@ -66,7 +66,7 @@ const ensureSerializableDate = (dateValue: any): Date | undefined => {
 const REGISTRATION_STATUSES: Registration['status'][] = ["Draft", "Submitted", "PendingReview", "RequiresInfo", "Approved", "Rejected", "Expired", "Suspended", "Revoked"];
 
 export default function RegistrationsPage() {
-  const { currentUser, isAdmin, isRegistrar, loading: authLoading } = useAuth();
+  const { currentUser, isAdmin, isRegistrar, isSupervisor, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -270,7 +270,7 @@ export default function RegistrationsPage() {
   const canEditRegistration = (regStatus?: Registration["status"]): boolean => {
     if (!currentUser) return false;
     const editableStatuses: Array<Registration["status"]> = ["Draft", "Submitted", "RequiresInfo"];
-    return (isRegistrar || isAdmin) && !!regStatus && editableStatuses.includes(regStatus);
+    return (isRegistrar || isAdmin || isSupervisor) && !!regStatus && editableStatuses.includes(regStatus);
   };
 
   const filteredRegistrations = useMemo(() => {
@@ -452,7 +452,7 @@ export default function RegistrationsPage() {
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          {(isRegistrar || isAdmin) && (
+          {(isRegistrar || isAdmin || isSupervisor) && (
             <Button asChild>
               <Link href="/registrations/new">
                 <PlusCircle className="mr-2 h-4 w-4" /> Add New Registration
@@ -549,7 +549,7 @@ export default function RegistrationsPage() {
                             </DropdownMenuItem>
                           )}
 
-                          {(isAdmin || isRegistrar) && ["Approved", "Expired"].includes(reg.status) && (
+                          {(isAdmin || isRegistrar || isSupervisor) && ["Approved", "Expired"].includes(reg.status) && (
                             <>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem asChild>

@@ -1,9 +1,12 @@
 
 // src/actions/users.ts
-'use server';
+// NOTE: These user management actions run in the client context with the authenticated
+// Firebase user credentials so that Firestore security rules can evaluate request.auth.
+// 'use server' was removed because on the server, the Firebase client SDK is unauthenticated (request.auth is null),
+// which caused Firestore permission denied errors when checking admin privileges or writing to /users.
 
 import { collection, getDocs, Timestamp, type DocumentReference, doc, getDoc, updateDoc, deleteDoc, setDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase'; 
+import { db, auth } from '@/lib/firebase'; 
 import type { User, UserRole } from '@/types';
 
 // Helper function to safely convert Firestore Timestamps or other date forms to JS Date objects
@@ -19,7 +22,7 @@ const ensureSerializableDate = (dateValue: any): Date | undefined => {
     try {
       return new Timestamp(dateValue.seconds, dateValue.nanoseconds).toDate();
     } catch (e) {
-      console.warn('Server Action users.ts: Failed to convert object to Timestamp then to Date:', dateValue, e);
+      console.warn('users.ts: Failed to convert object to Timestamp then to Date:', dateValue, e);
       return undefined;
     }
   }
@@ -29,23 +32,24 @@ const ensureSerializableDate = (dateValue: any): Date | undefined => {
       return parsedDate;
     }
   }
-  console.warn(`Server Action users.ts: Could not convert field to a serializable Date:`, dateValue);
+  console.warn(`users.ts: Could not convert field to a serializable Date:`, dateValue);
   return undefined;
 };
 
-// Helper to check Admin permissions securely on the server
+// Helper to check Admin permissions securely
 async function checkAdminPermissions(adminUserId: string): Promise<{ isAdmin: boolean; error?: string }> {
-  if (!adminUserId) {
+  const uidToCheck = auth.currentUser?.uid || adminUserId;
+  if (!uidToCheck) {
     return { isAdmin: false, error: "Admin user ID not provided for permission check." };
   }
   try {
-    const adminUserDocRef = doc(db, "users", adminUserId);
+    const adminUserDocRef = doc(db, "users", uidToCheck);
     const adminUserDocSnap = await getDoc(adminUserDocRef);
     if (!adminUserDocSnap.exists()) {
       return { isAdmin: false, error: "Admin user profile not found." };
     }
     const adminUserData = adminUserDocSnap.data() as User;
-    if (adminUserData.role !== "Admin" || !adminUserData.isActive) {
+    if (adminUserData.role?.toLowerCase() !== "admin" || !adminUserData.isActive) {
       return { isAdmin: false, error: "Action requires active Admin privileges." };
     }
     return { isAdmin: true };

@@ -477,7 +477,7 @@ export default function InspectionListPage() {
               </TableHeader>
               <TableBody>
                 {inspections.length > 0 ? inspections.map((insp) => {
-                  const canBeStartedByCurrentUser = (isInspector && insp.inspectorData?.id === currentUser?.userId) || isAdmin || isRegistrar || isSupervisor;
+                  const canBeStartedByCurrentUser = (isInspector && insp.inspectorData?.id === currentUser?.userId) || isAdmin || isRegistrar;
                   const canEditScheduleByCurrentUser = (isAdmin || isRegistrar || isSupervisor);
                   const canContinueConductingByCurrentUser = (isInspector && insp.inspectorData?.id === currentUser?.userId && insp.status === "InProgress") || ((isAdmin || isRegistrar || isSupervisor) && insp.status === "InProgress");
                   const canReviewByCurrentUser = (isRegistrar || isAdmin);

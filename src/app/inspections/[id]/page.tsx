@@ -221,7 +221,7 @@ export default function InspectionDetailPage() {
 
   const canConductOrContinueInspection =
     (isInspector && inspection?.inspectorData?.id === currentUser?.userId && (inspection?.status === "Scheduled" || inspection?.status === "InProgress")) ||
-    ((isAdmin || isRegistrar || isSupervisor) && (inspection?.status === "Scheduled" || inspection?.status === "InProgress"));
+    ((isAdmin || isRegistrar) && (inspection?.status === "Scheduled" || inspection?.status === "InProgress"));
 
   const canEditSchedule = (isAdmin || isRegistrar || isSupervisor) && ["Scheduled", "InProgress", "Passed"].includes(inspection?.status || "");
 

@@ -209,7 +209,7 @@ export function UserFormDialog({ mode, user, open, onOpenChange, onUserUpdated }
         } else {
           let description = result.error || "Could not create user profile.";
           if (result.error?.toLowerCase().includes("permission check failed")) {
-            description = `Server-side permission check failed: ${result.error}. Verify your admin role in Firestore.`;
+            description = `${result.error}. Verify your admin role in Firestore.`;
           }
           toast({ title: "Profile Creation Failed", description, variant: "destructive" });
         }
@@ -228,7 +228,7 @@ export function UserFormDialog({ mode, user, open, onOpenChange, onUserUpdated }
         } else {
           let description = result.error || "Could not update user profile.";
           if (result.error?.toLowerCase().includes("permission check failed")) {
-            description = `Server-side permission check failed: ${result.error}. Verify your admin role in Firestore.`;
+            description = `${result.error}. Verify your admin role in Firestore.`;
           }
           toast({ title: "Update Failed", description, variant: "destructive" });
         }

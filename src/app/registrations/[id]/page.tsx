@@ -410,12 +410,12 @@ export default function RegistrationDetailPage() {
   };
 
 
-  const canEdit = (isRegistrar || isAdmin) && (registration.status === "Submitted" || registration.status === "RequiresInfo" || registration.status === "Draft" || registration.status === "Approved");
+  const canEdit = (isRegistrar || isAdmin || isSupervisor) && (registration.status === "Submitted" || registration.status === "RequiresInfo" || registration.status === "Draft" || registration.status === "Approved");
   const canApproveReject = (isRegistrar || isAdmin) && (registration.status === "Submitted" || registration.status === "RequiresInfo" || registration.status === "PendingReview");
   const canSuspendRevoke = (isRegistrar || isAdmin) && (registration.status === "Approved" || registration.status === "Expired" || registration.status === "Suspended");
   const canUnsuspend = (isRegistrar || isAdmin) && registration.status === "Suspended";
   const canScheduleInspection = (isAdmin || isSupervisor || isRegistrar);
-  const canGenerateCertificate = (isRegistrar || isAdmin) && registration.status === "Approved";
+  const canGenerateCertificate = (isRegistrar || isAdmin || isSupervisor) && registration.status === "Approved";
 
 
   return (
