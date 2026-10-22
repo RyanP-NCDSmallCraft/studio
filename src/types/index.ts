@@ -66,11 +66,16 @@ export interface Registration {
   approvedAt?: Timestamp | Date | string;
   effectiveDate?: Timestamp | Date | string;
   expiryDate?: Timestamp | Date | string;
-  paymentMethod?: "Cash" | "Card" | "BankDeposit";
+  paymentMethod?: "Cash" | "Card" | "BankDeposit" | "EFTPOS";
   paymentReceiptNumber?: string;
   bankStampRef?: string;
   paymentAmount?: number;
   paymentDate?: Timestamp | Date | string;
+  paymentConfirmed?: boolean;
+  paymentReceiptUrl?: string;
+  paymentReceiptFileName?: string;
+  paymentConfirmedAt?: Timestamp | Date | string;
+  paymentConfirmedByRef?: DocumentReference<User> | string;
   safetyCertNumber?: string;
   safetyEquipIssued?: boolean;
   safetyEquipReceiptNumber?: string;
