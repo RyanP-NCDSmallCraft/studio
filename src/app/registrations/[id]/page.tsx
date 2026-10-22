@@ -27,7 +27,7 @@ import { Label } from "@/components/ui/label";
 import React, { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { format, parseISO, isValid, addDays, addYears } from "date-fns";
-import { doc, getDoc, updateDoc, Timestamp, collection, query, where, getDocs, DocumentReference } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, Timestamp, collection, query, where, getDocs, DocumentReference, type QueryConstraint } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Textarea } from "@/components/ui/textarea";
 
@@ -58,7 +58,7 @@ const ensureDateObject = (dateValue: any): Date | undefined => {
 export default function RegistrationDetailPage() {
   const params = useParams();
   const registrationId = params.id as string;
-  const { currentUser, isRegistrar, isAdmin, isSupervisor } = useAuth();
+  const { currentUser, isRegistrar, isAdmin, isSupervisor, isInspector } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
@@ -175,9 +175,17 @@ export default function RegistrationDetailPage() {
 
 
         try {
+          const queryConstraints: QueryConstraint[] = [
+            where("registrationRef", "==", doc(db, "registrations", registrationId))
+          ];
+
+          if (isInspector && !isAdmin && !isRegistrar && !isSupervisor && currentUser?.userId) {
+            queryConstraints.push(where("inspectorRef", "==", doc(db, "users", currentUser.userId)));
+          }
+
           const inspectionsQuery = query(
             collection(db, "inspections"),
-            where("registrationRef", "==", doc(db, "registrations", registrationId))
+            ...queryConstraints
           );
           const inspectionSnapshot = await getDocs(inspectionsQuery);
           const inspectionsData = inspectionSnapshot.docs.map(inspDoc => {
@@ -216,7 +224,7 @@ export default function RegistrationDetailPage() {
       setLoading(false);
       setLoadingLinkedInspections(false);
     }
-  }, [registrationId, currentUser]);
+  }, [registrationId, currentUser, isInspector, isAdmin, isRegistrar, isSupervisor]);
 
   useEffect(() => {
     if (currentUser !== undefined) {
@@ -761,7 +769,11 @@ export default function RegistrationDetailPage() {
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-muted-foreground">No inspections linked to this registration yet.</p>
+            <p className="text-sm text-muted-foreground">
+              {isInspector && !isAdmin && !isRegistrar && !isSupervisor
+                ? "No inspections assigned to you for this registration yet."
+                : "No inspections linked to this registration yet."}
+            </p>
           )}
         </CardContent>
       </Card>

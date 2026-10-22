@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { 
   Users, Ship, ClipboardList, ArrowRight, Info, Loader2, AlertTriangle, 
-  CheckCircle, FileEdit, Ban, PauseCircle, AlertOctagon, UserCheck, Siren, CalendarClock, Contact
+  CheckCircle, FileEdit, Ban, PauseCircle, AlertOctagon, UserCheck, Siren, CalendarClock, Contact,
+  PlayCircle, ClipboardCheck
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import React, { useState, useEffect, useCallback } from "react";
@@ -206,6 +207,42 @@ export default function DashboardPage() {
         </CardHeader>
       </Card>
 
+      {/* Prominent Inspector Action Section */}
+      {isInspector && (
+        <Card className="relative overflow-hidden border-2 border-primary/30 bg-gradient-to-br from-primary/15 via-primary/5 to-background shadow-xl">
+          <div className="absolute top-0 right-0 -mt-6 -mr-6 w-56 h-56 bg-primary/15 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute bottom-0 right-8 opacity-10 pointer-events-none hidden md:block">
+            <ClipboardCheck className="w-48 h-48 text-primary" />
+          </div>
+          <CardContent className="p-6 sm:p-8 relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            <div className="space-y-2 max-w-2xl">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/15 text-primary text-xs font-bold tracking-wide uppercase">
+                <ClipboardCheck className="h-4 w-4" />
+                Inspector Field Operations
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
+                Ready to Inspect a Craft?
+              </h2>
+              <p className="text-muted-foreground text-sm sm:text-base leading-relaxed">
+                Launch an on-the-spot craft safety inspection, complete standard checklists, and record findings directly in the field.
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto shrink-0">
+              <Button asChild size="lg" className="h-14 px-8 text-base font-bold shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:scale-[1.02] transition-all bg-primary hover:bg-primary/90 text-primary-foreground">
+                <Link href="/inspections/conduct-new">
+                  <PlayCircle className="mr-2 h-6 w-6" /> Start Inspection <ArrowRight className="ml-2 h-5 w-5" />
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="lg" className="h-14 px-6 text-sm font-semibold border-primary/20 hover:bg-primary/5">
+                <Link href="/inspections?assignedTo=me&status=Scheduled,InProgress,PendingReview">
+                  <ClipboardList className="mr-2 h-5 w-5 text-primary" /> Assigned to You ({renderStat(userInspectionsCount)})
+                </Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {statsError && !loadingStats && ( 
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
@@ -377,9 +414,16 @@ export default function DashboardPage() {
             <CardContent>
               <div className="text-3xl font-bold text-purple-600">{renderStat(userInspectionsCount)}</div>
               <p className="text-xs font-medium text-purple-600/80 mt-1">Inspections assigned to you</p>
-               <Button asChild size="sm" className="mt-4 w-full bg-purple-600 hover:bg-purple-700 text-white">
-                <Link href="/inspections?assignedTo=me&status=Scheduled,InProgress,PendingReview">View Your Inspections <ArrowRight className="ml-2 h-4 w-4" /></Link>
-              </Button>
+              <div className="mt-4 flex flex-col gap-2">
+                <Button asChild size="sm" className="w-full bg-purple-600 hover:bg-purple-700 text-white">
+                  <Link href="/inspections?assignedTo=me&status=Scheduled,InProgress,PendingReview">View Your Inspections <ArrowRight className="ml-2 h-4 w-4" /></Link>
+                </Button>
+                <Button asChild size="sm" variant="outline" className="w-full border-purple-500/30 text-purple-700 dark:text-purple-300 hover:bg-purple-500/10">
+                  <Link href="/inspections/conduct-new">
+                    <PlayCircle className="mr-2 h-4 w-4" /> Start Inspection
+                  </Link>
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )}
@@ -405,6 +449,13 @@ export default function DashboardPage() {
           <CardTitle>Quick Links</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-4">
+          {isInspector && (
+            <Button asChild className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-sm">
+              <Link href="/inspections/conduct-new">
+                <PlayCircle className="mr-2 h-4 w-4" /> Start Inspection
+              </Link>
+            </Button>
+          )}
           <Button asChild variant="secondary">
             <Link href="/registrations">View All Registrations</Link>
           </Button>
