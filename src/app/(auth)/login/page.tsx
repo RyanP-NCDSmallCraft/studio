@@ -31,7 +31,7 @@ export default function LoginPage() {
         </CardContent>
       </Card>
       <footer className="mt-8 text-center text-sm text-primary-foreground/70">
-        <p>&copy; {new Date().getFullYear()} RegoCraft. All rights reserved.</p>
+        <p>&copy; {new Date().getFullYear()} RegoCraft. v{process.env.NEXT_PUBLIC_APP_VERSION || "0.1.4"} &bull; All rights reserved.</p>
       </footer>
     </main>
   );
