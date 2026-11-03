@@ -22,8 +22,9 @@ import type { Registration, Owner, ProofOfOwnershipDoc, User, EngineDetail } fro
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
-import { Save, Send, Trash2, PlusCircle, UploadCloud } from "lucide-react";
-import React, { useState, useEffect } from "react";
+import { Save, Send, Trash2, PlusCircle, UploadCloud, Receipt, CheckCircle2, AlertCircle } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Timestamp, addDoc, collection, doc, type DocumentReference, updateDoc } from "firebase/firestore";
 import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
@@ -115,11 +116,12 @@ const registrationFormSchema = z.object({
   }).optional(),
   vesselTypeOtherDesc: z.string().optional().default(""),
 
-  paymentMethod: z.enum(["Cash", "Card", "BankDeposit"]).optional(),
+  paymentMethod: z.enum(["Cash", "Card", "BankDeposit", "EFTPOS"]).optional(),
   paymentReceiptNumber: z.string().optional().default(""),
   bankStampRef: z.string().optional().default(""),
   paymentAmount: z.number({invalid_type_error: "Amount must be a number"}).positive("Amount must be positive").optional().nullable(),
   paymentDate: z.date().optional().nullable(),
+  paymentConfirmed: z.boolean().optional().default(false),
 
   safetyCertNumber: z.string().optional().default(""),
   safetyEquipIssued: z.boolean().optional().default(false),
@@ -151,6 +153,8 @@ const registrationFormSchema = z.object({
   if (data.vesselType === "Other" && !data.vesselTypeOtherDesc) {
      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["vesselTypeOtherDesc"], message: "Description is required if 'Other' selected." });
   }
+  // Payment is mandatory when submitting for review — enforced at submit time via submissionStatus param
+  // (handled in onSubmit rather than here to allow Drafts without payment)
 });
 
 type RegistrationFormValues = z.infer<typeof registrationFormSchema>;
@@ -169,6 +173,13 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(existingRegistrationData?.craftImageUrl || null);
   const [imageUploadProgress, setImageUploadProgress] = useState<number | null>(null);
+
+  // Payment receipt file upload state
+  const [selectedReceiptFile, setSelectedReceiptFile] = useState<File | null>(null);
+  const [receiptUploadProgress, setReceiptUploadProgress] = useState<number | null>(null);
+  const [existingReceiptUrl, setExistingReceiptUrl] = useState<string | null>(existingRegistrationData?.paymentReceiptUrl || null);
+  const [existingReceiptFileName, setExistingReceiptFileName] = useState<string | null>(existingRegistrationData?.paymentReceiptFileName || null);
+  const receiptFileInputRef = useRef<HTMLInputElement>(null);
 
 
   const defaultValues: Partial<RegistrationFormValues> = existingRegistrationData
@@ -234,6 +245,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       bankStampRef: existingRegistrationData.bankStampRef || "",
       paymentAmount: existingRegistrationData.paymentAmount ?? null,
       paymentDate: existingRegistrationData.paymentDate instanceof Timestamp ? existingRegistrationData.paymentDate.toDate() : (existingRegistrationData.paymentDate ? new Date(existingRegistrationData.paymentDate as any) : null),
+      paymentConfirmed: existingRegistrationData.paymentConfirmed ?? false,
       safetyCertNumber: existingRegistrationData.safetyCertNumber || "",
       safetyEquipIssued: existingRegistrationData.safetyEquipIssued ?? false,
       safetyEquipReceiptNumber: existingRegistrationData.safetyEquipReceiptNumber || "",
@@ -272,6 +284,7 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       bankStampRef: "",
       paymentAmount: null,
       paymentDate: null,
+      paymentConfirmed: false,
       safetyCertNumber: "",
       safetyEquipIssued: false,
       safetyEquipReceiptNumber: "",
@@ -337,6 +350,22 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       return;
     }
 
+    // Enforce mandatory payment fields when submitting for review
+    if (submissionStatus === "Submitted") {
+      const missingFields: string[] = [];
+      if (!data.paymentMethod) missingFields.push("Payment Method");
+      if (!data.paymentAmount || data.paymentAmount <= 0) missingFields.push("Payment Amount");
+      if (!data.paymentDate) missingFields.push("Payment Date");
+      if (missingFields.length > 0) {
+        toast({
+          title: "Payment Information Required",
+          description: `Please complete payment details before submitting: ${missingFields.join(", ")}.`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     form.clearErrors();
     setImageUploadProgress(null);
 
@@ -374,6 +403,44 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
         toast({ title: "Image Upload Failed", description: "Could not upload the craft image. Please try again.", variant: "destructive" });
         setImageUploadProgress(null);
         return; 
+      }
+    }
+
+    // Upload payment receipt file if one is selected
+    if (selectedReceiptFile) {
+      toast({ title: "Uploading Receipt...", description: "Please wait." });
+      setReceiptUploadProgress(0);
+      const receiptFileName = `${Date.now()}_${selectedReceiptFile.name}`;
+      const receiptPath = `payment_receipts/${registrationId || Date.now()}/${receiptFileName}`;
+      const receiptStorageRef = storageRef(storage, receiptPath);
+
+      try {
+        const receiptUploadTask = uploadBytesResumable(receiptStorageRef, selectedReceiptFile);
+        await new Promise<void>((resolve, reject) => {
+          receiptUploadTask.on('state_changed',
+            (snapshot) => {
+              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+              setReceiptUploadProgress(progress);
+            },
+            (error) => {
+              console.error("Receipt upload error:", error);
+              reject(error);
+            },
+            async () => {
+              const downloadUrl = await getDownloadURL(receiptUploadTask.snapshot.ref);
+              setExistingReceiptUrl(downloadUrl);
+              setExistingReceiptFileName(selectedReceiptFile.name);
+              setSelectedReceiptFile(null);
+              resolve();
+            }
+          );
+        });
+        toast({ title: "Receipt Upload Successful", description: "Payment receipt has been uploaded." });
+        setReceiptUploadProgress(100);
+      } catch (error) {
+        toast({ title: "Receipt Upload Failed", description: "Could not upload the payment receipt. Please try again.", variant: "destructive" });
+        setReceiptUploadProgress(null);
+        return;
       }
     }
 
@@ -428,6 +495,9 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
       bankStampRef: data.bankStampRef ?? "",
       paymentAmount: data.paymentAmount ?? null,
       paymentDate: data.paymentDate ? Timestamp.fromDate(data.paymentDate instanceof Date ? data.paymentDate : new Date(data.paymentDate as string)) : null,
+      paymentConfirmed: data.paymentConfirmed ?? false,
+      paymentReceiptUrl: existingReceiptUrl ?? null,
+      paymentReceiptFileName: existingReceiptFileName ?? null,
       safetyCertNumber: data.safetyCertNumber ?? "",
       safetyEquipReceiptNumber: data.safetyEquipReceiptNumber ?? "",
       distinguishingFeatures: data.distinguishingFeatures ?? "",
@@ -779,13 +849,37 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
           </Card>
         )}
 
-         <Card>
-          <CardHeader><CardTitle>Payment Information (Optional)</CardTitle></CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <FormField control={form.control} name="paymentMethod" render={({ field }) => (<FormItem><FormLabel>Payment Method</FormLabel><Select onValueChange={field.onChange} value={field.value || ""}><FormControl><SelectTrigger><SelectValue placeholder="Select method"/></SelectTrigger></FormControl><SelectContent>{["Cash", "Card", "BankDeposit"].map(val => <SelectItem key={val} value={val}>{val}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="paymentAmount" render={({ field }) => (
+         <Card className="border-amber-200 bg-amber-50/30">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-amber-600" />
+              Payment Information
+              <span className="text-xs font-normal text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full ml-1">
+                Required when submitting
+              </span>
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Payment must be confirmed before a registration can be submitted for review or approved.
+              You may upload an EFTPOS slip or bank transfer receipt.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <FormField control={form.control} name="paymentMethod" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Payment Amount</FormLabel>
+                  <FormLabel>Payment Method <span className="text-destructive">*</span></FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value || ""}>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Select method"/></SelectTrigger></FormControl>
+                    <SelectContent>
+                      {["Cash", "Card", "EFTPOS", "BankDeposit"].map(val => <SelectItem key={val} value={val}>{val === "BankDeposit" ? "Bank Deposit" : val}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="paymentAmount" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Payment Amount (Kina) <span className="text-destructive">*</span></FormLabel>
                   <FormControl>
                     <Input
                       type="number"
@@ -795,17 +889,100 @@ export function RegistrationForm({ mode, registrationId, existingRegistrationDat
                       value={field.value === undefined || field.value === null || isNaN(Number(field.value)) ? '' : Number(field.value)}
                       onChange={e => {
                         const val = e.target.value;
-                         field.onChange(val === '' || isNaN(parseFloat(val)) ? null : parseFloat(val));
+                        field.onChange(val === '' || isNaN(parseFloat(val)) ? null : parseFloat(val));
                       }}
                     />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
+              )} />
+              <FormField control={form.control} name="paymentDate" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Payment Date <span className="text-destructive">*</span></FormLabel>
+                  <FormControl>
+                    <Input type="date" {...field} value={field.value ? new Date(field.value).toISOString().split('T')[0] : ''} onChange={e => field.onChange(e.target.value ? new Date(e.target.value) : null)} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="paymentReceiptNumber" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Payment Receipt / Reference No.</FormLabel>
+                  <FormControl><Input placeholder="e.g., RCP-00123 or transaction ref" {...field} value={field.value ?? ""} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="bankStampRef" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Bank Stamp / Reference</FormLabel>
+                  <FormControl><Input placeholder="Bank stamp or deposit reference" {...field} value={field.value ?? ""} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            </div>
+
+            {/* Receipt File Upload */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Upload Payment Receipt <span className="text-xs text-muted-foreground">(EFTPOS slip or bank transfer receipt — PDF or image)</span></label>
+              {existingReceiptUrl && (
+                <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-md text-sm">
+                  <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+                  <span className="text-green-800 font-medium">Receipt uploaded:</span>
+                  <a href={existingReceiptUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline truncate">{existingReceiptFileName || "View Receipt"}</a>
+                  <button type="button" className="ml-auto text-destructive text-xs underline" onClick={() => { setExistingReceiptUrl(null); setExistingReceiptFileName(null); if (receiptFileInputRef.current) receiptFileInputRef.current.value = ""; }}>Remove</button>
+                </div>
+              )}
+              {!existingReceiptUrl && (
+                <div className="flex items-center gap-3 p-3 bg-muted/40 border-2 border-dashed border-muted-foreground/30 rounded-md">
+                  <UploadCloud className="h-5 w-5 text-muted-foreground shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <input
+                      ref={receiptFileInputRef}
+                      type="file"
+                      accept="image/*,application/pdf"
+                      className="text-sm text-muted-foreground file:mr-3 file:py-1 file:px-3 file:rounded file:border file:border-muted-foreground/40 file:text-xs file:bg-muted file:text-muted-foreground hover:file:bg-accent cursor-pointer w-full"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        setSelectedReceiptFile(file || null);
+                      }}
+                    />
+                    {selectedReceiptFile && (
+                      <p className="text-xs text-muted-foreground mt-1">Selected: {selectedReceiptFile.name} ({(selectedReceiptFile.size / 1024).toFixed(1)} KB)</p>
+                    )}
+                  </div>
+                </div>
+              )}
+              {receiptUploadProgress !== null && receiptUploadProgress < 100 && (
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Uploading receipt... {Math.round(receiptUploadProgress)}%</p>
+                  <Progress value={receiptUploadProgress} className="h-1" />
+                </div>
+              )}
+            </div>
+
+            {/* Payment Confirmed Checkbox */}
+            <FormField
+              control={form.control}
+              name="paymentConfirmed"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border border-green-200 bg-green-50/50 p-4">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value ?? false}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel className="text-sm font-semibold text-green-800">
+                      Payment Confirmed / Verified
+                    </FormLabel>
+                    <FormDescription className="text-xs text-green-700">
+                      Check this box to confirm that payment has been received and verified (e.g., cash counted, EFTPOS approved, or bank deposit confirmed).
+                    </FormDescription>
+                  </div>
+                </FormItem>
               )}
             />
-            <FormField control={form.control} name="paymentReceiptNumber" render={({ field }) => (<FormItem><FormLabel>Payment Receipt No.</FormLabel><FormControl><Input placeholder="Receipt number" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="bankStampRef" render={({ field }) => (<FormItem><FormLabel>Bank Stamp Ref.</FormLabel><FormControl><Input placeholder="Bank stamp reference" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="paymentDate" render={({ field }) => (<FormItem><FormLabel>Payment Date</FormLabel><FormControl><Input type="date" {...field} value={field.value ? new Date(field.value).toISOString().split('T')[0] : ''} onChange={e => field.onChange(e.target.value ? new Date(e.target.value) : null)} /></FormControl><FormMessage /></FormItem>)} />
           </CardContent>
         </Card>
 

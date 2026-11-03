@@ -64,7 +64,7 @@ function parseCSVRow(line: string): string[] {
 export default function ImportRegistrationsPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const { currentUser, isAdmin, isRegistrar, loading: authLoading } = useAuth();
+  const { currentUser, isAdmin, isRegistrar, isSupervisor, loading: authLoading } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [parsedData, setParsedData] = useState<RegistrationImportData[]>([]);
   const [isParsing, setIsParsing] = useState(false);
@@ -215,7 +215,7 @@ export default function ImportRegistrationsPage() {
     );
   }
 
-  if (!currentUser || (!isAdmin && !isRegistrar)) {
+  if (!currentUser || (!isAdmin && !isRegistrar && !isSupervisor)) {
     return (
       <Card>
         <CardHeader>
@@ -224,7 +224,7 @@ export default function ImportRegistrationsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p>You do not have permission to access the import registrations feature. This page is restricted to Administrators and Registrars.</p>
+          <p>You do not have permission to access the import registrations feature. This page is restricted to Administrators, Registrars, and Supervisors.</p>
           <Button onClick={() => router.back()} className="mt-4">Go Back</Button>
         </CardContent>
       </Card>

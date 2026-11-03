@@ -6,7 +6,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
 import type { Registration, Owner, ProofOfOwnershipDoc, Inspection, User, EngineDetail } from "@/types";
-import { Ship, User as UserIconLucide, FileText, ClipboardCheck, CalendarDays, DollarSign, Edit, CheckCircle, XCircle, Info, FileSpreadsheet, ListChecks, AlertTriangle, Loader2, ArrowLeft, Ban, AlertCircle, CalendarClock, Cog, Building } from "lucide-react";
+import { Ship, User as UserIconLucide, FileText, ClipboardCheck, CalendarDays, DollarSign, Edit, CheckCircle, XCircle, Info, FileSpreadsheet, ListChecks, AlertTriangle, Loader2, ArrowLeft, Ban, AlertCircle, CalendarClock, Cog, Building, Receipt, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { formatFirebaseTimestamp } from '@/lib/utils';
@@ -75,6 +75,11 @@ export default function RegistrationDetailPage() {
   const [scaRegoNo, setScaRegoNo] = useState("");
   const [effectiveDate, setEffectiveDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [expiryDate, setExpiryDate] = useState(format(addYears(new Date(), 1), "yyyy-MM-dd"));
+  const [approvePaymentConfirmed, setApprovePaymentConfirmed] = useState(false);
+  const [approvePaymentMethod, setApprovePaymentMethod] = useState("");
+  const [approvePaymentAmount, setApprovePaymentAmount] = useState("");
+  const [approvePaymentDate, setApprovePaymentDate] = useState("");
+  const [approvePaymentReceiptNumber, setApprovePaymentReceiptNumber] = useState("");
 
   const [suspendModalOpen, setSuspendModalOpen] = useState(false);
   const [suspensionReason, setSuspensionReason] = useState("");
@@ -270,20 +275,43 @@ export default function RegistrationDetailPage() {
       return;
     }
 
+    // Enforce payment confirmation before approving
+    const hasPaymentInfo = (registration.paymentConfirmed ||
+      (registration.paymentAmount && registration.paymentMethod)) ||
+      (approvePaymentConfirmed || (approvePaymentAmount && approvePaymentMethod));
+
+    if (!hasPaymentInfo) {
+      toast({
+        title: "Payment Confirmation Required",
+        description: "Payment must be confirmed before approving this registration. Please verify payment details and check the confirmation box.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const registrationDocRef = doc(db, "registrations", registration.registrationId);
 
-    const updatePayload: Partial<Registration> = {
+    const updatePayload: { [key: string]: any } = {
       status: "Approved",
       scaRegoNo: scaRegoNo,
       effectiveDate: Timestamp.fromDate(parseISO(effectiveDate)),
       expiryDate: Timestamp.fromDate(parseISO(expiryDate)),
       approvedAt: Timestamp.now(),
       lastUpdatedAt: Timestamp.now(),
-      lastUpdatedByRef: doc(db, "users", currentUser.userId) as DocumentReference<User>,
+      lastUpdatedByRef: doc(db, "users", currentUser.userId),
     };
 
+    // Update payment info if entered in the approval modal
+    if (approvePaymentConfirmed) updatePayload.paymentConfirmed = true;
+    if (approvePaymentConfirmed) updatePayload.paymentConfirmedAt = Timestamp.now();
+    if (approvePaymentConfirmed) updatePayload.paymentConfirmedByRef = doc(db, "users", currentUser.userId);
+    if (approvePaymentMethod) updatePayload.paymentMethod = approvePaymentMethod;
+    if (approvePaymentAmount && !isNaN(parseFloat(approvePaymentAmount))) updatePayload.paymentAmount = parseFloat(approvePaymentAmount);
+    if (approvePaymentDate) updatePayload.paymentDate = Timestamp.fromDate(parseISO(approvePaymentDate));
+    if (approvePaymentReceiptNumber) updatePayload.paymentReceiptNumber = approvePaymentReceiptNumber;
+
     try {
-      await updateDoc(registrationDocRef, updatePayload as any);
+      await updateDoc(registrationDocRef, updatePayload);
       toast({ title: "Registration Approved", description: `SCA Rego No: ${scaRegoNo} assigned.` });
       setApproveModalOpen(false);
       fetchRegistrationDetails(); // Re-fetch to update state
@@ -306,6 +334,13 @@ export default function RegistrationDetailPage() {
       ? (registration.expiryDate instanceof Date ? registration.expiryDate : new Date(registration.expiryDate as any))
       : addYears(currentEffective, 1);
     setExpiryDate(format(currentExpiry, "yyyy-MM-dd"));
+
+    // Pre-fill payment state from registration
+    setApprovePaymentConfirmed(registration.paymentConfirmed ?? false);
+    setApprovePaymentMethod(registration.paymentMethod || "");
+    setApprovePaymentAmount(registration.paymentAmount ? String(registration.paymentAmount) : "");
+    setApprovePaymentDate(registration.paymentDate ? format(new Date(registration.paymentDate as any), "yyyy-MM-dd") : "");
+    setApprovePaymentReceiptNumber(registration.paymentReceiptNumber || "");
     
     setApproveModalOpen(true);
   };
@@ -459,11 +494,12 @@ export default function RegistrationDetailPage() {
                 <AlertDialogTrigger asChild>
                   <Button variant="default" onClick={openApprovalModalWithPrefilledDates}><CheckCircle className="mr-2 h-4 w-4" /> Approve</Button>
                 </AlertDialogTrigger>
-                <AlertDialogContent>
+                <AlertDialogContent className="max-w-lg">
                   <AlertDialogHeader>
                     <AlertDialogTitle>Approve Registration</AlertDialogTitle>
                     <AlertDialogDescription>
                       Enter the official SCA Registration Number and validity dates.
+                      Payment must be confirmed before approval.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <div className="space-y-4 py-2">
@@ -478,6 +514,65 @@ export default function RegistrationDetailPage() {
                      <div>
                       <Label htmlFor="expiryDate">Expiry Date *</Label>
                       <Input id="expiryDate" type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
+                    </div>
+
+                    {/* Payment Section */}
+                    <div className="border rounded-lg p-4 space-y-3 bg-amber-50/50 border-amber-200">
+                      <p className="text-sm font-semibold text-amber-800 flex items-center gap-2">
+                        <Receipt className="h-4 w-4" /> Payment Verification
+                      </p>
+                      {(registration.paymentConfirmed || registration.paymentAmount) ? (
+                        <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 rounded p-2">
+                          <CheckCircle2 className="h-4 w-4 shrink-0" />
+                          <span>
+                            Payment recorded: K{registration.paymentAmount?.toFixed(2)} via {registration.paymentMethod}
+                            {registration.paymentConfirmed && " (Confirmed ✓)"}
+                          </span>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-amber-700">No payment on record. Enter payment details below or update the registration form first.</p>
+                      )}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label htmlFor="approvePaymentMethod" className="text-xs">Payment Method</Label>
+                          <select
+                            id="approvePaymentMethod"
+                            className="w-full mt-1 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            value={approvePaymentMethod}
+                            onChange={(e) => setApprovePaymentMethod(e.target.value)}
+                          >
+                            <option value="">-- Select --</option>
+                            <option value="Cash">Cash</option>
+                            <option value="Card">Card</option>
+                            <option value="EFTPOS">EFTPOS</option>
+                            <option value="BankDeposit">Bank Deposit</option>
+                          </select>
+                        </div>
+                        <div>
+                          <Label htmlFor="approvePaymentAmount" className="text-xs">Amount (K)</Label>
+                          <Input id="approvePaymentAmount" type="number" step="0.01" placeholder="150.00" value={approvePaymentAmount} onChange={(e) => setApprovePaymentAmount(e.target.value)} className="mt-1" />
+                        </div>
+                        <div>
+                          <Label htmlFor="approvePaymentDate" className="text-xs">Payment Date</Label>
+                          <Input id="approvePaymentDate" type="date" value={approvePaymentDate} onChange={(e) => setApprovePaymentDate(e.target.value)} className="mt-1" />
+                        </div>
+                        <div>
+                          <Label htmlFor="approvePaymentReceiptNumber" className="text-xs">Receipt / Reference No.</Label>
+                          <Input id="approvePaymentReceiptNumber" placeholder="RCP-0001" value={approvePaymentReceiptNumber} onChange={(e) => setApprovePaymentReceiptNumber(e.target.value)} className="mt-1" />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 pt-1">
+                        <input
+                          id="approvePaymentConfirmed"
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                          checked={approvePaymentConfirmed}
+                          onChange={(e) => setApprovePaymentConfirmed(e.target.checked)}
+                        />
+                        <label htmlFor="approvePaymentConfirmed" className="text-sm font-semibold text-green-800 cursor-pointer">
+                          ✓ Confirm payment has been received and verified
+                        </label>
+                      </div>
                     </div>
                   </div>
                   <AlertDialogFooter>
@@ -514,6 +609,14 @@ export default function RegistrationDetailPage() {
                       <Link href={`/registrations/${registrationId}/certificate`}><FileSpreadsheet className="mr-2 h-4 w-4" /> Generate Certificate</Link>
                     </Button>
                 )
+            )}
+            {/* Generate Payment Receipt — visible if payment exists */}
+            {(isRegistrar || isAdmin || isSupervisor) && (registration.paymentAmount != null || registration.paymentConfirmed) && (
+              <Button variant="outline" asChild>
+                <Link href={`/registrations/${registrationId}/receipt`}>
+                  <Receipt className="mr-2 h-4 w-4" /> Generate Receipt
+                </Link>
+              </Button>
             )}
             {canSuspendRevoke && registration.status !== "Suspended" && (
               <AlertDialog open={suspendModalOpen} onOpenChange={setSuspendModalOpen}>
@@ -692,15 +795,38 @@ export default function RegistrationDetailPage() {
             </CardContent>
           </Card>
 
-          {registration.paymentAmount != null && (
-            <Card>
-              <CardHeader><CardTitle>Payment Details</CardTitle></CardHeader>
+          {(registration.paymentAmount != null || registration.paymentConfirmed) && (
+            <Card className={registration.paymentConfirmed ? "border-green-300 bg-green-50/30" : ""}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Receipt className="h-5 w-5" />
+                  Payment Details
+                  {registration.paymentConfirmed && (
+                    <span className="flex items-center gap-1 text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded-full font-normal">
+                      <CheckCircle2 className="h-3 w-3" /> Confirmed
+                    </span>
+                  )}
+                </CardTitle>
+              </CardHeader>
               <CardContent className="space-y-1 text-sm">
                 <p><strong>Amount:</strong> K{registration.paymentAmount?.toFixed(2)}</p>
                 <p><strong>Method:</strong> {registration.paymentMethod}</p>
-                <p><strong>Receipt No:</strong> {registration.paymentReceiptNumber}</p>
+                <p><strong>Receipt No:</strong> {registration.paymentReceiptNumber || "N/A"}</p>
                 <p><strong>Date:</strong> {formatFirebaseTimestamp(registration.paymentDate, "PP")}</p>
                 {registration.bankStampRef && <p><strong>Bank Ref:</strong> {registration.bankStampRef}</p>}
+                {registration.paymentConfirmedAt && <p><strong>Confirmed At:</strong> {formatFirebaseTimestamp(registration.paymentConfirmedAt, "PPpp")}</p>}
+                {registration.paymentReceiptUrl && (
+                  <div className="pt-2">
+                    <a
+                      href={registration.paymentReceiptUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-primary underline text-xs"
+                    >
+                      <FileText className="h-3.5 w-3.5" /> View Uploaded Receipt ({registration.paymentReceiptFileName || "receipt"})
+                    </a>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
