@@ -1,12 +1,12 @@
 
 "use client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge }
 from "@/components/ui/badge";
 import Link from "next/link";
-import { PlusCircle, Ship, Eye, Edit, Filter, Search, Loader2, AlertTriangle, MoreHorizontal, RefreshCw, CheckCircle, Clock, Ban, DollarSign, CalendarClock } from "lucide-react";
+import { PlusCircle, Ship, Eye, Edit, Filter, Search, Loader2, AlertTriangle, MoreHorizontal, RefreshCw, CheckCircle, Clock, Ban, DollarSign, CalendarClock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import type { Registration, Owner, ProofOfOwnershipDoc, User } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { formatFirebaseTimestamp } from '@/lib/utils';
@@ -27,6 +27,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 
 // Helper function to safely convert Firestore Timestamps or other date forms to JS Date
@@ -75,6 +82,8 @@ export default function RegistrationsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(50);
 
   useEffect(() => {
       const statusesFromUrl = searchParams.get('status')?.split(',') || [];
@@ -338,6 +347,51 @@ export default function RegistrationsPage() {
     return { approved, pending, expiringSoon, suspendedOrRevoked };
   }, [filteredRegistrations]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, itemsPerPage]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRegistrations.length / itemsPerPage));
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const paginatedRegistrations = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredRegistrations.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredRegistrations, currentPage, itemsPerPage]);
+
+  const totalCount = filteredRegistrations.length;
+  const startIndex = totalCount === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+  const endIndex = Math.min(currentPage * itemsPerPage, totalCount);
+
+  const getPageNumbers = () => {
+    const pages: (number | "ellipsis")[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      pages.push(1);
+      if (currentPage > 3) {
+        pages.push("ellipsis");
+      }
+      const start = Math.max(2, currentPage - 1);
+      const end = Math.min(totalPages - 1, currentPage + 1);
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+      if (currentPage < totalPages - 2) {
+        pages.push("ellipsis");
+      }
+      pages.push(totalPages);
+    }
+    return pages;
+  };
+
   if (authLoading && isLoading) { 
     return (
       <div className="flex h-64 justify-center items-center py-10">
@@ -463,9 +517,16 @@ export default function RegistrationsPage() {
       </div>
 
       <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle>Registration Overview</CardTitle>
-          <CardDescription>Manage and track all craft registrations.</CardDescription>
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div>
+            <CardTitle>Registration Overview</CardTitle>
+            <CardDescription>Manage and track all craft registrations.</CardDescription>
+          </div>
+          {!isLoading && !fetchError && filteredRegistrations.length > 0 && (
+            <Badge variant="outline" className="w-fit font-normal text-xs text-muted-foreground">
+              Page {currentPage} of {totalPages} ({totalCount} total)
+            </Badge>
+          )}
         </CardHeader>
         <CardContent>
           {isLoading && !fetchError ? ( 
@@ -510,7 +571,7 @@ export default function RegistrationsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredRegistrations.length > 0 ? filteredRegistrations.map((reg) => (
+                {paginatedRegistrations.length > 0 ? paginatedRegistrations.map((reg) => (
                   <TableRow key={reg.registrationId}>
                     <TableCell className="font-medium">
                       {reg.scaRegoNo || reg.interimRegoNo || reg.registrationId}
@@ -579,6 +640,116 @@ export default function RegistrationsPage() {
             </Table>
           )}
         </CardContent>
+        {!isLoading && !fetchError && filteredRegistrations.length > 0 && (
+          <CardFooter className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t p-4">
+            <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-6 text-sm text-muted-foreground w-full sm:w-auto text-center sm:text-left">
+              <span>
+                Showing <span className="font-medium text-foreground">{startIndex}</span> to{" "}
+                <span className="font-medium text-foreground">{endIndex}</span> of{" "}
+                <span className="font-medium text-foreground">{totalCount}</span> registrations
+                {registrations.length > filteredRegistrations.length && (
+                  <span className="ml-1 text-xs text-muted-foreground/80">
+                    (filtered from {registrations.length} total)
+                  </span>
+                )}
+              </span>
+
+              <div className="flex items-center gap-2 justify-center">
+                <span className="text-xs">Per page:</span>
+                <Select
+                  value={String(itemsPerPage)}
+                  onValueChange={(val) => setItemsPerPage(Number(val))}
+                >
+                  <SelectTrigger className="h-8 w-[70px]">
+                    <SelectValue placeholder={String(itemsPerPage)} />
+                  </SelectTrigger>
+                  <SelectContent side="top">
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-1 sm:space-x-2">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 hidden sm:inline-flex"
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage <= 1}
+                title="First page"
+                aria-label="First page"
+              >
+                <ChevronsLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={currentPage <= 1}
+                title="Previous page"
+                aria-label="Previous page"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+
+              {/* Page numbers for desktop */}
+              <div className="hidden md:flex items-center space-x-1">
+                {getPageNumbers().map((page, index) =>
+                  page === "ellipsis" ? (
+                    <span
+                      key={`ellipsis-${index}`}
+                      className="px-2 py-1 text-sm text-muted-foreground select-none"
+                    >
+                      ...
+                    </span>
+                  ) : (
+                    <Button
+                      key={page}
+                      variant={currentPage === page ? "default" : "outline"}
+                      size="icon"
+                      className="h-8 w-8 text-xs"
+                      onClick={() => setCurrentPage(page as number)}
+                    >
+                      {page}
+                    </Button>
+                  )
+                )}
+              </div>
+
+              {/* Compact page indicator for mobile */}
+              <span className="md:hidden text-xs text-muted-foreground px-2">
+                Page {currentPage} of {totalPages}
+              </span>
+
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                disabled={currentPage >= totalPages}
+                title="Next page"
+                aria-label="Next page"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 hidden sm:inline-flex"
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage >= totalPages}
+                title="Last page"
+                aria-label="Last page"
+              >
+                <ChevronsRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardFooter>
+        )}
       </Card>
     </div>
   );
