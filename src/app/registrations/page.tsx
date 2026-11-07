@@ -6,16 +6,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge }
 from "@/components/ui/badge";
 import Link from "next/link";
-import { PlusCircle, Ship, Eye, Edit, Filter, Search, Loader2, AlertTriangle, MoreHorizontal, RefreshCw, CheckCircle, Clock, Ban, DollarSign, CalendarClock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
-import type { Registration, Owner, ProofOfOwnershipDoc, User } from "@/types";
+import { PlusCircle, Ship, Eye, Edit, Filter, Search, Loader2, AlertTriangle, MoreHorizontal, RefreshCw, CheckCircle, Clock, Ban, DollarSign, CalendarClock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ShieldAlert, ShieldCheck, ShieldX, ClipboardList, Minus, Play } from "lucide-react";
+import type { Registration, Owner, ProofOfOwnershipDoc, User, Inspection } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
-import { formatFirebaseTimestamp } from '@/lib/utils';
+import { formatFirebaseTimestamp, cn } from '@/lib/utils';
 import { isValid } from 'date-fns';
 import type { BadgeProps } from "@/components/ui/badge";
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { collection, getDocs, query, where, Timestamp, DocumentReference, QueryConstraint } from 'firebase/firestore'; // Corrected import
+import { collection, getDocs, query, where, Timestamp, DocumentReference, QueryConstraint, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -35,6 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // Helper function to safely convert Firestore Timestamps or other date forms to JS Date
 // This is moved here as it's now used directly in this client component
@@ -72,8 +73,16 @@ const ensureSerializableDate = (dateValue: any): Date | undefined => {
 
 const REGISTRATION_STATUSES: Registration['status'][] = ["Draft", "Submitted", "PendingReview", "RequiresInfo", "Approved", "Rejected", "Expired", "Suspended", "Revoked"];
 
+export type RegistrationInspectionStatus = "passed" | "certified" | "failed" | "scheduled" | "in-progress" | "pending-review" | "none";
+
+export interface RegistrationInspectionInfo {
+  status: RegistrationInspectionStatus;
+  inspectionId?: string;
+  latestDate?: Date;
+}
+
 export default function RegistrationsPage() {
-  const { currentUser, isAdmin, isRegistrar, isSupervisor, loading: authLoading } = useAuth();
+  const { currentUser, isAdmin, isRegistrar, isSupervisor, isInspector, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -82,8 +91,12 @@ export default function RegistrationsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [inspectionFilter, setInspectionFilter] = useState<"all" | "needed" | "passed" | "scheduled">("all");
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [itemsPerPage, setItemsPerPage] = useState<number>(50);
+
+  // Inspection status tracking: maps registrationId -> latest inspection info
+  const [inspectionMap, setInspectionMap] = useState<Map<string, RegistrationInspectionInfo>>(new Map());
 
   useEffect(() => {
       const statusesFromUrl = searchParams.get('status')?.split(',') || [];
@@ -214,6 +227,72 @@ export default function RegistrationsPage() {
       });
       setRegistrations(fetchedRegistrations);
       console.log("RegistrationsPage (Client): Successfully fetched and mapped registrations.", fetchedRegistrations.length);
+
+      // Fetch all inspections to build the inspection status map
+      try {
+        const inspectionsColRef = collection(db, "inspections");
+        const inspectionSnapshot = await getDocs(inspectionsColRef);
+        const newInspectionMap = new Map<string, RegistrationInspectionInfo>();
+
+        inspectionSnapshot.docs.forEach(inspDoc => {
+          const inspData = inspDoc.data();
+
+          // Resolve the registrationRef to an ID
+          let regId: string | undefined;
+          if (inspData.registrationRef instanceof DocumentReference) {
+            regId = inspData.registrationRef.id;
+          } else if (typeof inspData.registrationRef === 'string') {
+            regId = inspData.registrationRef.startsWith('registrations/')
+              ? inspData.registrationRef.replace('registrations/', '')
+              : inspData.registrationRef;
+          } else if (inspData.registrationRef?.id && typeof inspData.registrationRef.id === 'string') {
+            regId = inspData.registrationRef.id;
+          }
+
+          if (!regId && inspData.registrationData?.id) {
+            regId = inspData.registrationData.id;
+          }
+
+          if (!regId) return;
+
+          // Map inspection status to our simplified status
+          let inspStatus: RegistrationInspectionStatus;
+          switch (inspData.status) {
+            case "Passed": inspStatus = "passed"; break;
+            case "Failed": inspStatus = "failed"; break;
+            case "Scheduled": inspStatus = "scheduled"; break;
+            case "InProgress": inspStatus = "in-progress"; break;
+            case "PendingReview": inspStatus = "pending-review"; break;
+            default: inspStatus = "none"; break;
+          }
+
+          // Skip cancelled inspections
+          if (inspData.status === "Cancelled") return;
+
+          const inspDate = ensureSerializableDate(inspData.inspectionDate || inspData.scheduledDate);
+          const existing = newInspectionMap.get(regId);
+
+          // Priority: passed > pending-review > in-progress > failed > scheduled > none
+          const statusPriority: Record<RegistrationInspectionStatus, number> = {
+            "passed": 6, "certified": 6, "pending-review": 5, "in-progress": 4,
+            "failed": 3, "scheduled": 2, "none": 0,
+          };
+
+          if (!existing || statusPriority[inspStatus] > statusPriority[existing.status]) {
+            newInspectionMap.set(regId, {
+              status: inspStatus,
+              inspectionId: inspDoc.id,
+              latestDate: inspDate,
+            });
+          }
+        });
+
+        setInspectionMap(newInspectionMap);
+        console.log("RegistrationsPage (Client): Built inspection map for", newInspectionMap.size, "registrations.");
+      } catch (inspError: any) {
+        console.warn("RegistrationsPage (Client): Could not fetch inspections for status indicators.", inspError.message);
+        // Non-fatal: we still show registrations, just without inspection indicators
+      }
     } catch (error: any) {
       const originalErrorMessage = error.message || "Unknown Firebase error";
       const originalErrorCode = error.code || "N/A";
@@ -282,10 +361,152 @@ export default function RegistrationsPage() {
     return (isRegistrar || isAdmin || isSupervisor) && !!regStatus && editableStatuses.includes(regStatus);
   };
 
+  // Determine if a registration needs an inspection, is passed, or is in progress
+  const getInspectionIndicator = useCallback((reg: Registration): {
+    needsAttention: boolean;
+    label: string;
+    icon: React.ReactNode;
+    variant: BadgeProps["variant"];
+    className?: string;
+    tooltip?: string;
+    inspectionId?: string;
+  } => {
+    // For Draft registrations, inspection is not yet due
+    if (reg.status === "Draft") {
+      return {
+        needsAttention: false,
+        label: "Draft",
+        icon: <Minus className="h-3 w-3 text-muted-foreground" />,
+        variant: "outline",
+        className: "text-muted-foreground border-dashed",
+        tooltip: "Draft registration - inspection not yet required",
+      };
+    }
+
+    // For Suspended, Revoked, Rejected
+    if (reg.status === "Suspended" || reg.status === "Revoked" || reg.status === "Rejected") {
+      return {
+        needsAttention: false,
+        label: "N/A",
+        icon: <Minus className="h-3 w-3 text-muted-foreground" />,
+        variant: "outline",
+        className: "text-muted-foreground",
+        tooltip: `Craft status is ${reg.status}`,
+      };
+    }
+
+    const inspInfo = inspectionMap.get(reg.registrationId);
+
+    if (inspInfo) {
+      if (inspInfo.status === "passed") {
+        return {
+          needsAttention: false,
+          label: "Passed",
+          icon: <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />,
+          variant: "outline",
+          className: "border-emerald-500/50 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 font-medium",
+          tooltip: `Inspection passed${inspInfo.latestDate ? ` on ${inspInfo.latestDate.toLocaleDateString()}` : ""}`,
+          inspectionId: inspInfo.inspectionId,
+        };
+      }
+      if (inspInfo.status === "failed") {
+        return {
+          needsAttention: true,
+          label: "Failed",
+          icon: <ShieldX className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />,
+          variant: "destructive",
+          className: "bg-red-600 text-white font-medium",
+          tooltip: "Inspection failed - re-inspection required",
+          inspectionId: inspInfo.inspectionId,
+        };
+      }
+      if (inspInfo.status === "scheduled") {
+        return {
+          needsAttention: false,
+          label: "Scheduled",
+          icon: <ClipboardList className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />,
+          variant: "outline",
+          className: "border-blue-400 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 font-medium",
+          tooltip: `Inspection scheduled${inspInfo.latestDate ? ` for ${inspInfo.latestDate.toLocaleDateString()}` : ""}`,
+          inspectionId: inspInfo.inspectionId,
+        };
+      }
+      if (inspInfo.status === "in-progress" || inspInfo.status === "pending-review") {
+        return {
+          needsAttention: false,
+          label: inspInfo.status === "in-progress" ? "In Progress" : "Pending Review",
+          icon: <Clock className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />,
+          variant: "outline",
+          className: "border-amber-400 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 font-medium",
+          tooltip: `Inspection is ${inspInfo.status === "in-progress" ? "in progress" : "pending supervisor review"}`,
+          inspectionId: inspInfo.inspectionId,
+        };
+      }
+    }
+
+    // If no inspection doc, check if registration already has a safetyCertNumber
+    if (reg.safetyCertNumber && reg.safetyCertNumber.trim() !== "") {
+      return {
+        needsAttention: false,
+        label: "Certified",
+        icon: <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />,
+        variant: "outline",
+        className: "border-emerald-500/40 bg-emerald-50/50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300",
+        tooltip: `Safety Cert No: ${reg.safetyCertNumber}`,
+      };
+    }
+
+    // If Expired registration with no current inspection
+    if (reg.status === "Expired") {
+      return {
+        needsAttention: true,
+        label: "Overdue",
+        icon: <ShieldAlert className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />,
+        variant: "destructive",
+        className: "bg-red-600 text-white font-medium",
+        tooltip: "Registration expired - requires full inspection renewal",
+      };
+    }
+
+    // Craft has no inspection and needs one (Approved, Submitted, PendingReview, RequiresInfo)
+    return {
+      needsAttention: true,
+      label: "Needs Inspection",
+      icon: <ShieldAlert className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />,
+      variant: "outline",
+      className: "border-amber-500 bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 font-semibold shadow-xs",
+      tooltip: "Craft does not have a recorded inspection or safety certificate",
+    };
+  }, [inspectionMap]);
+
+  // Determine row highlight class based on status + inspection
+  const getRowClassName = (reg: Registration): string => {
+    if (reg.status === "Expired") {
+      return "bg-red-50/70 dark:bg-red-950/30 hover:bg-red-100/70 dark:hover:bg-red-950/50 border-l-4 border-l-red-500 transition-colors";
+    }
+    const insp = getInspectionIndicator(reg);
+    if (insp.needsAttention) {
+      return "bg-amber-50/60 dark:bg-amber-950/20 hover:bg-amber-100/60 dark:hover:bg-amber-950/40 border-l-4 border-l-amber-500 transition-colors";
+    }
+    return "border-l-4 border-l-transparent transition-colors";
+  };
+
   const filteredRegistrations = useMemo(() => {
-    if (!searchTerm) return registrations;
-    const lowercasedFilter = searchTerm.toLowerCase();
     return registrations.filter((reg) => {
+      const insp = getInspectionIndicator(reg);
+
+      if (inspectionFilter === "needed" && !insp.needsAttention) {
+        return false;
+      }
+      if (inspectionFilter === "passed" && insp.label !== "Passed" && insp.label !== "Certified") {
+        return false;
+      }
+      if (inspectionFilter === "scheduled" && insp.label !== "Scheduled" && insp.label !== "In Progress") {
+        return false;
+      }
+
+      if (!searchTerm) return true;
+      const lowercasedFilter = searchTerm.toLowerCase();
       const regoNo = reg.scaRegoNo || reg.interimRegoNo || reg.registrationId;
       const ownerName = getPrimaryOwnerName(reg.owners);
       return (
@@ -293,10 +514,12 @@ export default function RegistrationsPage() {
         (reg.craftMake && reg.craftMake.toLowerCase().includes(lowercasedFilter)) ||
         (reg.craftModel && reg.craftModel.toLowerCase().includes(lowercasedFilter)) ||
         ownerName.toLowerCase().includes(lowercasedFilter) ||
-        (reg.status && reg.status.toLowerCase().includes(lowercasedFilter))
+        (reg.status && reg.status.toLowerCase().includes(lowercasedFilter)) ||
+        insp.label.toLowerCase().includes(lowercasedFilter) ||
+        (reg.safetyCertNumber && reg.safetyCertNumber.toLowerCase().includes(lowercasedFilter))
       );
     });
-  }, [searchTerm, registrations]);
+  }, [searchTerm, registrations, inspectionFilter, getInspectionIndicator]);
 
   const retryLoadRegistrations = () => {
     if (currentUser && !authLoading) {
@@ -326,12 +549,13 @@ export default function RegistrationsPage() {
     let pending = 0;
     let expiringSoon = 0;
     let suspendedOrRevoked = 0;
+    let needsInspection = 0;
 
     const futureDate = new Date();
     futureDate.setMonth(futureDate.getMonth() + 3);
     futureDate.setHours(23, 59, 59, 999);
 
-    filteredRegistrations.forEach(reg => {
+    registrations.forEach(reg => {
       if (reg.status === 'Approved') approved++;
       if (reg.status === 'PendingReview' || reg.status === 'Submitted' || reg.status === 'RequiresInfo') pending++;
       if (reg.status === 'Suspended' || reg.status === 'Revoked' || reg.status === 'Expired') suspendedOrRevoked++;
@@ -342,14 +566,19 @@ export default function RegistrationsPage() {
             expiringSoon++;
          }
       }
+
+      const insp = getInspectionIndicator(reg);
+      if (insp.needsAttention) {
+        needsInspection++;
+      }
     });
 
-    return { approved, pending, expiringSoon, suspendedOrRevoked };
-  }, [filteredRegistrations]);
+    return { approved, pending, expiringSoon, suspendedOrRevoked, needsInspection };
+  }, [registrations, getInspectionIndicator]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, statusFilter, itemsPerPage]);
+  }, [searchTerm, statusFilter, itemsPerPage, inspectionFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRegistrations.length / itemsPerPage));
 
@@ -477,22 +706,52 @@ export default function RegistrationsPage() {
               disabled={!currentUser || isLoading}
             />
           </div>
+          <Button
+            type="button"
+            variant={inspectionFilter === "needed" ? "default" : "outline"}
+            className={cn(
+              "transition-all gap-1.5 shrink-0",
+              inspectionFilter === "needed"
+                ? "bg-amber-600 hover:bg-amber-700 text-white border-amber-600 shadow-xs"
+                : "border-amber-300/80 text-amber-800 dark:text-amber-300 dark:border-amber-800/80 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+            )}
+            onClick={() => setInspectionFilter(prev => prev === "needed" ? "all" : "needed")}
+            title="Filter craft that require an inspection"
+          >
+            <ShieldAlert className="h-4 w-4 text-amber-500" />
+            <span className="hidden sm:inline">Needs Inspection</span>
+            <span className="sm:hidden">Uninspected</span>
+            {stats.needsInspection > 0 && (
+              <Badge
+                variant="secondary"
+                className={cn(
+                  "px-1.5 py-0 text-[11px] font-bold rounded-full",
+                  inspectionFilter === "needed"
+                    ? "bg-amber-800 text-amber-100"
+                    : "bg-amber-200 text-amber-900 dark:bg-amber-900 dark:text-amber-200"
+                )}
+              >
+                {stats.needsInspection}
+              </Badge>
+            )}
+          </Button>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
                 <Filter className="mr-2 h-4 w-4" />
                 Filter
-                {statusFilter.length > 0 && (
+                {(statusFilter.length > 0 || inspectionFilter !== "all") && (
                   <>
                     <Separator orientation="vertical" className="mx-2 h-4" />
                     <Badge variant="secondary" className="rounded-sm px-1 font-normal">
-                      {statusFilter.length}
+                      {statusFilter.length + (inspectionFilter !== "all" ? 1 : 0)}
                     </Badge>
                   </>
                 )}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>Filter by Status</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {REGISTRATION_STATUSES.map((status) => (
@@ -504,6 +763,32 @@ export default function RegistrationsPage() {
                   {status}
                 </DropdownMenuCheckboxItem>
               ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Filter by Inspection</DropdownMenuLabel>
+              <DropdownMenuCheckboxItem
+                checked={inspectionFilter === "all"}
+                onCheckedChange={() => setInspectionFilter("all")}
+              >
+                All Inspections
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={inspectionFilter === "needed"}
+                onCheckedChange={(checked) => setInspectionFilter(checked ? "needed" : "all")}
+              >
+                Needs Inspection ({stats.needsInspection})
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={inspectionFilter === "passed"}
+                onCheckedChange={(checked) => setInspectionFilter(checked ? "passed" : "all")}
+              >
+                Passed / Certified
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={inspectionFilter === "scheduled"}
+                onCheckedChange={(checked) => setInspectionFilter(checked ? "scheduled" : "all")}
+              >
+                Scheduled / In Progress
+              </DropdownMenuCheckboxItem>
             </DropdownMenuContent>
           </DropdownMenu>
           {(isRegistrar || isAdmin || isSupervisor) && (
@@ -520,7 +805,15 @@ export default function RegistrationsPage() {
         <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div>
             <CardTitle>Registration Overview</CardTitle>
-            <CardDescription>Manage and track all craft registrations.</CardDescription>
+            <CardDescription className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1">
+              <span>Manage and track all craft registrations.</span>
+              <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground font-normal">
+                <span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> Expired
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground font-normal">
+                <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" /> Needs Inspection
+              </span>
+            </CardDescription>
           </div>
           {!isLoading && !fetchError && filteredRegistrations.length > 0 && (
             <Badge variant="outline" className="w-fit font-normal text-xs text-muted-foreground">
@@ -566,20 +859,62 @@ export default function RegistrationsPage() {
                   <TableHead>Craft Make/Model</TableHead>
                   <TableHead>Primary Owner</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Inspection</TableHead>
                   <TableHead>Expiry Date</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedRegistrations.length > 0 ? paginatedRegistrations.map((reg) => (
-                  <TableRow key={reg.registrationId}>
+                {paginatedRegistrations.length > 0 ? paginatedRegistrations.map((reg) => {
+                  const insp = getInspectionIndicator(reg);
+                  return (
+                  <TableRow
+                    key={reg.registrationId}
+                    className={getRowClassName(reg)}
+                  >
                     <TableCell className="font-medium">
-                      {reg.scaRegoNo || reg.interimRegoNo || reg.registrationId}
+                      <div className="flex items-center gap-2">
+                        {insp.needsAttention && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-block w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Inspection needed</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                        <span>{reg.scaRegoNo || reg.interimRegoNo || reg.registrationId}</span>
+                      </div>
                     </TableCell>
                     <TableCell>{reg.craftMake} {reg.craftModel}</TableCell>
                     <TableCell>{getPrimaryOwnerName(reg.owners)}</TableCell>
                     <TableCell>
                       <Badge variant={getStatusBadgeVariant(reg.status)}>{reg.status || "N/A"}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="inline-flex items-center">
+                              <Badge
+                                variant={insp.variant}
+                                className={cn("gap-1 py-0.5 px-2 text-xs font-medium cursor-default", insp.className)}
+                              >
+                                {insp.icon}
+                                <span>{insp.label}</span>
+                              </Badge>
+                            </div>
+                          </TooltipTrigger>
+                          {insp.tooltip && (
+                            <TooltipContent>
+                              <p>{insp.tooltip}</p>
+                            </TooltipContent>
+                          )}
+                        </Tooltip>
+                      </TooltipProvider>
                     </TableCell>
                     <TableCell>
                       {(reg.status === "Approved" || reg.status === "Suspended") && reg.expiryDate
@@ -601,6 +936,39 @@ export default function RegistrationsPage() {
                               <Eye className="mr-2 h-4 w-4" /> View Details
                             </Link>
                           </DropdownMenuItem>
+
+                          {insp.needsAttention && (isAdmin || isRegistrar || isSupervisor || isInspector) && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem asChild>
+                                <Link
+                                  href={`/inspections/new?registrationId=${reg.registrationId}`}
+                                  className="cursor-pointer flex items-center text-amber-700 dark:text-amber-400 font-medium"
+                                >
+                                  <ClipboardList className="mr-2 h-4 w-4" /> Schedule Inspection
+                                </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem asChild>
+                                <Link
+                                  href={`/inspections/conduct-new?registrationId=${reg.registrationId}`}
+                                  className="cursor-pointer flex items-center text-emerald-700 dark:text-emerald-400 font-medium"
+                                >
+                                  <Play className="mr-2 h-4 w-4" /> Conduct Inspection
+                                </Link>
+                              </DropdownMenuItem>
+                            </>
+                          )}
+
+                          {insp.inspectionId && (
+                            <DropdownMenuItem asChild>
+                              <Link
+                                href={`/inspections/${insp.inspectionId}`}
+                                className="cursor-pointer flex items-center"
+                              >
+                                <ShieldCheck className="mr-2 h-4 w-4" /> View Inspection
+                              </Link>
+                            </DropdownMenuItem>
+                          )}
                           
                           {canEditRegistration(reg.status) && (
                             <DropdownMenuItem asChild>
@@ -627,12 +995,14 @@ export default function RegistrationsPage() {
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
-                )) : (
+                  );
+                }) : (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                       {!isLoading && registrations.length === 0 && !fetchError ? "No registrations found." : ""}
                       {searchTerm && !isLoading && filteredRegistrations.length === 0 && registrations.length > 0 ? "No registrations match your search." : ""}
                       {searchParams.get('status') && !isLoading && filteredRegistrations.length === 0 && "No registrations match the current filter."}
+                      {inspectionFilter !== "all" && !isLoading && filteredRegistrations.length === 0 && "No registrations match the inspection filter."}
                     </TableCell>
                   </TableRow>
                 )}
